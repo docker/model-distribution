@@ -44,8 +44,8 @@ func ShowProgress(operation string, progressChan chan int64, totalSize int64) {
 	fmt.Println() // Move to new line after progress
 }
 
-// ReadContent reads content from a local file or URL
-func ReadContent(source string) ([]byte, error) {
+// ReadContent reads content from a local file or URL and returns an io.ReadCloser
+func ReadContent(source string) (io.ReadCloser, error) {
 	// Check if the source is a URL
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		// Parse the URL
@@ -59,9 +59,9 @@ func ReadContent(source string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to download file: %v", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
 			return nil, fmt.Errorf("failed to download file: HTTP status %d", resp.StatusCode)
 		}
 
@@ -72,34 +72,41 @@ func ReadContent(source string) ([]byte, error) {
 		// Start progress reporting goroutine
 		go ShowProgress("Downloading", progressChan, contentLength)
 
-		// Create a wrapper reader to track progress
-		progressReader := &ProgressReader{
-			Reader:       resp.Body,
+		// Return a wrapped reader that tracks progress
+		return &ProgressReadCloser{
+			ReadCloser:   resp.Body,
 			ProgressChan: progressChan,
-		}
-
-		// Read the content
-		content, err := io.ReadAll(progressReader)
-		close(progressChan)
-		return content, err
+		}, nil
 	}
 
 	// If not a URL, treat as local file path
-	return os.ReadFile(source)
+	file, err := os.Open(source)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
 }
 
-// ProgressReader wraps an io.Reader to track reading progress
-type ProgressReader struct {
-	Reader       io.Reader
+// ProgressReadCloser wraps an io.ReadCloser to track reading progress
+type ProgressReadCloser struct {
+	ReadCloser   io.ReadCloser
 	ProgressChan chan int64
 	Total        int64
 }
 
-func (pr *ProgressReader) Read(p []byte) (int, error) {
-	n, err := pr.Reader.Read(p)
+func (pr *ProgressReadCloser) Read(p []byte) (int, error) {
+	n, err := pr.ReadCloser.Read(p)
 	if n > 0 {
 		pr.Total += int64(n)
 		pr.ProgressChan <- pr.Total
 	}
+	if err == io.EOF {
+		close(pr.ProgressChan)
+	}
 	return n, err
+}
+
+func (pr *ProgressReadCloser) Close() error {
+	return pr.ReadCloser.Close()
 }
