@@ -1,19 +1,22 @@
 package main
 
 import (
-	"os"
+	"context"
 	"testing"
+
+	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 )
 
 func TestPushModel(t *testing.T) {
-	// Check for required environment variables
-	registry := os.Getenv("DOCKER_REGISTRY")
-	username := os.Getenv("DOCKER_USERNAME")
-	password := os.Getenv("DOCKER_PASSWORD")
-
-	if registry == "" || username == "" || password == "" {
-		t.Skip("Skipping test: DOCKER_REGISTRY, DOCKER_USERNAME, or DOCKER_PASSWORD not set")
+	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	if err != nil {
+		t.Fatalf("Failed to start registry container: %v", err)
 	}
+	registry, err := registryContainer.HostAddress(context.Background())
+	if err != nil {
+		t.Fatalf("Failed to get registry address: %v", err)
+	}
+	username := "testuser"
 
 	// Test cases
 	tests := []struct {
@@ -25,44 +28,46 @@ func TestPushModel(t *testing.T) {
 		{
 			name:    "Valid push",
 			source:  "assets/dummy.gguf",
-			tag:     registry + "/" + username + "/test-model:latest",
+			tag:     registry + "/" + username + "/myartifact:v1.0.0",
 			wantErr: false,
 		},
 		{
-			name:    "Invalid source",
-			source:  "nonexistent.gguf",
-			tag:     registry + "/" + username + "/test-model:latest",
+			name:    "Invalid source file",
+			source:  "nonexistent/file.gguf",
+			tag:     registry + "/" + username + "/myartifact:v1.0.0",
 			wantErr: true,
 		},
 		{
-			name:    "Invalid tag",
+			name:    "Invalid tag format",
 			source:  "assets/dummy.gguf",
 			tag:     "invalid:tag:format",
 			wantErr: true,
 		},
+		{
+			name:    "Empty source",
+			source:  "",
+			tag:     registry + "/" + username + "/myartifact:v1.0.0",
+			wantErr: true,
+		},
+		{
+			name:    "Empty tag",
+			source:  "assets/dummy.gguf",
+			tag:     "",
+			wantErr: true,
+		},
 	}
-
-	// Create test directory and dummy file
-	err := os.MkdirAll("assets", 0755)
-	if err != nil {
-		t.Fatalf("Failed to create assets directory: %v", err)
-	}
-
-	dummyContent := []byte("dummy model content")
-	err = os.WriteFile("assets/dummy.gguf", dummyContent, 0644)
-	if err != nil {
-		t.Fatalf("Failed to create dummy file: %v", err)
-	}
-
-	// Clean up after tests
-	defer os.RemoveAll("assets")
 
 	// Run tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := PushModel(tt.source, tt.tag)
+			ref, err := PushModel(tt.source, tt.tag)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("PushModel() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil {
+				if ref.String() != tt.tag {
+					t.Errorf("PushModel() ref = %v, want %v", ref.String(), tt.tag)
+				}
 			}
 		})
 	}

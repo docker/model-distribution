@@ -18,18 +18,18 @@ import (
 	"github.com/docker/model-distribution/pkg/utils"
 )
 
-func PushModel(source, tag string) error {
+func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Println("1. Creating reference for target image...")
 	ref, err := name.ParseReference(tag)
 	if err != nil {
-		return fmt.Errorf("parsing reference: %v", err)
+		return nil, err
 	}
 	fmt.Printf("   Reference: %s\n", ref.String())
 
 	fmt.Printf("2. Reading from source: %s\n", source)
 	fileContent, err := utils.ReadContent(source)
 	if err != nil {
-		return fmt.Errorf("reading content: %v", err)
+		return nil, err
 	}
 	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
 
@@ -49,7 +49,7 @@ func PushModel(source, tag string) error {
 
 	img, err = mutate.ConfigFile(img, configFile)
 	if err != nil {
-		return fmt.Errorf("setting config: %v", err)
+		return nil, err
 	}
 
 	// Set up artifact manifest according to OCI spec
@@ -59,13 +59,13 @@ func PushModel(source, tag string) error {
 	fmt.Println("5. Appending imgLayer to image...")
 	img, err = mutate.AppendLayers(img, l)
 	if err != nil {
-		return fmt.Errorf("appending imgLayer: %v", err)
+		return nil, err
 	}
 
 	fmt.Println("6. Getting manifest details...")
 	manifest, err := img.Manifest()
 	if err != nil {
-		return fmt.Errorf("getting manifest: %v", err)
+		return nil, err
 	}
 
 	fmt.Println("\nManifest details:")
@@ -110,11 +110,20 @@ func PushModel(source, tag string) error {
 		remote.WithAuth(auth),
 		remote.WithProgress(progressChan),
 	); err != nil {
-		return fmt.Errorf("writing image: %v", err)
+		return nil, fmt.Errorf("writing image: %v", err)
 	}
 
 	fmt.Printf("Successfully pushed %s\n", ref.String())
-	return nil
+	return ref, nil
+}
+
+func PullModel(tag string) (v1.Image, error) {
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		return nil, fmt.Errorf("parsing reference: %v", err)
+	}
+
+	return remote.Image(ref)
 }
 
 func main() {
@@ -129,7 +138,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := PushModel(*source, *tag); err != nil {
+	_, err := PushModel(*source, *tag)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
