@@ -36,8 +36,9 @@ clean:
 	@rm -rf test/artifacts/*
 
 lint:
-	@echo "Running linter..."
-	@golangci-lint run
+	@echo "Running linters..."
+	@gofmt -s -l . | tee /dev/stderr | xargs -r false
+	@go vet ./...
 
 run: build
 	@if [ -z "$(SOURCE)" ] || [ -z "$(TAG)" ]; then \
