@@ -28,9 +28,6 @@ make build
 # Run tests
 make test
 
-# Build for all platforms
-make build-all
-
 # Clean build artifacts
 make clean
 ```
@@ -43,7 +40,16 @@ The tool requires two parameters:
 - `--source`: Path to local file or URL to download
 - `--tag`: Target registry/repository:tag where the model will be pushed
 
-### Examples
+### Using make run
+
+The easiest way to run the tool is using the `make run` command:
+
+```bash
+# Make sure your .env file is configured with DOCKER_* variables
+make run SOURCE=path/to/model.gguf TAG=registry.example.com/my-model:latest
+```
+
+### Using the binary directly
 
 Package a local model file:
 ```
