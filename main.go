@@ -18,29 +18,18 @@ import (
 	"github.com/docker/model-distribution/pkg/utils"
 )
 
-func main() {
-	var (
-		source = flag.String("source", "", "Path to local file or URL to download")
-		tag    = flag.String("tag", "", "Target registry/repository:tag")
-	)
-	flag.Parse()
-
-	if *source == "" || *tag == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-
+func PushModel(source, tag string) error {
 	fmt.Println("1. Creating reference for target image...")
-	ref, err := name.ParseReference(*tag)
+	ref, err := name.ParseReference(tag)
 	if err != nil {
-		log.Fatalf("parsing reference: %v", err)
+		return fmt.Errorf("parsing reference: %v", err)
 	}
 	fmt.Printf("   Reference: %s\n", ref.String())
 
-	fmt.Printf("2. Reading from source: %s\n", *source)
-	fileContent, err := utils.ReadContent(*source)
+	fmt.Printf("2. Reading from source: %s\n", source)
+	fileContent, err := utils.ReadContent(source)
 	if err != nil {
-		log.Fatalf("reading content: %v", err)
+		return fmt.Errorf("reading content: %v", err)
 	}
 	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
 
@@ -60,7 +49,7 @@ func main() {
 
 	img, err = mutate.ConfigFile(img, configFile)
 	if err != nil {
-		log.Fatalf("setting config: %v", err)
+		return fmt.Errorf("setting config: %v", err)
 	}
 
 	// Set up artifact manifest according to OCI spec
@@ -70,13 +59,13 @@ func main() {
 	fmt.Println("5. Appending imgLayer to image...")
 	img, err = mutate.AppendLayers(img, l)
 	if err != nil {
-		log.Fatalf("appending imgLayer: %v", err)
+		return fmt.Errorf("appending imgLayer: %v", err)
 	}
 
 	fmt.Println("6. Getting manifest details...")
 	manifest, err := img.Manifest()
 	if err != nil {
-		log.Fatalf("getting manifest: %v", err)
+		return fmt.Errorf("getting manifest: %v", err)
 	}
 
 	fmt.Println("\nManifest details:")
@@ -115,8 +104,26 @@ func main() {
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithProgress(progressChan),
 	); err != nil {
-		log.Fatalf("writing image: %v", err)
+		return fmt.Errorf("writing image: %v", err)
 	}
 
 	fmt.Printf("Successfully pushed %s\n", ref.String())
+	return nil
+}
+
+func main() {
+	var (
+		source = flag.String("source", "", "Path to local file or URL to download")
+		tag    = flag.String("tag", "", "Target registry/repository:tag")
+	)
+	flag.Parse()
+
+	if *source == "" || *tag == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if err := PushModel(*source, *tag); err != nil {
+		log.Fatal(err)
+	}
 }
