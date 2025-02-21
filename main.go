@@ -12,7 +12,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/docker/model-distribution/pkg/layer"
 	"github.com/docker/model-distribution/pkg/utils"
@@ -30,26 +32,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("1. Creating reference for target image...")
+	fmt.Println("Creating reference for target image...")
 	ref, err := name.ParseReference(*tag)
 	if err != nil {
 		log.Fatalf("parsing reference: %v", err)
 	}
 	fmt.Printf("   Reference: %s\n", ref.String())
 
-	fmt.Printf("2. Reading from source: %s\n", *source)
-	fileContent, err := utils.ReadContent(*source)
+	fmt.Printf("Creating layer from source file: %s\n", *source)
+	f, err := utils.Open(*source)
 	if err != nil {
 		log.Fatalf("reading content: %v", err)
 	}
-	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
+	defer f.Close()
 
-	fmt.Println("3. Creating imgLayer from file content...")
-	l := layer.New(fileContent)
-	layerSize, _ := l.Size()
-	fmt.Printf("   Layer size: %s\n", utils.FormatBytes(int(layerSize)))
+	l := stream.NewLayer(f,
+		stream.WithMediaType(layer.MediaTypeGGUF),
+		stream.WithCompressionLevel(gzip.NoCompression),
+	)
 
-	fmt.Println("4. Creating empty image with artifact configuration...")
+	fmt.Println("Creating empty image with artifact configuration...")
 	img := empty.Image
 
 	configFile := &v1.ConfigFile{
@@ -67,34 +69,13 @@ func main() {
 	img = mutate.MediaType(img, types.OCIManifestSchema1)
 	img = mutate.ConfigMediaType(img, "application/vnd.docker.ai.model.config.v1+json")
 
-	fmt.Println("5. Appending imgLayer to image...")
+	fmt.Println("Appending imgLayer to image...")
 	img, err = mutate.AppendLayers(img, l)
 	if err != nil {
 		log.Fatalf("appending imgLayer: %v", err)
 	}
-
-	fmt.Println("6. Getting manifest details...")
-	manifest, err := img.Manifest()
-	if err != nil {
-		log.Fatalf("getting manifest: %v", err)
-	}
-
-	fmt.Println("\nManifest details:")
-	fmt.Printf("  MediaType: %s\n", manifest.MediaType)
-	fmt.Printf("  Config:")
-	fmt.Printf("    MediaType: %s\n", manifest.Config.MediaType)
-	fmt.Printf("    Size: %d bytes\n", manifest.Config.Size)
-	fmt.Printf("    Digest: %s\n", manifest.Config.Digest)
-	fmt.Printf("  Layers:\n")
-	for i, imgLayer := range manifest.Layers {
-		fmt.Printf("    Layer %d:\n", i+1)
-		fmt.Printf("      MediaType: %s\n", imgLayer.MediaType)
-		fmt.Printf("      Size: %d bytes\n", imgLayer.Size)
-		fmt.Printf("      Digest: %s\n", imgLayer.Digest)
-	}
-	fmt.Println()
-
-	fmt.Println("7. Pushing image to registry...")
+	//
+	fmt.Println("Pushing image to registry...")
 	// Create progress channel
 	progressChan := make(chan v1.Update, 1)
 
@@ -117,6 +98,15 @@ func main() {
 	); err != nil {
 		log.Fatalf("writing image: %v", err)
 	}
+
+	fmt.Println("Getting manifest details...")
+	manifest, err := img.RawManifest()
+	if err != nil {
+		log.Fatalf("getting manifest: %v", err)
+	}
+
+	fmt.Println("\nManifest:")
+	fmt.Println(string(manifest))
 
 	fmt.Printf("Successfully pushed %s\n", ref.String())
 }

@@ -10,6 +10,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 )
 
+const (
+	MediaTypeGGUF = "application/vnd.docker.ai.model.file.v1+gguf"
+)
+
 // Raw implements v1.Layer for raw content
 type Raw struct {
 	content []byte

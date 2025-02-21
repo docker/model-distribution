@@ -44,8 +44,8 @@ func ShowProgress(operation string, progressChan chan int64, totalSize int64) {
 	fmt.Println() // Move to new line after progress
 }
 
-// ReadContent reads content from a local file or URL
-func ReadContent(source string) ([]byte, error) {
+// Open reads content from a local file or URL
+func Open(source string) (io.ReadCloser, error) {
 	// Check if the source is a URL
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		// Parse the URL
@@ -62,30 +62,33 @@ func ReadContent(source string) ([]byte, error) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
 			return nil, fmt.Errorf("failed to download file: HTTP status %d", resp.StatusCode)
 		}
+		return resp.Body, nil
 
-		// Create progress reader
-		contentLength := resp.ContentLength
-		progressChan := make(chan int64, 100)
-
-		// Start progress reporting goroutine
-		go ShowProgress("Downloading", progressChan, contentLength)
-
-		// Create a wrapper reader to track progress
-		progressReader := &ProgressReader{
-			Reader:       resp.Body,
-			ProgressChan: progressChan,
-		}
-
-		// Read the content
-		content, err := io.ReadAll(progressReader)
-		close(progressChan)
-		return content, err
+		//// Create progress reader
+		//contentLength := resp.ContentLength
+		//progressChan := make(chan int64, 100)
+		//
+		//// Start progress reporting goroutine
+		//go ShowProgress("Downloading", progressChan, contentLength)
+		//
+		//// Create a wrapper reader to track progress
+		//progressReader := &ProgressReader{
+		//	Reader:       resp.Body,
+		//	ProgressChan: progressChan,
+		//}
+		//
+		//// Read the content
+		//content, err := io.ReadAll(progressReader)
+		//close(progressChan)
+		//return content, err
 	}
 
+	return os.Open(source)
 	// If not a URL, treat as local file path
-	return os.ReadFile(source)
+	//return os.ReadFile(source)
 }
 
 // ProgressReader wraps an io.Reader to track reading progress
