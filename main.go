@@ -99,9 +99,15 @@ func PushModel(source, tag string) error {
 	// Show progress
 	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
 
-	// Push the image with progress
+	// Create auth config from environment variables
+	auth := &authn.Basic{
+		Username: os.Getenv("DOCKER_USERNAME"),
+		Password: os.Getenv("DOCKER_PASSWORD"),
+	}
+
+	// Push the image with progress and auth config
 	if err := remote.Write(ref, img,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithAuth(auth),
 		remote.WithProgress(progressChan),
 	); err != nil {
 		return fmt.Errorf("writing image: %v", err)
