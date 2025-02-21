@@ -72,3 +72,75 @@ func TestPushModel(t *testing.T) {
 		})
 	}
 }
+
+func TestPullModel(t *testing.T) {
+	// Set up test registry
+	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	if err != nil {
+		t.Fatalf("Failed to start registry container: %v", err)
+	}
+
+	registry, err := registryContainer.HostAddress(context.Background())
+	if err != nil {
+		t.Fatalf("Failed to get registry address: %v", err)
+	}
+	username := "testuser"
+
+	// First push a test model
+	source := "assets/dummy.gguf"
+	tag := registry + "/" + username + "/pulltest:v1.0.0"
+
+	_, err = PushModel(source, tag)
+	if err != nil {
+		t.Fatalf("Failed to push test model: %v", err)
+	}
+
+	// Test cases
+	tests := []struct {
+		name    string
+		tag     string
+		wantErr bool
+	}{
+		{
+			name:    "Valid pull",
+			tag:     tag,
+			wantErr: false,
+		},
+		{
+			name:    "Invalid tag format",
+			tag:     "invalid:tag:format",
+			wantErr: true,
+		},
+		{
+			name:    "Nonexistent image",
+			tag:     registry + "/" + username + "/nonexistent:v1.0.0",
+			wantErr: true,
+		},
+		{
+			name:    "Empty tag",
+			tag:     "",
+			wantErr: true,
+		},
+	}
+
+	// Run tests
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			img, err := PullModel(tt.tag)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PullModel() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil {
+				// Verify the pulled image is valid
+				manifest, err := img.Manifest()
+				if err != nil {
+					t.Errorf("Failed to get manifest from pulled image: %v", err)
+				}
+				if manifest == nil {
+					t.Error("Pulled image manifest is nil")
+				}
+			}
+		})
+	}
+}
