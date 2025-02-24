@@ -13,14 +13,16 @@ on:
         type: string
 
 permissions:
+  contents: read
   id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build and push image
         uses: docker/actions/build-push-image-ecr@build-push-image-ecr/v1
         with:
