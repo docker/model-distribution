@@ -19,9 +19,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Build and push image
         uses: docker/actions/build-push-image-ecr@build-push-image-ecr/v1
         with:
           docker_password: ${{ secrets.DOCKERBUILDBOT_READ_PAT }}
-          image_name: ${{ inputs.service }}
-          image_version: ${{ inputs.version }}
+          image_name: 'hello-world'
+          image_version: '1.0'
