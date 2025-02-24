@@ -45,7 +45,7 @@ func Push(source, tag string) (name.Reference, error) {
 		return nil, err
 	}
 
-	gguf, err := utils.ReadContent(source)
+	gguf, err := utils.OpenSource(source)
 	if err != nil {
 		return nil, err
 	}

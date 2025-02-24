@@ -44,8 +44,8 @@ func ShowProgress(operation string, progressChan chan int64, totalSize int64) {
 	fmt.Println() // Move to new line after progress
 }
 
-// ReadContent reads content from a local file or URL and returns an io.ReadCloser
-func ReadContent(source string) (io.ReadCloser, error) {
+// OpenSource opens a local file or URL and returns an io.ReadCloser
+func OpenSource(source string) (io.ReadCloser, error) {
 	// Check if the source is a URL
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		// Parse the URL
