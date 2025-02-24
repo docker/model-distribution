@@ -1,6 +1,9 @@
 name: ECR Push
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       service:
