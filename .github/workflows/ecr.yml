@@ -1,7 +1,6 @@
 name: ECR Push
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       service:
@@ -12,6 +11,9 @@ on:
         description: 'Version/tag for the image'
         required: true
         type: string
+
+permissions:
+  id-token: write
 
 jobs:
   build:
