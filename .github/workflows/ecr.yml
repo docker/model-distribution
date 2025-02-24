@@ -13,6 +13,9 @@ on:
         required: true
         type: string
 
+permissions:
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,6 +24,5 @@ jobs:
         uses: docker/actions/build-push-image-ecr@build-push-image-ecr/v1
         with:
           dockerfile: Dockerfile
-          docker_password: ${{ secrets.DOCKERBUILDBOT_READ_PAT }}
           image_name: ${{ inputs.service }}
           image_version: ${{ inputs.version }}
