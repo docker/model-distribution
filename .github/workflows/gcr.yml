@@ -10,12 +10,14 @@ permissions:
 jobs:
   verify-access:
     runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: sandbox-298914
     steps:
       - uses: actions/checkout@v4
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          project_id: 'sandbox-298914'
+          project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
 
       - name: Set up Cloud SDK
@@ -28,16 +30,16 @@ jobs:
       - name: Build and push image
         run: |
           # Build and push using existing Dockerfile
-          docker build -t gcr.io/docker-sandbox/hello-world:latest .
-          docker push gcr.io/docker-sandbox/hello-world:latest
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/hello-world:latest .
+          docker push gcr.io/${{ env.PROJECT_ID }}/hello-world:latest
 
       - name: Verify image
         run: |
           # Remove local image to ensure we're pulling from GCR
-          docker rmi gcr.io/docker-sandbox/hello-world:latest
+          docker rmi gcr.io/${{ env.PROJECT_ID }}/hello-world:latest
           
           # Pull the image back
-          docker pull gcr.io/docker-sandbox/hello-world:latest
+          docker pull gcr.io/${{ env.PROJECT_ID }}/hello-world:latest
           
           # Run the container to verify
-          docker run gcr.io/docker-sandbox/hello-world:latest
+          docker run gcr.io/${{ env.PROJECT_ID }}/hello-world:latest
