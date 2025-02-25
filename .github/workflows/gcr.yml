@@ -17,6 +17,7 @@ jobs:
         with:
           workload_identity_provider: 'projects/docker-sandbox/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
           service_account: 'model-distribution@docker-sandbox.iam.gserviceaccount.com'
+          audience: 'https://iam.googleapis.com/projects/docker-sandbox/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
