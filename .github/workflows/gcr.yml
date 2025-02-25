@@ -15,8 +15,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          project_id: 'docker-sandbox'
-          workload_identity_provider: 'projects/docker-sandbox/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+          project_id: 'sandbox-298914'
+          workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
