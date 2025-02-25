@@ -1,0 +1,43 @@
+name: GCR Push
+
+on:
+  push:
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
+jobs:
+  verify-access:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/docker-sandbox/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+          service_account: 'model-distribution@docker-sandbox.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and push image
+        run: |
+          # Build and push using existing Dockerfile
+          docker build -t gcr.io/docker-sandbox/hello-world:latest .
+          docker push gcr.io/docker-sandbox/hello-world:latest
+
+      - name: Verify image
+        run: |
+          # Remove local image to ensure we're pulling from GCR
+          docker rmi gcr.io/docker-sandbox/hello-world:latest
+          
+          # Pull the image back
+          docker pull gcr.io/docker-sandbox/hello-world:latest
+          
+          # Run the container to verify
+          docker run gcr.io/docker-sandbox/hello-world:latest
