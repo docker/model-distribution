@@ -35,6 +35,10 @@ jobs:
           workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
           create_credentials_file: true
 
+      - name: Configure Docker for GAR
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }} --quiet
+
       - name: Run tests with GAR integration
         run: |
           # Set environment variables for the test
@@ -46,7 +50,7 @@ jobs:
           export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
           
           # GOOGLE_APPLICATION_CREDENTIALS is automatically set by the auth action
-          echo "Using credentials file at: $GOOGLE_APPLICATION_CREDENTIALS"
+          echo "Using credentials file at: ${GOOGLE_APPLICATION_CREDENTIALS}"
           
           # Run the tests
           go test -v -run TestGARIntegration
