@@ -44,28 +44,24 @@ if err != nil {
 
 ## CI/CD Workflows
 
-This repository includes GitHub Actions workflows for testing model distribution with different container registries:
-
-1. **verify-registry-push-pull.yml**: Tests pushing and pulling models to/from GAR and ECR
-2. **gar.yml**: Validates OIDC authentication works properly against Google Artifact Registry (GAR). This workflow has no other purpose beyond confirming that OIDC authentication and permissions are correctly configured.
-3. **ecr.yml**: Validates OIDC authentication works properly against Amazon Elastic Container Registry (ECR). This workflow has no other purpose beyond confirming that OIDC authentication and permissions are correctly configured.
+This repository includes GitHub Actions workflows for testing model distribution with different container registries. The verify-registry-push-pull.yml workflow tests pushing and pulling models to/from GAR and ECR.
 
 ### Environment Variables
 
 For GAR integration tests:
-- `TEST_GAR_ENABLED`: Set to "true" to enable GAR tests
-- `TEST_GAR_LOCATION`: GAR location (e.g., "us-east4-docker.pkg.dev")
-- `TEST_PROJECT_ID`: Google Cloud project ID
-- `TEST_GAR_REPOSITORY`: GAR repository name
-- `TEST_MODEL_NAME`: Model name
-- `TEST_MODEL_VERSION`: Model version/tag
+`TEST_GAR_ENABLED`: Set to "true" to enable GAR tests
+`TEST_GAR_LOCATION`: GAR location (e.g., "us-east4-docker.pkg.dev")
+`TEST_PROJECT_ID`: Google Cloud project ID
+`TEST_GAR_REPOSITORY`: GAR repository name
+`TEST_MODEL_NAME`: Model name
+`TEST_MODEL_VERSION`: Model version/tag
 
 For ECR integration tests:
-- `TEST_ECR_ENABLED`: Set to "true" to enable ECR tests
-- `TEST_ECR_REGISTRY`: ECR registry URL
-- `TEST_ECR_REPOSITORY`: ECR repository name
-- `TEST_MODEL_NAME`: Model name
-- `TEST_MODEL_VERSION`: Model version/tag
+`TEST_ECR_ENABLED`: Set to "true" to enable ECR tests
+`TEST_ECR_REGISTRY`: ECR registry URL
+`TEST_ECR_REPOSITORY`: ECR repository name
+`TEST_MODEL_NAME`: Model name
+`TEST_MODEL_VERSION`: Model version/tag
 
 ## Development
 
