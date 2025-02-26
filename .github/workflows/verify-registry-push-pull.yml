@@ -84,7 +84,7 @@ jobs:
         run: |
           # Set environment variables for the test
           export TEST_ECR_ENABLED=true
-          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          export TEST_ECR_REGISTRY=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           export TEST_ECR_REPOSITORY=model-distribution
           export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
           export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
