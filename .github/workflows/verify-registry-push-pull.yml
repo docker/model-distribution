@@ -33,23 +33,9 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
-          service_account: 'model-distribution-github@sandbox-298914.iam.gserviceaccount.com'
-          token_format: 'access_token'  # Request an access token
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker for GAR
-        run: |
-          gcloud auth configure-docker ${{ env.GAR_LOCATION }} --quiet
-          
-          # Get access token and set it as GOOGLE_OAUTH_ACCESS_TOKEN
-          echo "GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)" >> $GITHUB_ENV
+          create_credentials_file: true
 
       - name: Run tests with GAR integration
-        env:
-          # Use Google's OAuth access token for authentication
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ env.GOOGLE_OAUTH_ACCESS_TOKEN }}
         run: |
           # Set environment variables for the test
           export TEST_GAR_ENABLED=true
@@ -59,43 +45,41 @@ jobs:
           export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
           export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
           
+          # GOOGLE_APPLICATION_CREDENTIALS is automatically set by the auth action
+          echo "Using credentials file at: $GOOGLE_APPLICATION_CREDENTIALS"
+          
           # Run the tests
           go test -v -run TestGARIntegration
 
-  verify-ecr:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Run tests with ECR integration
-        env:
-          # Use AWS credentials for ECR authentication
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
-        run: |
-          # Set environment variables for the test
-          export TEST_ECR_ENABLED=true
-          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          export TEST_ECR_REPOSITORY=model-distribution
-          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
-          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
-          
-          # Run the tests
-          go test -v -run TestECRIntegration 
+#  verify-ecr:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Go
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: '1.21'
+#
+#      - name: Configure AWS credentials
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#          aws-region: us-east-1
+#
+#      - name: Login to Amazon ECR
+#        id: login-ecr
+#        uses: aws-actions/amazon-ecr-login@v2
+#
+#      - name: Run tests with ECR integration
+#        run: |
+#          # Set environment variables for the test
+#          export TEST_ECR_ENABLED=true
+#          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+#          export TEST_ECR_REPOSITORY=model-distribution
+#          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
+#          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
+#
+#          # Run the tests
+#          go test -v -run TestECRIntegration

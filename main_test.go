@@ -165,6 +165,13 @@ func TestGARIntegration(t *testing.T) {
 		t.Fatal("Missing required environment variables for GAR test")
 	}
 
+	// Log authentication method
+	if credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credFile != "" {
+		t.Logf("Using Google Application Credentials file: %s", credFile)
+	} else {
+		t.Log("GOOGLE_APPLICATION_CREDENTIALS not set, will try other authentication methods")
+	}
+
 	// Create tag for GAR
 	tag := fmt.Sprintf("%s/%s/%s/%s:%s", garLocation, projectID, garRepo, modelName, modelVersion)
 	source := "assets/dummy.gguf"

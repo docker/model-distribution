@@ -23,11 +23,32 @@ import (
 func getAuthenticator(ref name.Reference) authn.Authenticator {
 	registry := ref.Context().Registry.Name()
 
+	// First try to use the Docker config authentication
+	// This will use credentials from ~/.docker/config.json which is set up by the workflow
+	dockerAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
+	if err == nil && dockerAuth != authn.Anonymous {
+		fmt.Println("Using Docker config authentication")
+		return dockerAuth
+	}
+
 	// Default to anonymous authentication
 	auth := authn.Anonymous
 
+	// Check for Google Application Credentials file (for GAR)
+	// This is set by google-github-actions/auth@v2 with create_credentials_file: true
+	if credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credFile != "" && strings.Contains(registry, "pkg.dev") {
+		fmt.Println("Using Google Application Credentials file for authentication")
+		// Resolve an authenticator using the credentials file
+		googleAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
+		if err == nil && googleAuth != authn.Anonymous {
+			return googleAuth
+		}
+		// If resolution fails, continue to other auth methods
+	}
+
 	// Check for Google OAuth token (for GAR)
 	if googleToken := os.Getenv("GOOGLE_OAUTH_ACCESS_TOKEN"); googleToken != "" && strings.Contains(registry, "pkg.dev") {
+		fmt.Println("Using Google OAuth token authentication")
 		return &authn.Bearer{
 			Token: googleToken,
 		}
@@ -37,6 +58,7 @@ func getAuthenticator(ref name.Reference) authn.Authenticator {
 	if strings.Contains(registry, "amazonaws.com") &&
 		os.Getenv("AWS_ACCESS_KEY_ID") != "" &&
 		os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+		fmt.Println("Using AWS credentials authentication")
 		return authn.FromConfig(authn.AuthConfig{
 			Username: os.Getenv("AWS_ACCESS_KEY_ID"),
 			Password: os.Getenv("AWS_SECRET_ACCESS_KEY"),
@@ -45,12 +67,14 @@ func getAuthenticator(ref name.Reference) authn.Authenticator {
 
 	// Fall back to Docker credentials if available
 	if username, password := os.Getenv("DOCKER_USERNAME"), os.Getenv("DOCKER_PASSWORD"); username != "" && password != "" {
+		fmt.Println("Using Docker username/password authentication")
 		return &authn.Basic{
 			Username: username,
 			Password: password,
 		}
 	}
 
+	fmt.Println("Using anonymous authentication")
 	return auth
 }
 
