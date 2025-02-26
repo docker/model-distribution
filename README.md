@@ -47,8 +47,8 @@ if err != nil {
 This repository includes GitHub Actions workflows for testing model distribution with different container registries:
 
 1. **verify-registry-push-pull.yml**: Tests pushing and pulling models to/from GAR and ECR
-2. **gar.yml**: Pushes Docker images to Google Artifact Registry
-3. **ecr.yml**: Pushes Docker images to Amazon Elastic Container Registry
+2. **gar.yml**: Validates OIDC authentication works properly against Google Artifact Registry (GAR). This workflow has no other purpose beyond confirming that OIDC authentication and permissions are correctly configured.
+3. **ecr.yml**: Validates OIDC authentication works properly against Amazon Elastic Container Registry (ECR). This workflow has no other purpose beyond confirming that OIDC authentication and permissions are correctly configured.
 
 ### Environment Variables
 

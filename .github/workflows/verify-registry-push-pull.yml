@@ -1,7 +1,6 @@
 name: Verify Registry Push Pull
 
 on:
-  push:
   workflow_dispatch:
 
 permissions:
