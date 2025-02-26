@@ -3,10 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"os"
-	"strings"
-
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -14,6 +10,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"log"
+	"os"
 
 	"github.com/docker/model-distribution/pkg/layer"
 	"github.com/docker/model-distribution/pkg/utils"
@@ -21,7 +19,6 @@ import (
 
 // getAuthenticator returns the appropriate authenticator based on the registry and available credentials
 func getAuthenticator(ref name.Reference) authn.Authenticator {
-	registry := ref.Context().Registry.Name()
 
 	// First try to use the Docker config authentication
 	// This will use credentials from ~/.docker/config.json which is set up by the workflow
@@ -29,53 +26,6 @@ func getAuthenticator(ref name.Reference) authn.Authenticator {
 	if err == nil && dockerAuth != authn.Anonymous {
 		fmt.Println("Using Docker config authentication")
 		return dockerAuth
-	}
-
-	// Default to anonymous authentication
-	auth := authn.Anonymous
-
-	// Check for Google Application Credentials file (for GAR)
-	// This is set by google-github-actions/auth@v2 with create_credentials_file: true
-	if credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credFile != "" && strings.Contains(registry, "pkg.dev") {
-		fmt.Println("Using Google Application Credentials file for authentication")
-		// Resolve an authenticator using the credentials file
-		googleAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
-		if err == nil && googleAuth != authn.Anonymous {
-			return googleAuth
-		}
-		// If resolution fails, continue to other auth methods
-	}
-
-	// Check for Google OAuth token (for GAR)
-	if googleToken := os.Getenv("GOOGLE_OAUTH_ACCESS_TOKEN"); googleToken != "" && strings.Contains(registry, "pkg.dev") {
-		fmt.Println("Using Google OAuth token authentication")
-		return &authn.Bearer{
-			Token: googleToken,
-		}
-	}
-
-	// Check for AWS credentials (for ECR)
-	// First check if we're dealing with an ECR registry
-	if strings.Contains(registry, "amazonaws.com") {
-		// Try to use AWS SDK credential chain first (handles OIDC, role assumption, etc.)
-		// This will work when credentials are set up by aws-actions/configure-aws-credentials
-		fmt.Println("Attempting to use AWS SDK credential chain for ECR authentication")
-		awsAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
-		if err == nil && awsAuth != authn.Anonymous {
-			fmt.Println("Successfully authenticated with AWS SDK credential chain")
-			return awsAuth
-		}
-
-		// Fall back to explicit environment variables if available
-		if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-			fmt.Println("Using AWS credentials from environment variables")
-			return authn.FromConfig(authn.AuthConfig{
-				Username: os.Getenv("AWS_ACCESS_KEY_ID"),
-				Password: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-			})
-		}
-
-		fmt.Println("Warning: Could not authenticate with AWS for ECR")
 	}
 
 	// Fall back to Docker credentials if available
@@ -87,8 +37,9 @@ func getAuthenticator(ref name.Reference) authn.Authenticator {
 		}
 	}
 
+	// Default to anonymous authentication
 	fmt.Println("Using anonymous authentication")
-	return auth
+	return authn.Anonymous
 }
 
 func PushModel(source, tag string) (name.Reference, error) {
