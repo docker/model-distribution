@@ -9,14 +9,15 @@ permissions:
   id-token: write  # Required for OIDC authentication
 
 env:
-  GAR_REGION: us-east4
-  PROJECT_ID: sandbox-298914
-  GAR_REPOSITORY: docker-model-distribution
+  AWS_ACCOUNT_ID: 676043725699
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: images/model-distribution
   GAR_LOCATION: us-east4-docker.pkg.dev
+  GAR_REGION: us-east4
+  GAR_REPOSITORY: docker-model-distribution
   MODEL_NAME: test-model
   MODEL_VERSION: latest
-  AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: 676043725699
+  PROJECT_ID: sandbox-298914
 
 jobs:
   verify-gar:
@@ -76,6 +77,12 @@ jobs:
           role-session-name: gha-build-push-image-ecr
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Create ECR Repository
+        run: |
+          # Check if repository exists, create if it doesn't
+          aws ecr describe-repositories --repository-names images/model-distribution/test-model || \
+          aws ecr create-repository --repository-name images/model-distribution/test-model
+
       - name: Configure Docker for ECR
         run: |
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
@@ -85,8 +92,8 @@ jobs:
           # Set environment variables for the test
           export TEST_ECR_ENABLED=true
           export TEST_ECR_REGISTRY=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-          export TEST_ECR_REPOSITORY=model-distribution
-          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
+          export TEST_ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
+          export TEST_MODEL_NAME=$${{ env.MODEL_NAME }}
           export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
 
           # Run the tests
