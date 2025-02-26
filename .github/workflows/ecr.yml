@@ -3,11 +3,7 @@ name: ECR Push
 on:
   workflow_dispatch:
     inputs:
-      service:
-        description: 'Service name to build'
-        required: true
-        type: string
-      version:
+      tag:
         description: 'Version/tag for the image'
         required: true
         type: string
@@ -28,4 +24,4 @@ jobs:
         with:
           docker_password: ${{ secrets.DOCKERBUILDBOT_READ_PAT }}
           image_name: 'hello-world'
-          image_version: '1.0'
+          image_version: ${{ inputs.tag }}
