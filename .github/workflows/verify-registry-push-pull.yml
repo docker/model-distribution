@@ -80,8 +80,8 @@ jobs:
       - name: Create ECR Repository
         run: |
           # Check if repository exists, create if it doesn't
-          aws ecr describe-repositories --repository-names images/model-distribution/test-model || \
-          aws ecr create-repository --repository-name images/model-distribution/test-model
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }}/${{ env.MODEL_NAME }} || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}/${{ env.MODEL_NAME }}
 
       - name: Configure Docker for ECR
         run: |
@@ -93,7 +93,7 @@ jobs:
           export TEST_ECR_ENABLED=true
           export TEST_ECR_REGISTRY=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           export TEST_ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
-          export TEST_MODEL_NAME=$${{ env.MODEL_NAME }}
+          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
           export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
 
           # Run the tests
