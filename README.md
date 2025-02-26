@@ -50,18 +50,11 @@ This repository includes GitHub Actions workflows for testing model distribution
 
 For GAR integration tests:
 `TEST_GAR_ENABLED`: Set to "true" to enable GAR tests
-`TEST_GAR_LOCATION`: GAR location (e.g., "us-east4-docker.pkg.dev")
-`TEST_PROJECT_ID`: Google Cloud project ID
-`TEST_GAR_REPOSITORY`: GAR repository name
-`TEST_MODEL_NAME`: Model name
-`TEST_MODEL_VERSION`: Model version/tag
+`TEST_GAR_TAG`: Full GAR tag (e.g., "us-east4-docker.pkg.dev/project-id/repository/model:v1.0.0")
 
 For ECR integration tests:
 `TEST_ECR_ENABLED`: Set to "true" to enable ECR tests
-`TEST_ECR_REGISTRY`: ECR registry URL
-`TEST_ECR_REPOSITORY`: ECR repository name
-`TEST_MODEL_NAME`: Model name
-`TEST_MODEL_VERSION`: Model version/tag
+`TEST_ECR_TAG`: Full ECR tag (e.g., "123456789012.dkr.ecr.us-east-1.amazonaws.com/repository/model:v1.0.0")
 
 ## Development
 
@@ -71,9 +64,9 @@ For ECR integration tests:
 # Run all tests
 go test -v ./...
 
-# Run only GAR integration tests
-TEST_GAR_ENABLED=true TEST_GAR_LOCATION=... TEST_PROJECT_ID=... TEST_GAR_REPOSITORY=... TEST_MODEL_NAME=... TEST_MODEL_VERSION=... go test -v -run TestGARIntegration
+# Run only GAR integration tests (using full tag)
+TEST_GAR_ENABLED=true TEST_GAR_TAG=us-east4-docker.pkg.dev/project-id/repository/model:v1.0.0 go test -v -run TestGARIntegration
 
-# Run only ECR integration tests
-TEST_ECR_ENABLED=true TEST_ECR_REGISTRY=... TEST_ECR_REPOSITORY=... TEST_MODEL_NAME=... TEST_MODEL_VERSION=... go test -v -run TestECRIntegration
+# Run only ECR integration tests (using full tag)
+TEST_ECR_ENABLED=true TEST_ECR_TAG=123456789012.dkr.ecr.us-east-1.amazonaws.com/repository/model:v1.0.0 go test -v -run TestECRIntegration
 ```

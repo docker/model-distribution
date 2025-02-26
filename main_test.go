@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -155,15 +154,10 @@ func TestGARIntegration(t *testing.T) {
 		t.Skip("Skipping GAR integration test - not enabled")
 	}
 
-	// Get environment variables
-	garLocation := os.Getenv("TEST_GAR_LOCATION")
-	projectID := os.Getenv("TEST_PROJECT_ID")
-	garRepo := os.Getenv("TEST_GAR_REPOSITORY")
-	modelName := os.Getenv("TEST_MODEL_NAME")
-	modelVersion := os.Getenv("TEST_MODEL_VERSION")
-
-	if garLocation == "" || projectID == "" || garRepo == "" || modelName == "" || modelVersion == "" {
-		t.Fatal("Missing required environment variables for GAR test")
+	// Get tag from environment variable
+	tag := os.Getenv("TEST_GAR_TAG")
+	if tag == "" {
+		t.Fatal("Missing required environment variable for GAR test: TEST_GAR_TAG")
 	}
 
 	// Log authentication method
@@ -173,8 +167,6 @@ func TestGARIntegration(t *testing.T) {
 		t.Log("GOOGLE_APPLICATION_CREDENTIALS not set, will try other authentication methods")
 	}
 
-	// Create tag for GAR
-	tag := fmt.Sprintf("%s/%s/%s/%s:%s", garLocation, projectID, garRepo, modelName, modelVersion)
 	source := "assets/dummy.gguf"
 
 	// Test push to GAR
@@ -209,18 +201,12 @@ func TestECRIntegration(t *testing.T) {
 		t.Skip("Skipping ECR integration test - not enabled")
 	}
 
-	// Get environment variables
-	ecrRegistry := os.Getenv("TEST_ECR_REGISTRY")
-	ecrRepo := os.Getenv("TEST_ECR_REPOSITORY")
-	modelName := os.Getenv("TEST_MODEL_NAME")
-	modelVersion := os.Getenv("TEST_MODEL_VERSION")
-
-	if ecrRegistry == "" || ecrRepo == "" || modelName == "" || modelVersion == "" {
-		t.Fatal("Missing required environment variables for ECR test")
+	// Get tag from environment variable
+	tag := os.Getenv("TEST_ECR_TAG")
+	if tag == "" {
+		t.Fatal("Missing required environment variable for ECR test: TEST_ECR_TAG")
 	}
 
-	// Create tag for ECR
-	tag := fmt.Sprintf("%s/%s/%s:%s", ecrRegistry, ecrRepo, modelName, modelVersion)
 	source := "assets/dummy.gguf"
 
 	// Test push to ECR
