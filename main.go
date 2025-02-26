@@ -55,14 +55,27 @@ func getAuthenticator(ref name.Reference) authn.Authenticator {
 	}
 
 	// Check for AWS credentials (for ECR)
-	if strings.Contains(registry, "amazonaws.com") &&
-		os.Getenv("AWS_ACCESS_KEY_ID") != "" &&
-		os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-		fmt.Println("Using AWS credentials authentication")
-		return authn.FromConfig(authn.AuthConfig{
-			Username: os.Getenv("AWS_ACCESS_KEY_ID"),
-			Password: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-		})
+	// First check if we're dealing with an ECR registry
+	if strings.Contains(registry, "amazonaws.com") {
+		// Try to use AWS SDK credential chain first (handles OIDC, role assumption, etc.)
+		// This will work when credentials are set up by aws-actions/configure-aws-credentials
+		fmt.Println("Attempting to use AWS SDK credential chain for ECR authentication")
+		awsAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
+		if err == nil && awsAuth != authn.Anonymous {
+			fmt.Println("Successfully authenticated with AWS SDK credential chain")
+			return awsAuth
+		}
+
+		// Fall back to explicit environment variables if available
+		if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+			fmt.Println("Using AWS credentials from environment variables")
+			return authn.FromConfig(authn.AuthConfig{
+				Username: os.Getenv("AWS_ACCESS_KEY_ID"),
+				Password: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			})
+		}
+
+		fmt.Println("Warning: Could not authenticate with AWS for ECR")
 	}
 
 	// Fall back to Docker credentials if available
