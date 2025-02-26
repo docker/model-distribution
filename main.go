@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -17,6 +18,41 @@ import (
 	"github.com/docker/model-distribution/pkg/layer"
 	"github.com/docker/model-distribution/pkg/utils"
 )
+
+// getAuthenticator returns the appropriate authenticator based on the registry and available credentials
+func getAuthenticator(ref name.Reference) authn.Authenticator {
+	registry := ref.Context().Registry.Name()
+
+	// Default to anonymous authentication
+	auth := authn.Anonymous
+
+	// Check for Google OAuth token (for GAR)
+	if googleToken := os.Getenv("GOOGLE_OAUTH_ACCESS_TOKEN"); googleToken != "" && strings.Contains(registry, "pkg.dev") {
+		return &authn.Bearer{
+			Token: googleToken,
+		}
+	}
+
+	// Check for AWS credentials (for ECR)
+	if strings.Contains(registry, "amazonaws.com") &&
+		os.Getenv("AWS_ACCESS_KEY_ID") != "" &&
+		os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+		return authn.FromConfig(authn.AuthConfig{
+			Username: os.Getenv("AWS_ACCESS_KEY_ID"),
+			Password: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		})
+	}
+
+	// Fall back to Docker credentials if available
+	if username, password := os.Getenv("DOCKER_USERNAME"), os.Getenv("DOCKER_PASSWORD"); username != "" && password != "" {
+		return &authn.Basic{
+			Username: username,
+			Password: password,
+		}
+	}
+
+	return auth
+}
 
 func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Println("1. Creating reference for target image...")
@@ -99,11 +135,8 @@ func PushModel(source, tag string) (name.Reference, error) {
 	// Show progress
 	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
 
-	// Create auth config from environment variables
-	auth := &authn.Basic{
-		Username: os.Getenv("DOCKER_USERNAME"),
-		Password: os.Getenv("DOCKER_PASSWORD"),
-	}
+	// Get the appropriate authenticator for this registry
+	auth := getAuthenticator(ref)
 
 	// Push the image with progress and auth config
 	if err := remote.Write(ref, img,
@@ -123,7 +156,10 @@ func PullModel(tag string) (v1.Image, error) {
 		return nil, fmt.Errorf("parsing reference: %v", err)
 	}
 
-	return remote.Image(ref)
+	// Get the appropriate authenticator for this registry
+	auth := getAuthenticator(ref)
+
+	return remote.Image(ref, remote.WithAuth(auth))
 }
 
 func main() {
