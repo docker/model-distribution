@@ -15,6 +15,8 @@ env:
   GAR_LOCATION: us-east4-docker.pkg.dev
   MODEL_NAME: test-model
   MODEL_VERSION: latest
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 676043725699
 
 jobs:
   verify-gar:
@@ -55,35 +57,37 @@ jobs:
           # Run the tests
           go test -v -run TestGARIntegration
 
-#  verify-ecr:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout code
-#        uses: actions/checkout@v4
-#
-#      - name: Set up Go
-#        uses: actions/setup-go@v4
-#        with:
-#          go-version: '1.21'
-#
-#      - name: Configure AWS credentials
-#        uses: aws-actions/configure-aws-credentials@v4
-#        with:
-#          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-#          aws-region: us-east-1
-#
-#      - name: Login to Amazon ECR
-#        id: login-ecr
-#        uses: aws-actions/amazon-ecr-login@v2
-#
-#      - name: Run tests with ECR integration
-#        run: |
-#          # Set environment variables for the test
-#          export TEST_ECR_ENABLED=true
-#          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-#          export TEST_ECR_REPOSITORY=model-distribution
-#          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
-#          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
-#
-#          # Run the tests
-#          go test -v -run TestECRIntegration
+  verify-ecr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Configure AWS Credentials
+        id: assume-role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/release-model-distribution
+          role-session-name: gha-build-push-image-ecr
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Run tests with ECR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_ECR_ENABLED=true
+          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          export TEST_ECR_REPOSITORY=model-distribution
+          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
+          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
+
+          # Run the tests
+          go test -v -run TestECRIntegration
