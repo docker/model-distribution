@@ -18,7 +18,6 @@ func TestPushModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get registry address: %v", err)
 	}
-	username := "testuser"
 
 	// Test cases
 	tests := []struct {
@@ -30,13 +29,13 @@ func TestPushModel(t *testing.T) {
 		{
 			name:    "Valid push",
 			source:  "assets/dummy.gguf",
-			tag:     registry + "/" + username + "/myartifact:v1.0.0",
+			tag:     registry + "/myartifact:v1.0.0",
 			wantErr: false,
 		},
 		{
 			name:    "Invalid source file",
 			source:  "nonexistent/file.gguf",
-			tag:     registry + "/" + username + "/myartifact:v1.0.0",
+			tag:     registry + "/myartifact:v1.0.0",
 			wantErr: true,
 		},
 		{
@@ -48,7 +47,7 @@ func TestPushModel(t *testing.T) {
 		{
 			name:    "Empty source",
 			source:  "",
-			tag:     registry + "/" + username + "/myartifact:v1.0.0",
+			tag:     registry + "/myartifact:v1.0.0",
 			wantErr: true,
 		},
 		{
@@ -86,11 +85,10 @@ func TestPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get registry address: %v", err)
 	}
-	username := "testuser"
 
 	// First push a test model
 	source := "assets/dummy.gguf"
-	tag := registry + "/" + username + "/pulltest:v1.0.0"
+	tag := registry + "/pulltest:v1.0.0"
 
 	_, err = PushModel(source, tag)
 	if err != nil {
@@ -115,7 +113,7 @@ func TestPullModel(t *testing.T) {
 		},
 		{
 			name:    "Nonexistent image",
-			tag:     registry + "/" + username + "/nonexistent:v1.0.0",
+			tag:     registry + "/nonexistent:v1.0.0",
 			wantErr: true,
 		},
 		{
@@ -133,15 +131,18 @@ func TestPullModel(t *testing.T) {
 				t.Errorf("PullModel() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if err == nil {
-				// Verify the pulled image is valid
-				manifest, err := img.Manifest()
-				if err != nil {
-					t.Errorf("Failed to get manifest from pulled image: %v", err)
-				}
-				if manifest == nil {
-					t.Error("Pulled image manifest is nil")
-				}
+
+			if tt.wantErr {
+				return
+			}
+
+			// Verify the pulled image is valid
+			manifest, err := img.Manifest()
+			if err != nil {
+				t.Errorf("Failed to get manifest from pulled image: %v", err)
+			}
+			if manifest == nil {
+				t.Error("Pulled image manifest is nil")
 			}
 		})
 	}
@@ -178,11 +179,10 @@ func TestGARIntegration(t *testing.T) {
 
 	// Test push to GAR
 	t.Log("Pushing model to GAR:", tag)
-	ref, err := PushModel(source, tag)
-	if err != nil {
-		t.Fatalf("Failed to push model to GAR: %v", err)
+	if _, err := PushModel(source, tag); err != nil {
+		t.Fatalf("Failed to push test model: %v", err)
 	}
-	t.Log("Successfully pushed model to GAR:", ref.String())
+	t.Log("Successfully pushed model to GAR:", tag)
 
 	// Test pull from GAR
 	t.Log("Pulling model from GAR:", tag)
