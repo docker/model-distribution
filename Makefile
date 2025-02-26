@@ -47,9 +47,6 @@ run: build
 		exit 1; \
 	fi
 	@echo "Running ${BINARY_NAME}..."
-	@DOCKER_REGISTRY=${DOCKER_REGISTRY} \
-	DOCKER_USERNAME=${DOCKER_USERNAME} \
-	DOCKER_PASSWORD=${DOCKER_PASSWORD} \
 	${GOBIN}/${BINARY_NAME} --source "$(SOURCE)" --tag "$(TAG)"
 
 help:
