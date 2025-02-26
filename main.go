@@ -17,31 +17,6 @@ import (
 	"github.com/docker/model-distribution/pkg/utils"
 )
 
-// getAuthenticator returns the appropriate authenticator based on the registry and available credentials
-func getAuthenticator(ref name.Reference) authn.Authenticator {
-
-	// First try to use the Docker config authentication
-	// This will use credentials from ~/.docker/config.json which is set up by the workflow
-	dockerAuth, err := authn.DefaultKeychain.Resolve(ref.Context())
-	if err == nil && dockerAuth != authn.Anonymous {
-		fmt.Println("Using Docker config authentication")
-		return dockerAuth
-	}
-
-	// Fall back to Docker credentials if available
-	if username, password := os.Getenv("DOCKER_USERNAME"), os.Getenv("DOCKER_PASSWORD"); username != "" && password != "" {
-		fmt.Println("Using Docker username/password authentication")
-		return &authn.Basic{
-			Username: username,
-			Password: password,
-		}
-	}
-
-	// Default to anonymous authentication
-	fmt.Println("Using anonymous authentication")
-	return authn.Anonymous
-}
-
 func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Println("1. Creating reference for target image...")
 	ref, err := name.ParseReference(tag)
@@ -123,12 +98,9 @@ func PushModel(source, tag string) (name.Reference, error) {
 	// Show progress
 	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
 
-	// Get the appropriate authenticator for this registry
-	auth := getAuthenticator(ref)
-
 	// Push the image with progress and auth config
 	if err := remote.Write(ref, img,
-		remote.WithAuth(auth),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithProgress(progressChan),
 	); err != nil {
 		return nil, fmt.Errorf("writing image: %v", err)
@@ -144,10 +116,7 @@ func PullModel(tag string) (v1.Image, error) {
 		return nil, fmt.Errorf("parsing reference: %v", err)
 	}
 
-	// Get the appropriate authenticator for this registry
-	auth := getAuthenticator(ref)
-
-	return remote.Image(ref, remote.WithAuth(auth))
+	return remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 }
 
 func main() {
