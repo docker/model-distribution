@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -10,8 +13,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"log"
-	"os"
 
 	"github.com/docker/model-distribution/pkg/layer"
 	"github.com/docker/model-distribution/pkg/utils"
@@ -117,6 +118,17 @@ func PullModel(tag string) (v1.Image, error) {
 	}
 
 	return remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+}
+
+// DeleteModel deletes a model artifact from a container registry
+func DeleteModel(tag string) error {
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		return fmt.Errorf("parsing reference: %v", err)
+	}
+
+	fmt.Printf("Deleting artifact: %s\n", ref.String())
+	return remote.Delete(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 }
 
 func main() {

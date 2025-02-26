@@ -160,6 +160,16 @@ func TestGARIntegration(t *testing.T) {
 		t.Fatal("Missing required environment variable for GAR test: TEST_GAR_TAG")
 	}
 
+	// Register cleanup function
+	t.Cleanup(func() {
+		t.Log("Cleaning up GAR artifact:", tag)
+		if err := DeleteModel(tag); err != nil {
+			t.Logf("Warning: Failed to cleanup GAR artifact: %v", err)
+		} else {
+			t.Log("Successfully cleaned up GAR artifact")
+		}
+	})
+
 	// Log authentication method
 	if credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credFile != "" {
 		t.Logf("Using Google Application Credentials file: %s", credFile)
@@ -206,6 +216,16 @@ func TestECRIntegration(t *testing.T) {
 	if tag == "" {
 		t.Fatal("Missing required environment variable for ECR test: TEST_ECR_TAG")
 	}
+
+	// Register cleanup function
+	t.Cleanup(func() {
+		t.Log("Cleaning up ECR artifact:", tag)
+		if err := DeleteModel(tag); err != nil {
+			t.Logf("Warning: Failed to cleanup ECR artifact: %v", err)
+		} else {
+			t.Log("Successfully cleaned up ECR artifact")
+		}
+	})
 
 	source := "assets/dummy.gguf"
 
