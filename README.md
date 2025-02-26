@@ -1,62 +1,83 @@
-# Model Distribution Tool
+# Model Distribution
 
-[![CI](https://github.com/docker/model-distribution/actions/workflows/ci.yml/badge.svg)](https://github.com/docker/model-distribution/actions/workflows/ci.yml)
+This repository contains tools for distributing AI models to container registries like Google Artifact Registry (GAR) and Amazon Elastic Container Registry (ECR).
 
-A tool for packaging and distributing AI models as OCI artifacts in container registries.
+## Features
 
-## Development
-
-### Configuration
-
-Copy the example environment file and update with your values:
-
-```bash
-cp .env.example .env
-```
-
-Required environment variables for tests:
-- `DOCKER_REGISTRY`: Registry URL (default: docker.io)
-- `DOCKER_USERNAME`: Your Docker registry username
-- `DOCKER_PASSWORD`: Your Docker Personal Access Token (not your password)
-
-### Building
-
-```bash
-# Build the binary
-make build
-
-# Run tests
-make test
-
-# Clean build artifacts
-make clean
-```
-
-See `make help` for all available commands.
+- Push models to container registries using OCI artifacts
+- Pull models from container registries
+- Verify model integrity after push/pull operations
+- CI/CD workflows for testing with GAR and ECR
 
 ## Usage
 
-The tool requires two parameters:
-- `--source`: Path to local file or URL to download
-- `--tag`: Target registry/repository:tag where the model will be pushed
-
-### Using make run
-
-The easiest way to run the tool is using the `make run` command:
+### Command Line
 
 ```bash
-# Make sure your .env file is configured with DOCKER_* variables
-make run SOURCE=path/to/model.gguf TAG=registry.example.com/my-model:latest
+# Push a model to a registry
+go run main.go --source path/to/model.gguf --tag registry/repository:tag
+
+# Example for GAR
+go run main.go --source assets/dummy.gguf --tag us-east4-docker.pkg.dev/project-id/repository/model:v1.0.0
+
+# Example for ECR
+go run main.go --source assets/dummy.gguf --tag 123456789012.dkr.ecr.us-east-1.amazonaws.com/repository/model:v1.0.0
 ```
 
-### Using the binary directly
+### As a Library
 
-Package a local model file:
-```
-./model-distribution-tool --source "/Users/ilopezluna/Downloads/llama-2-7b-chat.Q2_K.gguf" --tag registry.example.com/my-model:latest
+```go
+import "github.com/your-org/model-distribution"
+
+// Push a model
+ref, err := PushModel("path/to/model.gguf", "registry/repository:tag")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Pull a model
+img, err := PullModel("registry/repository:tag")
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
-Package a remote model file:
-```
-./model-distribution-tool --source "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/191239b/llama-2-7b-chat.Q2_K.gguf" --tag registry.example.com/my-model:latest
+## CI/CD Workflows
+
+This repository includes GitHub Actions workflows for testing model distribution with different container registries:
+
+1. **verify-registry-push-pull.yml**: Tests pushing and pulling models to/from GAR and ECR
+2. **gar.yml**: Pushes Docker images to Google Artifact Registry
+3. **ecr.yml**: Pushes Docker images to Amazon Elastic Container Registry
+
+### Environment Variables
+
+For GAR integration tests:
+- `TEST_GAR_ENABLED`: Set to "true" to enable GAR tests
+- `TEST_GAR_LOCATION`: GAR location (e.g., "us-east4-docker.pkg.dev")
+- `TEST_PROJECT_ID`: Google Cloud project ID
+- `TEST_GAR_REPOSITORY`: GAR repository name
+- `TEST_MODEL_NAME`: Model name
+- `TEST_MODEL_VERSION`: Model version/tag
+
+For ECR integration tests:
+- `TEST_ECR_ENABLED`: Set to "true" to enable ECR tests
+- `TEST_ECR_REGISTRY`: ECR registry URL
+- `TEST_ECR_REPOSITORY`: ECR repository name
+- `TEST_MODEL_NAME`: Model name
+- `TEST_MODEL_VERSION`: Model version/tag
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+go test -v ./...
+
+# Run only GAR integration tests
+TEST_GAR_ENABLED=true TEST_GAR_LOCATION=... TEST_PROJECT_ID=... TEST_GAR_REPOSITORY=... TEST_MODEL_NAME=... TEST_MODEL_VERSION=... go test -v -run TestGARIntegration
+
+# Run only ECR integration tests
+TEST_ECR_ENABLED=true TEST_ECR_REGISTRY=... TEST_ECR_REPOSITORY=... TEST_MODEL_NAME=... TEST_MODEL_VERSION=... go test -v -run TestECRIntegration
 ```

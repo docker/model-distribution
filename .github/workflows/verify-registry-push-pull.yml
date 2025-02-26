@@ -1,0 +1,88 @@
+name: Verify Registry Push Pull
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
+env:
+  GAR_REGION: us-east4
+  PROJECT_ID: sandbox-298914
+  GAR_REPOSITORY: docker-model-distribution
+  GAR_LOCATION: us-east4-docker.pkg.dev
+  MODEL_NAME: test-model
+  MODEL_VERSION: latest
+
+jobs:
+  verify-gar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GAR
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }} --quiet
+
+      - name: Run tests with GAR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_GAR_ENABLED=true
+          export TEST_GAR_LOCATION=${{ env.GAR_LOCATION }}
+          export TEST_PROJECT_ID=${{ env.PROJECT_ID }}
+          export TEST_GAR_REPOSITORY=${{ env.GAR_REPOSITORY }}
+          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
+          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
+          
+          # Run the tests
+          go test -v -run TestGARIntegration
+
+  verify-ecr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Run tests with ECR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_ECR_ENABLED=true
+          export TEST_ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          export TEST_ECR_REPOSITORY=model-distribution
+          export TEST_MODEL_NAME=${{ env.MODEL_NAME }}
+          export TEST_MODEL_VERSION=${{ env.MODEL_VERSION }}
+          
+          # Run the tests
+          go test -v -run TestECRIntegration 

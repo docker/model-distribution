@@ -1,0 +1,49 @@
+name: GAR Push
+
+on:
+  push:
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
+env:
+  GAR_REGION: us-east4
+  PROJECT_ID: sandbox-298914
+  GAR_REPOSITORY: docker-model-distribution
+  GAR_LOCATION: us-east4-docker.pkg.dev
+
+jobs:
+  verify-access:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GAR
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }} --quiet
+
+      - name: Build and push image
+        run: |
+          # Build and push using existing Dockerfile
+          docker build -t ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/test:latest .
+          docker push ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/test:latest
+
+      - name: Verify image
+        run: |
+          # Remove local image to ensure we're pulling from GAR
+          docker rmi ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/test:latest
+          
+          # Pull the image back
+          docker pull ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/test:latest
+          
+          # Run the container to verify
+          docker run ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/test:latest 
