@@ -33,6 +33,7 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+          service_account: 'model-distribution-github@sandbox-298914.iam.gserviceaccount.com'
           token_format: 'access_token'  # Request an access token
 
       - name: Set up Cloud SDK
