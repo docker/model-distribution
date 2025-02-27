@@ -3,10 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/docker/model-distribution/pkg/image"
+	"github.com/docker/model-distribution/pkg/store"
+	"github.com/docker/model-distribution/pkg/types"
 	"github.com/docker/model-distribution/pkg/utils"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -90,13 +94,120 @@ func PushModel(source, tag string) (name.Reference, error) {
 	return ref, nil
 }
 
+// getLocalStore initializes and returns a local store instance
+func getLocalStore() (*store.LocalStore, error) {
+	// Use a default path for the local store (e.g., ~/.model-distribution/store)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting user home directory: %v", err)
+	}
+
+	storePath := filepath.Join(homeDir, ".model-distribution", "store")
+	return store.New(types.StoreOptions{RootPath: storePath})
+}
+
+// getImageFromLocalStore creates an image from a model in the local store
+func getImageFromLocalStore(localStore *store.LocalStore, model *types.Model) (v1.Image, error) {
+	// Create a temporary file to store the model content
+	tempFile, err := os.CreateTemp("", "model-*.gguf")
+	if err != nil {
+		return nil, fmt.Errorf("creating temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	// Pull the model to the temporary file
+	if err := localStore.Pull(model.Tags[0], tempFile.Name()); err != nil {
+		return nil, fmt.Errorf("pulling model from local store: %v", err)
+	}
+
+	// Read the model content
+	modelContent, err := os.ReadFile(tempFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("reading model content: %v", err)
+	}
+
+	// Create layer from model content
+	ggufLayer := static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf")
+
+	// Create image with layer
+	return image.CreateImage(ggufLayer)
+}
+
+// storeRemoteImage stores a remote image in the local store
+func storeRemoteImage(img v1.Image, tag string, localStore *store.LocalStore) error {
+	// Create a temporary file to store the model content
+	tempFile, err := os.CreateTemp("", "model-*.gguf")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	// Get the model content from the image
+	layers, err := img.Layers()
+	if err != nil {
+		return fmt.Errorf("getting layers: %v", err)
+	}
+
+	if len(layers) == 0 {
+		return fmt.Errorf("no layers in image")
+	}
+
+	// Use the first layer (assuming there's only one for models)
+	layer := layers[0]
+
+	// Get the layer content
+	rc, err := layer.Uncompressed()
+	if err != nil {
+		return fmt.Errorf("getting layer content: %v", err)
+	}
+	defer rc.Close()
+
+	// Write the layer content to the temporary file
+	if _, err := io.Copy(tempFile, rc); err != nil {
+		return fmt.Errorf("writing layer content: %v", err)
+	}
+
+	// Push the model to the local store
+	return localStore.Push(tempFile.Name(), []string{tag})
+}
+
 func PullModel(tag string) (v1.Image, error) {
+	// Initialize local store
+	localStore, err := getLocalStore()
+	if err != nil {
+		return nil, fmt.Errorf("initializing local store: %v", err)
+	}
+
+	// Check if model exists in local store
+	model, err := localStore.GetByTag(tag)
+	if err == nil {
+		fmt.Printf("Model %s found in local store, retrieving...\n", tag)
+		// Model exists in local store, create and return image from local store
+		return getImageFromLocalStore(localStore, model)
+	}
+
+	fmt.Printf("Model %s not found in local store, pulling from hub...\n", tag)
+	// Model doesn't exist in local store, pull from remote
 	ref, err := name.ParseReference(tag)
 	if err != nil {
 		return nil, fmt.Errorf("parsing reference: %v", err)
 	}
 
-	return remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Storing model %s in local store...\n", tag)
+	// Store the pulled model in local store
+	if err := storeRemoteImage(img, tag, localStore); err != nil {
+		// Log the error but continue since we already have the image
+		fmt.Printf("Warning: Failed to store model in local store: %v\n", err)
+	}
+
+	return img, nil
 }
 
 // DeleteModel deletes a model artifact from a container registry
