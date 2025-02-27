@@ -1,0 +1,136 @@
+package examples
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/docker/model-distribution/pkg/distribution"
+	"github.com/docker/pinata/common/pkg/logger"
+)
+
+// This example shows how to integrate the model-distribution library with the model manager
+
+// ModelManager is a simplified version of the model manager
+type ModelManager struct {
+	log        logger.ComponentLogger
+	httpClient *http.Client
+	cacheDir   string
+}
+
+// NewModelManager creates a new model manager
+func NewModelManager(log logger.ComponentLogger, httpClient *http.Client, cacheDir string) *ModelManager {
+	return &ModelManager{
+		log:        log,
+		httpClient: httpClient,
+		cacheDir:   cacheDir,
+	}
+}
+
+// PullModel pulls a model from a registry
+func (m *ModelManager) PullModel(ctx context.Context, model string) error {
+	// Create distribution client
+	client, err := distribution.NewClient(m.cacheDir)
+	if err != nil {
+		return fmt.Errorf("creating distribution client: %w", err)
+	}
+
+	// Pull the model
+	_, err = client.PullModel(ctx, model)
+	if err != nil {
+		return fmt.Errorf("pulling model: %w", err)
+	}
+
+	return nil
+}
+
+// GetModelPath returns the local file path for a model
+func (m *ModelManager) GetModelPath(model string) (string, error) {
+	// Create distribution client
+	client, err := distribution.NewClient(m.cacheDir)
+	if err != nil {
+		return "", fmt.Errorf("creating distribution client: %w", err)
+	}
+
+	// Get the model path - this now returns the direct path to the blob file
+	// without creating a temporary copy
+	path, err := client.GetModelPath(model)
+	if err != nil {
+		if errors.Is(err, distribution.ErrModelNotFound) {
+			return "", fmt.Errorf("model not found: %s", model)
+		}
+		return "", fmt.Errorf("getting model path: %w", err)
+	}
+
+	return path, nil
+}
+
+// GetModel returns a model by reference
+func (m *ModelManager) GetModel(model string) (*distribution.ManagerModel, error) {
+	// Create distribution client
+	client, err := distribution.NewClient(m.cacheDir)
+	if err != nil {
+		return nil, fmt.Errorf("creating distribution client: %w", err)
+	}
+
+	// Get the model
+	distributionModel, err := client.GetModel(model)
+	if err != nil {
+		if errors.Is(err, distribution.ErrModelNotFound) {
+			return nil, fmt.Errorf("model not found: %s", model)
+		}
+		return nil, fmt.Errorf("getting model: %w", err)
+	}
+
+	// Get the model path
+	path, err := client.GetModelPath(model)
+	if err != nil {
+		return nil, fmt.Errorf("getting model path: %w", err)
+	}
+
+	// Convert to manager model
+	managerModel := distribution.ConvertToManagerModel(distributionModel, path)
+
+	return managerModel, nil
+}
+
+// GetModels returns all available models
+func (m *ModelManager) GetModels() (distribution.ManagerModelList, error) {
+	// Create distribution client
+	client, err := distribution.NewClient(m.cacheDir)
+	if err != nil {
+		return nil, fmt.Errorf("creating distribution client: %w", err)
+	}
+
+	// Get all models
+	models, err := client.ListModels()
+	if err != nil {
+		return nil, fmt.Errorf("listing models: %w", err)
+	}
+
+	// Get paths for all models
+	paths := make(map[string]string)
+	for _, model := range models {
+		if len(model.Tags) == 0 {
+			continue
+		}
+
+		// Use the first tag as the reference
+		reference := model.Tags[0]
+
+		// Get the model path
+		path, err := client.GetModelPath(reference)
+		if err != nil {
+			m.log.Warnf("Failed to get path for model %s: %v", reference, err)
+			continue
+		}
+
+		paths[reference] = path
+	}
+
+	// Convert to manager models
+	managerModels := distribution.ConvertToManagerModelList(models, paths)
+
+	return managerModels, nil
+}

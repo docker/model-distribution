@@ -1,10 +1,10 @@
 # Model Distribution
 
-A library for distributing ML models using container registries.
+A library and CLI tool for distributing ML models using container registries.
 
 ## Overview
 
-Model Distribution is a Go library that allows you to push, pull, and manage ML models using container registries. It provides a simple API for working with models in GGUF format.
+Model Distribution is a Go library and CLI tool that allows you to push, pull, and manage ML models using container registries. It provides a simple API and command-line interface for working with models in GGUF format.
 
 ## Features
 
@@ -12,8 +12,37 @@ Model Distribution is a Go library that allows you to push, pull, and manage ML 
 - Pull models from container registries
 - Local model storage
 - Model metadata management
+- Command-line interface for all operations
 
 ## Usage
+
+### As a CLI Tool
+
+```bash
+# Build the CLI tool
+make build
+
+# Pull a model from a registry
+./bin/model-distribution-tool pull registry.example.com/models/llama:v1.0
+
+# Push a model to a registry
+./bin/model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0
+
+# List all models in the local store
+./bin/model-distribution-tool list
+
+# Get information about a model
+./bin/model-distribution-tool get registry.example.com/models/llama:v1.0
+
+# Get the local file path for a model
+./bin/model-distribution-tool get-path registry.example.com/models/llama:v1.0
+```
+
+For more information about the CLI tool, run:
+
+```bash
+./bin/model-distribution-tool --help
+```
 
 ### As a Library
 
