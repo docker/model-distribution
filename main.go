@@ -18,29 +18,18 @@ import (
 	"github.com/docker/model-distribution/pkg/utils"
 )
 
-func main() {
-	var (
-		source = flag.String("source", "", "Path to local file or URL to download")
-		tag    = flag.String("tag", "", "Target registry/repository:tag")
-	)
-	flag.Parse()
-
-	if *source == "" || *tag == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-
+func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Println("1. Creating reference for target image...")
-	ref, err := name.ParseReference(*tag)
+	ref, err := name.ParseReference(tag)
 	if err != nil {
-		log.Fatalf("parsing reference: %v", err)
+		return nil, err
 	}
 	fmt.Printf("   Reference: %s\n", ref.String())
 
-	fmt.Printf("2. Reading from source: %s\n", *source)
-	fileContent, err := utils.ReadContent(*source)
+	fmt.Printf("2. Reading from source: %s\n", source)
+	fileContent, err := utils.ReadContent(source)
 	if err != nil {
-		log.Fatalf("reading content: %v", err)
+		return nil, err
 	}
 	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
 
@@ -60,7 +49,7 @@ func main() {
 
 	img, err = mutate.ConfigFile(img, configFile)
 	if err != nil {
-		log.Fatalf("setting config: %v", err)
+		return nil, err
 	}
 
 	// Set up artifact manifest according to OCI spec
@@ -70,13 +59,13 @@ func main() {
 	fmt.Println("5. Appending imgLayer to image...")
 	img, err = mutate.AppendLayers(img, l)
 	if err != nil {
-		log.Fatalf("appending imgLayer: %v", err)
+		return nil, err
 	}
 
 	fmt.Println("6. Getting manifest details...")
 	manifest, err := img.Manifest()
 	if err != nil {
-		log.Fatalf("getting manifest: %v", err)
+		return nil, err
 	}
 
 	fmt.Println("\nManifest details:")
@@ -110,13 +99,52 @@ func main() {
 	// Show progress
 	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
 
-	// Push the image with progress
+	// Push the image with progress and auth config
 	if err := remote.Write(ref, img,
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithProgress(progressChan),
 	); err != nil {
-		log.Fatalf("writing image: %v", err)
+		return nil, fmt.Errorf("writing image: %v", err)
 	}
 
 	fmt.Printf("Successfully pushed %s\n", ref.String())
+	return ref, nil
+}
+
+func PullModel(tag string) (v1.Image, error) {
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		return nil, fmt.Errorf("parsing reference: %v", err)
+	}
+
+	return remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+}
+
+// DeleteModel deletes a model artifact from a container registry
+func DeleteModel(tag string) error {
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		return fmt.Errorf("parsing reference: %v", err)
+	}
+
+	fmt.Printf("Deleting artifact: %s\n", ref.String())
+	return remote.Delete(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+}
+
+func main() {
+	var (
+		source = flag.String("source", "", "Path to local file or URL to download")
+		tag    = flag.String("tag", "", "Target registry/repository:tag")
+	)
+	flag.Parse()
+
+	if *source == "" || *tag == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	_, err := PushModel(*source, *tag)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
