@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/static"
 
 	"github.com/docker/model-distribution/pkg/image"
@@ -246,27 +247,19 @@ func (s *LocalStore) Pull(tag string, destPath string) error {
 	}
 
 	// Unmarshal the manifest
-	var manifest map[string]interface{}
+	var manifest v1.Manifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return fmt.Errorf("unmarshaling manifest: %w", err)
 	}
 
 	// Get the layer
-	layers, ok := manifest["layers"].([]interface{})
-	if !ok || len(layers) == 0 {
+	if len(manifest.Layers) == 0 {
 		return fmt.Errorf("no layers in manifest")
 	}
 
 	// Use the first layer (assuming there's only one for models)
-	layer, ok := layers[0].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid layer format")
-	}
-
-	layerDigest, ok := layer["digest"].(string)
-	if !ok {
-		return fmt.Errorf("invalid layer digest")
-	}
+	layer := manifest.Layers[0]
+	layerDigest := layer.Digest.String()
 
 	// Parse the layer digest
 	layerDigestParts := strings.Split(layerDigest, ":")
@@ -342,6 +335,71 @@ func (s *LocalStore) GetByTag(tag string) (*types.Model, error) {
 	}
 
 	return nil, fmt.Errorf("model with tag %s not found", tag)
+}
+
+// GetBlobPath returns the direct path to the blob file for a model
+func (s *LocalStore) GetBlobPath(tag string) (string, error) {
+	// Get the model by tag
+	model, err := s.GetByTag(tag)
+	if err != nil {
+		return "", fmt.Errorf("getting model by tag: %w", err)
+	}
+
+	// Read the manifest
+	manifestDigestParts := strings.Split(model.ManifestDigest, ":")
+	var algorithm, hash string
+
+	if len(manifestDigestParts) == 2 {
+		// Format is already "algorithm:hash"
+		algorithm = manifestDigestParts[0]
+		hash = manifestDigestParts[1]
+	} else if len(manifestDigestParts) == 1 {
+		// Format is just the hash, assume sha256
+		algorithm = "sha256"
+		hash = manifestDigestParts[0]
+	} else {
+		return "", fmt.Errorf("invalid manifest digest format: %s", model.ManifestDigest)
+	}
+
+	manifestPath := filepath.Join(s.rootPath, "manifests", algorithm, hash)
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return "", fmt.Errorf("reading manifest file: %w", err)
+	}
+
+	// Unmarshal the manifest
+	var manifest v1.Manifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		return "", fmt.Errorf("unmarshaling manifest: %w", err)
+	}
+
+	// Get the layer
+	if len(manifest.Layers) == 0 {
+		return "", fmt.Errorf("no layers in manifest")
+	}
+
+	// Use the first layer (assuming there's only one for models)
+	layer := manifest.Layers[0]
+	layerDigest := layer.Digest.String()
+
+	// Parse the layer digest
+	layerDigestParts := strings.Split(layerDigest, ":")
+	var layerAlgorithm, layerHash string
+
+	if len(layerDigestParts) == 2 {
+		// Format is already "algorithm:hash"
+		layerAlgorithm = layerDigestParts[0]
+		layerHash = layerDigestParts[1]
+	} else if len(layerDigestParts) == 1 {
+		// Format is just the hash, assume sha256
+		layerAlgorithm = "sha256"
+		layerHash = layerDigestParts[0]
+	} else {
+		return "", fmt.Errorf("invalid digest format: %s", layerDigest)
+	}
+
+	// Return the path to the blob file
+	return filepath.Join(s.rootPath, "blobs", layerAlgorithm, layerHash), nil
 }
 
 // Delete deletes a model by tag
