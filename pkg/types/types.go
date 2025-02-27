@@ -11,19 +11,19 @@ type Store interface {
 	// List all models in the store
 	List() ([]Model, error)
 
-	// Get model info by tag
+	// GetByTag Get model info by tag
 	GetByTag(tag string) (*Model, error)
 
 	// Delete a model by tag
 	Delete(tag string) error
 
-	// Add tags to an existing model
+	// AddTags Add tags to an existing model
 	AddTags(tag string, newTags []string) error
 
-	// Remove tags from a model
+	// RemoveTags Remove tags from a model
 	RemoveTags(tags []string) error
 
-	// Get store version
+	// Version Get store version
 	Version() string
 
 	// Upgrade store to latest version

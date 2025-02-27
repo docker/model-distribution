@@ -360,8 +360,8 @@ func (s *LocalStore) Delete(tag string) error {
 	}
 
 	// Find the model by tag
-	var modelIndex int = -1
-	var tagIndex int = -1
+	var modelIndex = -1
+	var tagIndex = -1
 	for i, model := range models.Models {
 		for j, modelTag := range model.Tags {
 			if modelTag == tag {
@@ -478,9 +478,9 @@ func (s *LocalStore) RemoveTags(tags []string) error {
 	}
 
 	// Remove tags from models
-	modelsToRemove := []int{}
+	var modelsToRemove []int
 	for i, model := range models.Models {
-		newTags := []string{}
+		var newTags []string
 		for _, tag := range model.Tags {
 			if !tagsToRemove[tag] {
 				newTags = append(newTags, tag)
