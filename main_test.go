@@ -26,10 +26,6 @@ var _ ClientInterface = (*distribution.Client)(nil)
 
 // TestMainHelp tests the help command
 func TestMainHelp(t *testing.T) {
-	if os.Getenv("GO_RUN_INTEGRATION_TESTS") != "1" {
-		t.Skip("Skipping integration test; set GO_RUN_INTEGRATION_TESTS=1 to run")
-	}
-
 	cmd := exec.Command("go", "run", "main.go", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -52,10 +48,6 @@ func TestMainHelp(t *testing.T) {
 
 // TestMainVersion tests the version command
 func TestMainVersion(t *testing.T) {
-	if os.Getenv("GO_RUN_INTEGRATION_TESTS") != "1" {
-		t.Skip("Skipping integration test; set GO_RUN_INTEGRATION_TESTS=1 to run")
-	}
-
 	cmd := exec.Command("go", "run", "main.go", "--version")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -66,27 +58,6 @@ func TestMainVersion(t *testing.T) {
 	if !strings.Contains(string(output), "version") {
 		t.Errorf("Version output does not contain version information")
 	}
-}
-
-// Helper function to wrap command functions to accept our interface
-func wrapCmdPull(client ClientInterface, args []string) int {
-	return cmdPull(client.(*distribution.Client), args)
-}
-
-func wrapCmdPush(client ClientInterface, args []string) int {
-	return cmdPush(client.(*distribution.Client), args)
-}
-
-func wrapCmdList(client ClientInterface, args []string) int {
-	return cmdList(client.(*distribution.Client), args)
-}
-
-func wrapCmdGet(client ClientInterface, args []string) int {
-	return cmdGet(client.(*distribution.Client), args)
-}
-
-func wrapCmdGetPath(client ClientInterface, args []string) int {
-	return cmdGetPath(client.(*distribution.Client), args)
 }
 
 // TestMainPull tests the pull command

@@ -30,10 +30,6 @@ test:
 	@echo "Running unit tests..."
 	@go test -v ./...
 
-integration-test:
-	@echo "Running integration tests..."
-	@GO_RUN_INTEGRATION_TESTS=1 go test -v ./...
-
 clean:
 	@echo "Cleaning..."
 	@rm -rf ${GOBIN}
@@ -71,7 +67,6 @@ help:
 	@echo "  all              - Clean, build, and test"
 	@echo "  build            - Build the binary"
 	@echo "  test             - Run unit tests"
-	@echo "  integration-test - Run integration tests"
 	@echo "  clean            - Clean build artifacts"
 	@echo "  run-pull         - Pull a model (TAG=registry/model:tag)"
 	@echo "  run-push         - Push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag)"
