@@ -147,6 +147,109 @@ func TestPullModel(t *testing.T) {
 	}
 }
 
+// TestLocalStorePullModel tests the local store functionality of PullModel
+func TestLocalStorePullModel(t *testing.T) {
+	// Set up test registry
+	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	if err != nil {
+		t.Fatalf("Failed to start registry container: %v", err)
+	}
+
+	registry, err := registryContainer.HostAddress(context.Background())
+	if err != nil {
+		t.Fatalf("Failed to get registry address: %v", err)
+	}
+
+	// First push a test model
+	source := "assets/dummy.gguf"
+	tag := registry + "/localstoretest:v1.0.0"
+
+	_, err = PushModel(source, tag)
+	if err != nil {
+		t.Fatalf("Failed to push test model: %v", err)
+	}
+
+	// First pull - should pull from remote and store locally
+	t.Log("First pull - should pull from remote")
+	img1, err := PullModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to pull model from remote: %v", err)
+	}
+
+	// Verify the pulled image is valid
+	manifest1, err := img1.Manifest()
+	if err != nil {
+		t.Fatalf("Failed to get manifest from pulled image: %v", err)
+	}
+
+	// Terminate the registry container to ensure the next pull is from local store
+	err = registryContainer.Terminate(context.Background())
+	if err != nil {
+		t.Fatalf("Failed to terminate registry container: %v", err)
+	}
+
+	// Second pull - should retrieve from local store
+	t.Log("Second pull - should retrieve from local store")
+	img2, err := PullModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to pull model from local store: %v", err)
+	}
+
+	// Verify the pulled image is valid
+	manifest2, err := img2.Manifest()
+	if err != nil {
+		t.Fatalf("Failed to get manifest from pulled image: %v", err)
+	}
+
+	// Verify both manifests are the same
+	if manifest1.Config.Digest.String() != manifest2.Config.Digest.String() {
+		t.Errorf("Manifests from remote and local store don't match")
+	}
+}
+
+// TestLocalStoreErrorHandling tests error handling in the local store functionality
+func TestLocalStoreErrorHandling(t *testing.T) {
+	// Save original home directory
+	originalHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", originalHome) // Restore original home directory after test
+
+	// Test with invalid home directory to simulate local store initialization failure
+	t.Run("Local store initialization failure", func(t *testing.T) {
+		// Set HOME to a non-existent directory
+		os.Setenv("HOME", "/nonexistent/directory")
+
+		// Set up test registry
+		registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+		if err != nil {
+			t.Fatalf("Failed to start registry container: %v", err)
+		}
+
+		registry, err := registryContainer.HostAddress(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get registry address: %v", err)
+		}
+
+		// Try to pull a model
+		tag := registry + "/errortest:v1.0.0"
+
+		// Should fall back to remote pull even if local store initialization fails
+		img, err := PullModel(tag)
+		// We expect an error here because the image doesn't exist in the registry
+		if err == nil {
+			t.Errorf("Expected error when pulling non-existent model with invalid store")
+
+			// If no error, verify the image
+			manifest, err := img.Manifest()
+			if err != nil {
+				t.Errorf("Failed to get manifest from pulled image: %v", err)
+			}
+			if manifest == nil {
+				t.Error("Pulled image manifest is nil")
+			}
+		}
+	})
+}
+
 // TestGARIntegration tests pushing and pulling a model to/from Google Artifact Registry
 func TestGARIntegration(t *testing.T) {
 	// Skip if not running in CI with GAR enabled
