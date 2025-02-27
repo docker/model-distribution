@@ -6,16 +6,13 @@ import (
 	"log"
 	"os"
 
+	"github.com/docker/model-distribution/pkg/image"
+	"github.com/docker/model-distribution/pkg/utils"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/types"
-
-	"github.com/docker/model-distribution/pkg/layer"
-	"github.com/docker/model-distribution/pkg/utils"
+	"github.com/google/go-containerregistry/pkg/v1/static"
 )
 
 func PushModel(source, tag string) (name.Reference, error) {
@@ -34,35 +31,17 @@ func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
 
 	fmt.Println("3. Creating imgLayer from file content...")
-	l := layer.New(fileContent)
+	l := static.NewLayer(fileContent, "application/vnd.docker.ai.model.file.v1+gguf")
 	layerSize, _ := l.Size()
 	fmt.Printf("   Layer size: %s\n", utils.FormatBytes(int(layerSize)))
 
-	fmt.Println("4. Creating empty image with artifact configuration...")
-	img := empty.Image
-
-	configFile := &v1.ConfigFile{
-		Architecture: "unknown",
-		OS:           "unknown",
-		Config:       v1.Config{},
-	}
-
-	img, err = mutate.ConfigFile(img, configFile)
+	fmt.Println("4. Creating image with layer...")
+	img, err := image.CreateImage(l)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set up artifact manifest according to OCI spec
-	img = mutate.MediaType(img, types.OCIManifestSchema1)
-	img = mutate.ConfigMediaType(img, "application/vnd.docker.ai.model.config.v1+json")
-
-	fmt.Println("5. Appending imgLayer to image...")
-	img, err = mutate.AppendLayers(img, l)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println("6. Getting manifest details...")
+	fmt.Println("5. Getting manifest details...")
 	manifest, err := img.Manifest()
 	if err != nil {
 		return nil, err
@@ -83,7 +62,7 @@ func PushModel(source, tag string) (name.Reference, error) {
 	}
 	fmt.Println()
 
-	fmt.Println("7. Pushing image to registry...")
+	fmt.Println("6. Pushing image to registry...")
 	// Create progress channel
 	progressChan := make(chan v1.Update, 1)
 
