@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run integration-test
+.PHONY: all build test clean lint run
 
 # Import env file if it exists
 -include .env
