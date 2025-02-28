@@ -19,6 +19,7 @@ type ClientInterface interface {
 	ListModels() ([]*types.Model, error)
 	GetModel(reference string) (*types.Model, error)
 	GetModelPath(reference string) (string, error)
+	DeleteModel(ctx context.Context, reference string) error
 }
 
 // Ensure distribution.Client implements ClientInterface
@@ -173,5 +174,27 @@ func TestMainGetPath(t *testing.T) {
 	exitCode := cmdGetPath(client, []string{})
 	if exitCode != 1 {
 		t.Errorf("Get-path command with invalid arguments should fail")
+	}
+}
+
+// TestCmdDelete tests the delete command
+func TestCmdDelete(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a client for testing
+	client, err := distribution.NewClient(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Test the delete command with invalid arguments
+	exitCode := cmdDelete(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Delete command with invalid arguments should fail")
 	}
 }

@@ -31,6 +31,12 @@ func TestECRIntegration(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
+	// Add cleanup to ensure model is deleted even if tests fail
+	t.Cleanup(func() {
+		// Ignore errors during cleanup
+		_ = client.DeleteModel(context.Background(), ecrTag)
+	})
+
 	// Read test model file
 	modelFile := "../../assets/dummy.gguf"
 	modelContent, err := os.ReadFile(modelFile)
@@ -79,15 +85,22 @@ func TestECRIntegration(t *testing.T) {
 
 	// Test delete model
 	t.Run("Delete", func(t *testing.T) {
-		err := client.store.Delete(ecrTag)
+		// Delete from both registry and local store
+		err := client.DeleteModel(context.Background(), ecrTag)
 		if err != nil {
-			t.Fatalf("Failed to delete model: %v", err)
+			t.Fatalf("Failed to delete model from registry and local store: %v", err)
 		}
 
-		// Verify model is gone
+		// Verify model is gone from local store
 		_, err = client.GetModel(ecrTag)
 		if err != ErrModelNotFound {
 			t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
+		}
+
+		// Try to pull the model again to verify it's gone from registry
+		_, err = client.PullModel(context.Background(), ecrTag)
+		if err == nil {
+			t.Errorf("Expected error when pulling deleted model, got nil")
 		}
 	})
 }

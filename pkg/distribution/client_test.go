@@ -195,3 +195,52 @@ func TestClientListModels(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteModel(t *testing.T) {
+	// Create a temporary directory for the store
+	tempDir, err := os.MkdirTemp("", "model-store-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a test model file
+	modelContent := []byte("test model content")
+	modelFile, err := os.CreateTemp("", "model-*.gguf")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(modelFile.Name())
+	defer modelFile.Close()
+
+	if _, err := modelFile.Write(modelContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+
+	// Create a client
+	client, err := NewClient(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create a reference
+	reference := "test-model:latest"
+
+	// Manually add the model to the local store
+	if err := client.store.Push(modelFile.Name(), []string{reference}); err != nil {
+		t.Fatalf("Failed to push model to local store: %v", err)
+	}
+
+	// Mock the remote.Delete function (we can't easily test the actual registry deletion)
+	// Instead, we'll verify that the model is removed from the local store
+
+	// Delete the model
+	// This will fail to delete from the registry but should still delete from local store
+	_ = client.DeleteModel(context.Background(), reference)
+
+	// Verify the model is deleted from the local store
+	_, err = client.GetModel(reference)
+	if err != ErrModelNotFound {
+		t.Fatalf("Expected ErrModelNotFound, got: %v", err)
+	}
+}

@@ -172,6 +172,51 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	return nil
 }
 
+// DeleteModel deletes a model from a registry
+func (c *Client) DeleteModel(ctx context.Context, reference string) error {
+	// Parse the reference to validate it
+	_, err := name.ParseReference(reference)
+	if err != nil {
+		return fmt.Errorf("parsing reference: %w", err)
+	}
+
+	// Get the model from the local store to get its digest
+	model, err := c.store.GetByTag(reference)
+	if err != nil {
+		return fmt.Errorf("getting model from local store: %w", err)
+	}
+
+	// Create a reference with the digest
+	digestRef, err := name.ParseReference(fmt.Sprintf("%s@%s", reference, model.ManifestDigest))
+	if err != nil {
+		return fmt.Errorf("parsing digest reference: %w", err)
+	}
+
+	// Delete the manifest from the registry
+	// If this fails, we still want to delete from the local store
+	registryErr := remote.Delete(digestRef,
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(ctx),
+	)
+	if registryErr != nil {
+		// Log the error but continue to delete from local store
+		fmt.Printf("Warning: Failed to delete model from registry: %v\n", registryErr)
+	}
+
+	// Delete the model from the local store
+	if err := c.store.Delete(reference); err != nil {
+		return fmt.Errorf("deleting model from local store: %w", err)
+	}
+
+	// If we failed to delete from registry but succeeded in deleting from local store,
+	// return the registry error
+	if registryErr != nil {
+		return fmt.Errorf("deleting model from registry: %w", registryErr)
+	}
+
+	return nil
+}
+
 // getImageFromLocalStore creates an image from a model in the local store
 func (c *Client) getImageFromLocalStore(model *types.Model) (v1.Image, error) {
 	// Get the direct path to the blob file
