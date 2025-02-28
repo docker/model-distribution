@@ -35,11 +35,13 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Create test model file
-	modelContent := []byte("test model content")
-	modelFile := filepath.Join(tempDir, "test-model.gguf")
-	if err := os.WriteFile(modelFile, modelContent, 0644); err != nil {
-		t.Fatalf("Failed to write test model file: %v", err)
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+	// Read model content for verification later
+	modelContent, err := os.ReadFile(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
 	// Push model to registry
@@ -53,7 +55,6 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to pull model: %v", err)
 	}
-	defer os.Remove(modelPath)
 
 	// Verify model content
 	pulledContent, err := os.ReadFile(modelPath)
@@ -80,12 +81,8 @@ func TestClientGetModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Create test model file
-	modelContent := []byte("test model content")
-	modelFile := filepath.Join(tempDir, "test-model.gguf")
-	if err := os.WriteFile(modelFile, modelContent, 0644); err != nil {
-		t.Fatalf("Failed to write test model file: %v", err)
-	}
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
@@ -204,18 +201,8 @@ func TestDeleteModel(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a test model file
-	modelContent := []byte("test model content")
-	modelFile, err := os.CreateTemp("", "model-*.gguf")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer os.Remove(modelFile.Name())
-	defer modelFile.Close()
-
-	if _, err := modelFile.Write(modelContent); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
 	// Create a client
 	client, err := NewClient(tempDir)
@@ -227,12 +214,9 @@ func TestDeleteModel(t *testing.T) {
 	reference := "test-model:latest"
 
 	// Manually add the model to the local store
-	if err := client.store.Push(modelFile.Name(), []string{reference}); err != nil {
+	if err := client.store.Push(modelFile, []string{reference}); err != nil {
 		t.Fatalf("Failed to push model to local store: %v", err)
 	}
-
-	// Mock the remote.Delete function (we can't easily test the actual registry deletion)
-	// Instead, we'll verify that the model is removed from the local store
 
 	// Delete the model
 	// This will fail to delete from the registry but should still delete from local store
