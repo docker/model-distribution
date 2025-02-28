@@ -8,15 +8,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/docker/model-distribution/pkg/image"
-	"github.com/docker/model-distribution/pkg/store"
-	"github.com/docker/model-distribution/pkg/types"
-	"github.com/docker/model-distribution/pkg/utils"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/static"
+
+	"github.com/docker/model-distribution/pkg/image"
+	"github.com/docker/model-distribution/pkg/model"
+	"github.com/docker/model-distribution/pkg/store"
+	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/pkg/utils"
 )
 
 func PushModel(source, tag string) (name.Reference, error) {
@@ -40,7 +42,7 @@ func PushModel(source, tag string) (name.Reference, error) {
 	fmt.Printf("   Layer size: %s\n", utils.FormatBytes(int(layerSize)))
 
 	fmt.Println("4. Creating image with layer...")
-	img, err := image.CreateImage(l)
+	img, err := model.FromGGUF(l)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +85,7 @@ func PushModel(source, tag string) (name.Reference, error) {
 	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
 
 	// Push the image with progress and auth config
-	if err := remote.Write(ref, img,
+	if err := remote.Push(ref, img,
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithProgress(progressChan),
 	); err != nil {
