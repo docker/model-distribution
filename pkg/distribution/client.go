@@ -175,26 +175,20 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 // DeleteModel deletes a model from a registry
 func (c *Client) DeleteModel(ctx context.Context, reference string) error {
 	// Parse the reference to validate it
-	_, err := name.ParseReference(reference)
+	ref, err := name.ParseReference(reference)
 	if err != nil {
 		return fmt.Errorf("parsing reference: %w", err)
 	}
 
-	// Get the model from the local store to get its digest
-	model, err := c.store.GetByTag(reference)
+	// Check if the model exists in the local store
+	_, err = c.store.GetByTag(reference)
 	if err != nil {
 		return fmt.Errorf("getting model from local store: %w", err)
 	}
 
-	// Create a reference with the digest
-	digestRef, err := name.ParseReference(fmt.Sprintf("%s@%s", reference, model.ManifestDigest))
-	if err != nil {
-		return fmt.Errorf("parsing digest reference: %w", err)
-	}
-
-	// Delete the manifest from the registry
+	// Delete the manifest from the registry using the tag reference directly
 	// If this fails, we still want to delete from the local store
-	registryErr := remote.Delete(digestRef,
+	registryErr := remote.Delete(ref,
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithContext(ctx),
 	)

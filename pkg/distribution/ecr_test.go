@@ -98,9 +98,12 @@ func TestECRIntegration(t *testing.T) {
 		}
 
 		// Try to pull the model again to verify it's gone from registry
+		// This should fail because the model has been deleted
 		_, err = client.PullModel(context.Background(), ecrTag)
 		if err == nil {
 			t.Errorf("Expected error when pulling deleted model, got nil")
+		} else {
+			t.Logf("Successfully verified model deletion: %v", err)
 		}
 	})
 }
