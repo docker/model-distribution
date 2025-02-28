@@ -53,7 +53,7 @@ jobs:
           echo "Using GAR tag: ${TEST_GAR_TAG}"
           
           # Run the tests
-          go test -v -run TestGARIntegration
+          go test -v ./pkg/distribution -run TestGARIntegration
 
   verify-ecr:
     runs-on: ubuntu-latest
@@ -94,4 +94,4 @@ jobs:
           echo "Using ECR tag: ${TEST_ECR_TAG}"
 
           # Run the tests
-          go test -v -run TestECRIntegration
+          go test -v ./pkg/distribution -run TestECRIntegration
