@@ -35,11 +35,13 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Create test model file
-	modelContent := []byte("test model content")
-	modelFile := filepath.Join(tempDir, "test-model.gguf")
-	if err := os.WriteFile(modelFile, modelContent, 0644); err != nil {
-		t.Fatalf("Failed to write test model file: %v", err)
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+	// Read model content for verification later
+	modelContent, err := os.ReadFile(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
 	// Push model to registry
@@ -53,7 +55,6 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to pull model: %v", err)
 	}
-	defer os.Remove(modelPath)
 
 	// Verify model content
 	pulledContent, err := os.ReadFile(modelPath)
@@ -80,12 +81,8 @@ func TestClientGetModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Create test model file
-	modelContent := []byte("test model content")
-	modelFile := filepath.Join(tempDir, "test-model.gguf")
-	if err := os.WriteFile(modelFile, modelContent, 0644); err != nil {
-		t.Fatalf("Failed to write test model file: %v", err)
-	}
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
