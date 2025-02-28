@@ -72,8 +72,6 @@ func main() {
 		exitCode = cmdGet(client, args)
 	case "get-path":
 		exitCode = cmdGetPath(client, args)
-	case "delete":
-		exitCode = cmdDelete(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -93,7 +91,6 @@ func printUsage() {
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
-	fmt.Println("  delete <reference>              Delete a model from registry and local store")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0")
@@ -211,24 +208,5 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Println(modelPath)
-	return 0
-}
-
-// cmdDelete deletes a model from the registry and local store
-func cmdDelete(client *distribution.Client, args []string) int {
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool delete <reference>\n")
-		return 1
-	}
-
-	reference := args[0]
-	fmt.Printf("Deleting model %s...\n", reference)
-
-	if err := client.DeleteModel(context.Background(), reference); err != nil {
-		fmt.Fprintf(os.Stderr, "Error deleting model: %v\n", err)
-		return 1
-	}
-
-	fmt.Printf("Model %s deleted successfully\n", reference)
 	return 0
 }

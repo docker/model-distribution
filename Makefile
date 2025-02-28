@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run run-pull run-push run-list run-get run-get-path run-delete
+.PHONY: all build test clean lint run
 
 # Import env file if it exists
 -include .env
@@ -62,10 +62,6 @@ run-get-path:
 	@echo "Getting path for model ${TAG}..."
 	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} get-path ${TAG}
 
-run-delete:
-	@echo "Deleting model ${TAG} from registry and local store..."
-	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} delete ${TAG}
-
 help:
 	@echo "Available targets:"
 	@echo "  all              - Clean, build, and test"
@@ -77,5 +73,4 @@ help:
 	@echo "  run-list         - List all models"
 	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
 	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"
-	@echo "  run-delete       - Delete a model from registry and local store (TAG=registry/model:tag)"
 

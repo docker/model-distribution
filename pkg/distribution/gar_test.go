@@ -31,12 +31,6 @@ func TestGARIntegration(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Add cleanup to ensure model is deleted even if tests fail
-	t.Cleanup(func() {
-		// Ignore errors during cleanup
-		_ = client.DeleteModel(context.Background(), garTag)
-	})
-
 	// Read test model file
 	modelFile := "../../assets/dummy.gguf"
 	modelContent, err := os.ReadFile(modelFile)
@@ -80,30 +74,6 @@ func TestGARIntegration(t *testing.T) {
 
 		if len(model.Tags) == 0 || model.Tags[0] != garTag {
 			t.Errorf("Model tags don't match: got %v, want [%s]", model.Tags, garTag)
-		}
-	})
-
-	// Test delete model
-	t.Run("Delete", func(t *testing.T) {
-		// Delete from both registry and local store
-		err := client.DeleteModel(context.Background(), garTag)
-		if err != nil {
-			t.Fatalf("Failed to delete model from registry and local store: %v", err)
-		}
-
-		// Verify model is gone from local store
-		_, err = client.GetModel(garTag)
-		if err != ErrModelNotFound {
-			t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
-		}
-
-		// Try to pull the model again to verify it's gone from registry
-		// This should fail because the model has been deleted
-		_, err = client.PullModel(context.Background(), garTag)
-		if err == nil {
-			t.Errorf("Expected error when pulling deleted model, got nil")
-		} else {
-			t.Logf("Successfully verified model deletion: %v", err)
 		}
 	})
 }

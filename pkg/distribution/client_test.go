@@ -192,39 +192,3 @@ func TestClientListModels(t *testing.T) {
 		}
 	}
 }
-
-func TestDeleteModel(t *testing.T) {
-	// Create a temporary directory for the store
-	tempDir, err := os.MkdirTemp("", "model-store-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Use the dummy.gguf file from assets directory
-	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-
-	// Create a client
-	client, err := NewClient(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	// Create a reference
-	reference := "test-model:latest"
-
-	// Manually add the model to the local store
-	if err := client.store.Push(modelFile, []string{reference}); err != nil {
-		t.Fatalf("Failed to push model to local store: %v", err)
-	}
-
-	// Delete the model
-	// This will fail to delete from the registry but should still delete from local store
-	_ = client.DeleteModel(context.Background(), reference)
-
-	// Verify the model is deleted from the local store
-	_, err = client.GetModel(reference)
-	if err != ErrModelNotFound {
-		t.Fatalf("Expected ErrModelNotFound, got: %v", err)
-	}
-}
