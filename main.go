@@ -1,122 +1,212 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/types"
-
-	"github.com/docker/model-distribution/pkg/layer"
-	"github.com/docker/model-distribution/pkg/utils"
+	"github.com/docker/model-distribution/pkg/distribution"
 )
 
+const (
+	defaultStorePath = "./model-store"
+	version          = "0.1.0"
+)
+
+var (
+	storePath string
+	showHelp  bool
+	showVer   bool
+)
+
+func init() {
+	flag.StringVar(&storePath, "store-path", defaultStorePath, "Path to the model store")
+	flag.BoolVar(&showHelp, "help", false, "Show help")
+	flag.BoolVar(&showVer, "version", false, "Show version")
+}
+
 func main() {
-	var (
-		source = flag.String("source", "", "Path to local file or URL to download")
-		tag    = flag.String("tag", "", "Target registry/repository:tag")
-	)
 	flag.Parse()
 
-	if *source == "" || *tag == "" {
-		flag.Usage()
+	if showVer {
+		fmt.Printf("model-distribution-tool version %s\n", version)
+		return
+	}
+
+	if showHelp || flag.NArg() == 0 {
+		printUsage()
+		return
+	}
+
+	// Create absolute path for store
+	absStorePath, err := filepath.Abs(storePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving store path: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("1. Creating reference for target image...")
-	ref, err := name.ParseReference(*tag)
+	// Create the client
+	client, err := distribution.NewClient(absStorePath)
 	if err != nil {
-		log.Fatalf("parsing reference: %v", err)
+		fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Printf("   Reference: %s\n", ref.String())
 
-	fmt.Printf("2. Reading from source: %s\n", *source)
-	fileContent, err := utils.ReadContent(*source)
+	// Get the command and arguments
+	command := flag.Arg(0)
+	args := flag.Args()[1:]
+
+	// Execute the command
+	exitCode := 0
+	switch command {
+	case "pull":
+		exitCode = cmdPull(client, args)
+	case "push":
+		exitCode = cmdPush(client, args)
+	case "list":
+		exitCode = cmdList(client, args)
+	case "get":
+		exitCode = cmdGet(client, args)
+	case "get-path":
+		exitCode = cmdGetPath(client, args)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
+		printUsage()
+		exitCode = 1
+	}
+
+	os.Exit(exitCode)
+}
+
+func printUsage() {
+	fmt.Println("Usage: model-distribution-tool [options] <command> [arguments]")
+	fmt.Println("\nOptions:")
+	flag.PrintDefaults()
+	fmt.Println("\nCommands:")
+	fmt.Println("  pull <reference>                Pull a model from a registry")
+	fmt.Println("  push <source> <reference>       Push a model to a registry")
+	fmt.Println("  list                            List all models")
+	fmt.Println("  get <reference>                 Get a model by reference")
+	fmt.Println("  get-path <reference>            Get the local file path for a model")
+	fmt.Println("\nExamples:")
+	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
+	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0")
+	fmt.Println("  model-distribution-tool list")
+}
+
+func cmdPull(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool pull <reference>\n")
+		return 1
+	}
+
+	reference := args[0]
+	ctx := context.Background()
+
+	modelPath, err := client.PullModel(ctx, reference)
 	if err != nil {
-		log.Fatalf("reading content: %v", err)
-	}
-	fmt.Printf("   Size: %s\n", utils.FormatBytes(len(fileContent)))
-
-	fmt.Println("3. Creating imgLayer from file content...")
-	l := layer.New(fileContent)
-	layerSize, _ := l.Size()
-	fmt.Printf("   Layer size: %s\n", utils.FormatBytes(int(layerSize)))
-
-	fmt.Println("4. Creating empty image with artifact configuration...")
-	img := empty.Image
-
-	configFile := &v1.ConfigFile{
-		Architecture: "unknown",
-		OS:           "unknown",
-		Config:       v1.Config{},
+		fmt.Fprintf(os.Stderr, "Error pulling model: %v\n", err)
+		return 1
 	}
 
-	img, err = mutate.ConfigFile(img, configFile)
+	fmt.Printf("Successfully pulled model: %s\n", reference)
+	fmt.Printf("Model path: %s\n", modelPath)
+	return 0
+}
+
+func cmdPush(client *distribution.Client, args []string) int {
+	if len(args) < 2 {
+		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference>\n")
+		return 1
+	}
+
+	source := args[0]
+	reference := args[1]
+	ctx := context.Background()
+
+	// Check if source file exists
+	if _, err := os.Stat(source); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: source file does not exist: %s\n", source)
+		return 1
+	}
+
+	// Check if source file is a GGUF file
+	if !strings.HasSuffix(strings.ToLower(source), ".gguf") {
+		fmt.Fprintf(os.Stderr, "Warning: source file does not have .gguf extension: %s\n", source)
+		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
+	}
+
+	err := client.PushModel(ctx, source, reference)
 	if err != nil {
-		log.Fatalf("setting config: %v", err)
+		fmt.Fprintf(os.Stderr, "Error pushing model: %v\n", err)
+		return 1
 	}
 
-	// Set up artifact manifest according to OCI spec
-	img = mutate.MediaType(img, types.OCIManifestSchema1)
-	img = mutate.ConfigMediaType(img, "application/vnd.docker.ai.model.config.v1+json")
+	fmt.Printf("Successfully pushed model: %s\n", reference)
+	return 0
+}
 
-	fmt.Println("5. Appending imgLayer to image...")
-	img, err = mutate.AppendLayers(img, l)
+func cmdList(client *distribution.Client, args []string) int {
+	models, err := client.ListModels()
 	if err != nil {
-		log.Fatalf("appending imgLayer: %v", err)
+		fmt.Fprintf(os.Stderr, "Error listing models: %v\n", err)
+		return 1
 	}
 
-	fmt.Println("6. Getting manifest details...")
-	manifest, err := img.Manifest()
+	if len(models) == 0 {
+		fmt.Println("No models found")
+		return 0
+	}
+
+	fmt.Println("Models:")
+	for i, model := range models {
+		fmt.Printf("%d. Manifest: %s\n", i+1, model.ManifestDigest)
+		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags, ", "))
+	}
+	return 0
+}
+
+func cmdGet(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool get <reference>\n")
+		return 1
+	}
+
+	reference := args[0]
+
+	model, err := client.GetModel(reference)
 	if err != nil {
-		log.Fatalf("getting manifest: %v", err)
+		fmt.Fprintf(os.Stderr, "Error getting model: %v\n", err)
+		return 1
 	}
 
-	fmt.Println("\nManifest details:")
-	fmt.Printf("  MediaType: %s\n", manifest.MediaType)
-	fmt.Printf("  Config:")
-	fmt.Printf("    MediaType: %s\n", manifest.Config.MediaType)
-	fmt.Printf("    Size: %d bytes\n", manifest.Config.Size)
-	fmt.Printf("    Digest: %s\n", manifest.Config.Digest)
-	fmt.Printf("  Layers:\n")
-	for i, imgLayer := range manifest.Layers {
-		fmt.Printf("    Layer %d:\n", i+1)
-		fmt.Printf("      MediaType: %s\n", imgLayer.MediaType)
-		fmt.Printf("      Size: %d bytes\n", imgLayer.Size)
-		fmt.Printf("      Digest: %s\n", imgLayer.Digest)
-	}
-	fmt.Println()
+	fmt.Printf("Model: %s\n", reference)
+	fmt.Printf("Manifest: %s\n", model.ManifestDigest)
+	fmt.Printf("Tags: %s\n", strings.Join(model.Tags, ", "))
+	return 0
+}
 
-	fmt.Println("7. Pushing image to registry...")
-	// Create progress channel
-	progressChan := make(chan v1.Update, 1)
-
-	// Convert v1.Update channel to int64 channel for ShowProgress
-	progressChan64 := make(chan int64, 1)
-	go func() {
-		for update := range progressChan {
-			progressChan64 <- update.Complete
-		}
-		close(progressChan64)
-	}()
-
-	// Show progress
-	go utils.ShowProgress("Uploading", progressChan64, -1) // -1 since total size might not be known
-
-	// Push the image with progress
-	if err := remote.Write(ref, img,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithProgress(progressChan),
-	); err != nil {
-		log.Fatalf("writing image: %v", err)
+func cmdGetPath(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool get-path <reference>\n")
+		return 1
 	}
 
-	fmt.Printf("Successfully pushed %s\n", ref.String())
+	reference := args[0]
+
+	modelPath, err := client.GetModelPath(reference)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting model path: %v\n", err)
+		return 1
+	}
+
+	fmt.Println(modelPath)
+	return 0
 }

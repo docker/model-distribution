@@ -1,0 +1,97 @@
+name: Verify Registry Push Pull
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
+env:
+  AWS_ACCOUNT_ID: 676043725699
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: images/model-distribution
+  GAR_LOCATION: us-east4-docker.pkg.dev
+  GAR_REGION: us-east4
+  GAR_REPOSITORY: docker-model-distribution
+  MODEL_NAME: test-model
+  MODEL_VERSION: latest
+  PROJECT_ID: sandbox-298914
+
+jobs:
+  verify-gar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: 'projects/981855438795/locations/global/workloadIdentityPools/model-distribution-pool/providers/model-distribution-github'
+          create_credentials_file: true
+
+      - name: Configure Docker for GAR
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }} --quiet
+
+      - name: Run tests with GAR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_GAR_ENABLED=true
+          
+          # Set the full tag directly (preferred method)
+          export TEST_GAR_TAG="${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.MODEL_NAME }}:${{ env.MODEL_VERSION }}"                  
+          # GOOGLE_APPLICATION_CREDENTIALS is automatically set by the auth action
+          echo "Using credentials file at: ${GOOGLE_APPLICATION_CREDENTIALS}"
+          echo "Using GAR tag: ${TEST_GAR_TAG}"
+          
+          # Run the tests
+          go test -v ./pkg/distribution -run TestGARIntegration
+
+  verify-ecr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Configure AWS Credentials
+        id: assume-role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/release-model-distribution
+          role-session-name: gha-build-push-image-ecr
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create ECR Repository
+        run: |
+          # Check if repository exists, create if it doesn't
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }}/${{ env.MODEL_NAME }} || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}/${{ env.MODEL_NAME }}
+
+      - name: Configure Docker for ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Run tests with ECR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_ECR_ENABLED=true
+          
+          # Set the full tag directly (preferred method)
+          export TEST_ECR_TAG="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ env.MODEL_NAME }}:${{ env.MODEL_VERSION }}"                          
+          echo "Using ECR tag: ${TEST_ECR_TAG}"
+
+          # Run the tests
+          go test -v ./pkg/distribution -run TestECRIntegration

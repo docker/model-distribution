@@ -1,9 +1,13 @@
+# Environment variables
+.env
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+model-distribution-tool
 
 # Test binary, built with `go test -c`
 *.test
@@ -11,19 +15,26 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Dependency directories (remove the comment below to include it)
+vendor/
+
 # Go workspace file
 go.work
+
+# IDE specific files
+.idea
+.vscode
+*.swp
+*.swo
+
+# Test artifacts
+test/artifacts/
 
 # Project specific
 /bin/
 /tmp/
 
-# IDE specific
-.idea/
-.vscode/
-*.swp
-*.swo
-
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+model-store
