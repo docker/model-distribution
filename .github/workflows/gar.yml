@@ -2,6 +2,7 @@ name: GAR Push
 
 on:
   push:
+  workflow_dispatch:
 
 permissions:
   contents: read
