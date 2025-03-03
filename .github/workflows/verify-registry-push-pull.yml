@@ -17,6 +17,8 @@ env:
   MODEL_NAME: test-model
   MODEL_VERSION: latest
   PROJECT_ID: sandbox-298914
+  ACR_REGISTRY: modeldistribution
+  ACR_REPOSITORY: model-distribution
 
 jobs:
   verify-gar:
@@ -95,3 +97,36 @@ jobs:
 
           # Run the tests
           go test -v ./pkg/distribution -run TestECRIntegration
+
+  verify-acr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ env.ACR_REGISTRY }}
+
+      - name: Run tests with ACR integration
+        run: |
+          # Set environment variables for the test
+          export TEST_ACR_ENABLED=true
+          
+          # Set the full tag directly (preferred method)
+          export TEST_ACR_TAG="${{ env.ACR_REGISTRY }}.azurecr.io/${{ env.ACR_REPOSITORY }}/${{ env.MODEL_NAME }}:${{ env.MODEL_VERSION }}"
+          echo "Using ACR tag: ${TEST_ACR_TAG}"
+
+          # Run the tests
+          go test -v ./pkg/distribution -run TestACRIntegration
