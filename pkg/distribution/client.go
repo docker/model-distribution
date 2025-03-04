@@ -197,3 +197,11 @@ func (c *Client) getImageFromLocalStore(model *types.Model) (v1.Image, error) {
 	// Create image with layer
 	return image.CreateImage(layer)
 }
+
+// DeleteModel deletes a model by tag
+func (c *Client) DeleteModel(tag string) error {
+	if err := c.store.Delete(tag); err != nil {
+		return fmt.Errorf("deleting model: %w", err)
+	}
+	return nil
+}

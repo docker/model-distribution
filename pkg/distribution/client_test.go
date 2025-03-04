@@ -2,6 +2,7 @@ package distribution
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -218,5 +219,40 @@ func TestClientGetStorePath(t *testing.T) {
 	// Verify the store directory exists
 	if _, err := os.Stat(storePath); os.IsNotExist(err) {
 		t.Errorf("Store directory does not exist: %s", storePath)
+	}
+}
+
+func TestClientDeleteModel(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+	// Push model to local store
+	tag := "test/model:v1.0.0"
+	if err := client.store.Push(modelFile, []string{tag}); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Delete the model
+	if err := client.DeleteModel(tag); err != nil {
+		t.Fatalf("Failed to delete model: %v", err)
+	}
+
+	// Verify model is deleted
+	_, err = client.GetModel(tag)
+	if !errors.Is(err, ErrModelNotFound) {
+		t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
 	}
 }
