@@ -119,7 +119,7 @@ func TestClientGetModelNotFound(t *testing.T) {
 
 	// Get non-existent model
 	_, err = client.GetModel("nonexistent/model:v1.0.0")
-	if err != ErrModelNotFound {
+	if !errors.Is(err, ErrModelNotFound) {
 		t.Errorf("Expected ErrModelNotFound, got %v", err)
 	}
 }
