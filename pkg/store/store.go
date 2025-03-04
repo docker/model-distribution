@@ -26,6 +26,11 @@ type LocalStore struct {
 	rootPath string
 }
 
+// RootPath returns the root path of the store
+func (s *LocalStore) RootPath() string {
+	return s.rootPath
+}
+
 // New creates a new LocalStore
 func New(opts types.StoreOptions) (*LocalStore, error) {
 	store := &LocalStore{
