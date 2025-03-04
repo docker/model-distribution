@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,12 +23,16 @@ func TestStoreAPI(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a temporary model file
+	// Create a temporary model file with known content
 	modelContent := []byte("test model content for API test")
 	modelPath := filepath.Join(tempDir, "api-test-model.gguf")
 	if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
 		t.Fatalf("Failed to create test model file: %v", err)
 	}
+
+	// Calculate expected blob hash
+	hash := sha256.Sum256(modelContent)
+	expectedBlobHash := fmt.Sprintf("sha256:%s", hex.EncodeToString(hash[:]))
 
 	// Create store
 	storePath := filepath.Join(tempDir, "api-model-store")
@@ -43,6 +49,21 @@ func TestStoreAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Push failed: %v", err)
 		}
+
+		// Verify the model was stored correctly
+		models, err := s.List()
+		if err != nil {
+			t.Fatalf("List failed: %v", err)
+		}
+		if len(models) != 1 {
+			t.Fatalf("Expected 1 model, got %d", len(models))
+		}
+		if len(models[0].Files) != 1 {
+			t.Fatalf("Expected 1 file, got %d", len(models[0].Files))
+		}
+		if models[0].Files[0] != expectedBlobHash {
+			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, models[0].Files[0])
+		}
 	})
 
 	// Test List
@@ -57,6 +78,9 @@ func TestStoreAPI(t *testing.T) {
 		if !containsTag(models[0].Tags, "api-model:latest") {
 			t.Errorf("Expected tag api-model:latest, got %v", models[0].Tags)
 		}
+		if models[0].Files[0] != expectedBlobHash {
+			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, models[0].Files[0])
+		}
 	})
 
 	// Test GetByTag
@@ -70,6 +94,9 @@ func TestStoreAPI(t *testing.T) {
 		}
 		if !containsTag(model.Tags, "api-model:latest") {
 			t.Errorf("Expected tag api-model:latest, got %v", model.Tags)
+		}
+		if model.Files[0] != expectedBlobHash {
+			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
 		}
 	})
 
@@ -87,6 +114,9 @@ func TestStoreAPI(t *testing.T) {
 		}
 		if !containsTag(model.Tags, "api-v1.0") || !containsTag(model.Tags, "api-stable") {
 			t.Errorf("Expected new tags, got %v", model.Tags)
+		}
+		if model.Files[0] != expectedBlobHash {
+			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
 		}
 	})
 
@@ -106,6 +136,12 @@ func TestStoreAPI(t *testing.T) {
 		if !bytes.Equal(pulledContent, modelContent) {
 			t.Errorf("Pulled content doesn't match original")
 		}
+
+		// Verify blob path exists
+		blobPath := filepath.Join(storePath, "blobs", "sha256", hex.EncodeToString(hash[:]))
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Errorf("Blob file does not exist at expected path: %s", blobPath)
+		}
 	})
 
 	// Test RemoveTags
@@ -123,6 +159,9 @@ func TestStoreAPI(t *testing.T) {
 		for _, model := range models {
 			if containsTag(model.Tags, "api-model:api-v1.0") {
 				t.Errorf("Tag should have been removed, but still present: %v", model.Tags)
+			}
+			if model.Files[0] != expectedBlobHash {
+				t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
 			}
 		}
 	})

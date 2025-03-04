@@ -149,8 +149,8 @@ func (s *LocalStore) Push(modelPath string, tags []string) error {
 		return fmt.Errorf("writing manifest file: %w", err)
 	}
 
-	// Update the models index
-	if err := s.updateModelsIndex(manifestDigestHex, tags, modelPath); err != nil {
+	// Update the models index with the layer digest
+	if err := s.updateModelsIndex(manifestDigestHex, tags, digestHex); err != nil {
 		return fmt.Errorf("updating models index: %w", err)
 	}
 
@@ -158,7 +158,7 @@ func (s *LocalStore) Push(modelPath string, tags []string) error {
 }
 
 // updateModelsIndex updates the models index with a new model
-func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, modelPath string) error {
+func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, blobDigest string) error {
 	// Ensure the manifest digest has the correct format (sha256:...)
 	if !strings.Contains(manifestDigest, ":") {
 		manifestDigest = fmt.Sprintf("sha256:%s", manifestDigest)
@@ -188,12 +188,10 @@ func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, mod
 
 	if model == nil {
 		// Model doesn't exist, add it
-		// Extract the filename from the model path
-		filename := filepath.Base(modelPath)
 		models.Models = append(models.Models, types.Model{
 			ID:      manifestDigest,
 			Tags:    tags,
-			Files:   []string{filename},
+			Files:   []string{fmt.Sprintf("sha256:%s", blobDigest)},
 			Created: time.Now().Unix(),
 		})
 	} else {
