@@ -192,3 +192,31 @@ func TestClientListModels(t *testing.T) {
 		}
 	}
 }
+
+func TestClientGetStorePath(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Get store path
+	storePath := client.GetStorePath()
+
+	// Verify store path matches the temp directory
+	if storePath != tempDir {
+		t.Errorf("Store path doesn't match: got %s, want %s", storePath, tempDir)
+	}
+
+	// Verify the store directory exists
+	if _, err := os.Stat(storePath); os.IsNotExist(err) {
+		t.Errorf("Store directory does not exist: %s", storePath)
+	}
+}

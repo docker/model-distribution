@@ -21,6 +21,11 @@ type Client struct {
 	store *store.LocalStore
 }
 
+// GetStorePath returns the root path where models are stored
+func (c *Client) GetStorePath() string {
+	return c.store.RootPath()
+}
+
 // NewClient creates a new distribution client
 func NewClient(storeRootPath string) (*Client, error) {
 	s, err := store.New(types.StoreOptions{RootPath: storeRootPath})
