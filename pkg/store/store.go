@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/static"
@@ -149,7 +150,7 @@ func (s *LocalStore) Push(modelPath string, tags []string) error {
 	}
 
 	// Update the models index
-	if err := s.updateModelsIndex(manifestDigestHex, tags); err != nil {
+	if err := s.updateModelsIndex(manifestDigestHex, tags, modelPath); err != nil {
 		return fmt.Errorf("updating models index: %w", err)
 	}
 
@@ -157,7 +158,7 @@ func (s *LocalStore) Push(modelPath string, tags []string) error {
 }
 
 // updateModelsIndex updates the models index with a new model
-func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string) error {
+func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, modelPath string) error {
 	// Ensure the manifest digest has the correct format (sha256:...)
 	if !strings.Contains(manifestDigest, ":") {
 		manifestDigest = fmt.Sprintf("sha256:%s", manifestDigest)
@@ -179,7 +180,7 @@ func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string) err
 	// Check if the model already exists
 	var model *types.Model
 	for i, m := range models.Models {
-		if m.ManifestDigest == manifestDigest {
+		if m.ID == manifestDigest {
 			model = &models.Models[i]
 			break
 		}
@@ -187,9 +188,13 @@ func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string) err
 
 	if model == nil {
 		// Model doesn't exist, add it
+		// Extract the filename from the model path
+		filename := filepath.Base(modelPath)
 		models.Models = append(models.Models, types.Model{
-			ManifestDigest: manifestDigest,
-			Tags:           tags,
+			ID:      manifestDigest,
+			Tags:    tags,
+			Files:   []string{filename},
+			Created: time.Now().Unix(),
 		})
 	} else {
 		// Model exists, update tags
@@ -230,7 +235,7 @@ func (s *LocalStore) Pull(tag string, destPath string) error {
 	}
 
 	// Read the manifest
-	manifestDigestParts := strings.Split(model.ManifestDigest, ":")
+	manifestDigestParts := strings.Split(model.ID, ":")
 	var algorithm, hash string
 
 	if len(manifestDigestParts) == 2 {
@@ -242,7 +247,7 @@ func (s *LocalStore) Pull(tag string, destPath string) error {
 		algorithm = "sha256"
 		hash = manifestDigestParts[0]
 	} else {
-		return fmt.Errorf("invalid manifest digest format: %s", model.ManifestDigest)
+		return fmt.Errorf("invalid manifest digest format: %s", model.ID)
 	}
 
 	manifestPath := filepath.Join(s.rootPath, "manifests", algorithm, hash)
@@ -351,7 +356,7 @@ func (s *LocalStore) GetBlobPath(tag string) (string, error) {
 	}
 
 	// Read the manifest
-	manifestDigestParts := strings.Split(model.ManifestDigest, ":")
+	manifestDigestParts := strings.Split(model.ID, ":")
 	var algorithm, hash string
 
 	if len(manifestDigestParts) == 2 {
@@ -363,7 +368,7 @@ func (s *LocalStore) GetBlobPath(tag string) (string, error) {
 		algorithm = "sha256"
 		hash = manifestDigestParts[0]
 	} else {
-		return "", fmt.Errorf("invalid manifest digest format: %s", model.ManifestDigest)
+		return "", fmt.Errorf("invalid manifest digest format: %s", model.ID)
 	}
 
 	manifestPath := filepath.Join(s.rootPath, "manifests", algorithm, hash)
@@ -488,7 +493,7 @@ func (s *LocalStore) AddTags(tag string, newTags []string) error {
 
 	// Find the model in the index
 	for i, m := range models.Models {
-		if m.ManifestDigest == model.ManifestDigest {
+		if m.ID == model.ID {
 			// Add new tags
 			existingTags := make(map[string]bool)
 			for _, t := range m.Tags {

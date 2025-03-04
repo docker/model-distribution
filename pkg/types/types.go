@@ -32,8 +32,14 @@ type Store interface {
 
 // Model represents a model with its metadata and tags
 type Model struct {
-	ManifestDigest string   `json:"manifestDigest"`
-	Tags           []string `json:"tags"`
+	// ID is the globally unique model identifier.
+	ID string `json:"id"`
+	// Tags are the list of tags associated with the model.
+	Tags []string `json:"tags"`
+	// Files are the GGUF files associated with the model.
+	Files []string `json:"files"`
+	// Created is the Unix epoch timestamp corresponding to the model creation.
+	Created int64 `json:"created"`
 }
 
 // ModelIndex represents the index of all models in the store

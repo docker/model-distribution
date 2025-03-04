@@ -165,8 +165,12 @@ func cmdList(client *distribution.Client, args []string) int {
 
 	fmt.Println("Models:")
 	for i, model := range models {
-		fmt.Printf("%d. Manifest: %s\n", i+1, model.ManifestDigest)
+		fmt.Printf("%d. ID: %s\n", i+1, model.ID)
 		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags, ", "))
+		if len(model.Files) > 0 {
+			fmt.Printf("   Files: %s\n", strings.Join(model.Files, ", "))
+		}
+		fmt.Printf("   Created: %d\n", model.Created)
 	}
 	return 0
 }
@@ -187,8 +191,12 @@ func cmdGet(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Model: %s\n", reference)
-	fmt.Printf("Manifest: %s\n", model.ManifestDigest)
+	fmt.Printf("ID: %s\n", model.ID)
 	fmt.Printf("Tags: %s\n", strings.Join(model.Tags, ", "))
+	if len(model.Files) > 0 {
+		fmt.Printf("Files: %s\n", strings.Join(model.Files, ", "))
+	}
+	fmt.Printf("Created: %d\n", model.Created)
 	return 0
 }
 
