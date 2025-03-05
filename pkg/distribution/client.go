@@ -67,8 +67,7 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 		return nil, fmt.Errorf("initializing store: %w", err)
 	}
 
-	logrus.Infoln("Successfully initialized store")
-
+	options.logger.Infoln("Successfully initialized store")
 	return &Client{
 		store: s,
 		log:   options.logger,
