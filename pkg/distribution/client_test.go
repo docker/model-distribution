@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 )
 
@@ -254,5 +255,40 @@ func TestClientDeleteModel(t *testing.T) {
 	_, err = client.GetModel(tag)
 	if !errors.Is(err, ErrModelNotFound) {
 		t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
+	}
+}
+
+func TestClientDefaultLogger(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client without specifying logger
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Verify that logger is not nil
+	if client.log == nil {
+		t.Error("Default logger should not be nil")
+	}
+
+	// Create client with custom logger
+	customLogger := logrus.NewEntry(logrus.New())
+	client, err = NewClient(
+		WithStoreRootPath(tempDir),
+		WithLogger(customLogger),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Verify that custom logger is used
+	if client.log != customLogger {
+		t.Error("Custom logger should be used when specified")
 	}
 }

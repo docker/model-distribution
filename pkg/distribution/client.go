@@ -51,7 +51,9 @@ func WithLogger(logger *logrus.Entry) func(*ClientOptions) {
 
 // NewClient creates a new distribution client
 func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
-	options := &ClientOptions{}
+	options := &ClientOptions{
+		logger: logrus.NewEntry(logrus.StandardLogger()),
+	}
 	for _, opt := range opts {
 		opt(options)
 	}

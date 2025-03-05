@@ -26,7 +26,7 @@ func TestGARIntegration(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
