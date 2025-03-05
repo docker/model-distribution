@@ -76,34 +76,34 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 
 // PullModel pulls a model from a registry and returns the local file path
 func (c *Client) PullModel(ctx context.Context, reference string) (string, error) {
-	c.log.WithField("reference", reference).Infoln("Starting model pull")
+	c.log.Infoln("Starting model pull:", reference)
 
 	// Check if model exists in local store
 	_, err := c.store.GetByTag(reference)
 	if err == nil {
-		c.log.WithField("reference", reference).Infoln("Model found in local store")
+		c.log.Infoln("Model found in local store:", reference)
 		// Model exists in local store, get its path
 		return c.GetModelPath(reference)
 	}
 
-	c.log.WithField("reference", reference).Infoln("Model not found in local store, pulling from remote")
+	c.log.Infoln("Model not found in local store, pulling from remote:", reference)
 	// Model doesn't exist in local store, pull from remote
 	ref, err := name.ParseReference(reference)
 	if err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to parse reference")
+		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
 		return "", fmt.Errorf("parsing reference: %w", err)
 	}
 
 	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx))
 	if err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to pull image")
+		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
 		return "", fmt.Errorf("pulling image: %w", err)
 	}
 
 	// Create a temporary file to store the model content
 	tempFile, err := os.CreateTemp("", "model-*.gguf")
 	if err != nil {
-		c.log.WithError(err).Error("Failed to create temporary file")
+		c.log.Errorln("Failed to create temporary file:", err)
 		return "", fmt.Errorf("creating temp file: %w", err)
 	}
 	defer os.Remove(tempFile.Name())
@@ -112,12 +112,12 @@ func (c *Client) PullModel(ctx context.Context, reference string) (string, error
 	// Get the model content from the image
 	layers, err := img.Layers()
 	if err != nil {
-		c.log.WithError(err).Error("Failed to get image layers")
+		c.log.Errorln("Failed to get image layers:", err)
 		return "", fmt.Errorf("getting layers: %w", err)
 	}
 
 	if len(layers) == 0 {
-		c.log.Error("No layers found in image")
+		c.log.Errorln("No layers found in image")
 		return "", fmt.Errorf("no layers in image")
 	}
 
@@ -127,35 +127,35 @@ func (c *Client) PullModel(ctx context.Context, reference string) (string, error
 	// Get the layer content
 	rc, err := layer.Uncompressed()
 	if err != nil {
-		c.log.WithError(err).Error("Failed to get layer content")
+		c.log.Errorln("Failed to get layer content:", err)
 		return "", fmt.Errorf("getting layer content: %w", err)
 	}
 	defer rc.Close()
 
 	// Write the layer content to the temporary file
 	if _, err := io.Copy(tempFile, rc); err != nil {
-		c.log.WithError(err).Error("Failed to write layer content")
+		c.log.Errorln("Failed to write layer content:", err)
 		return "", fmt.Errorf("writing layer content: %w", err)
 	}
 
 	// Push the model to the local store
 	if err := c.store.Push(tempFile.Name(), []string{reference}); err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to store model in local store")
+		c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
 		return "", fmt.Errorf("storing model in local store: %w", err)
 	}
 
-	c.log.WithField("reference", reference).Info("Successfully pulled and stored model")
+	c.log.Infoln("Successfully pulled and stored model:", reference)
 	// Get the model path
 	return c.GetModelPath(reference)
 }
 
 // GetModelPath returns the local file path for a model
 func (c *Client) GetModelPath(reference string) (string, error) {
-	c.log.WithField("reference", reference).Infoln("Getting model path")
+	c.log.Infoln("Getting model path:", reference)
 	// Get the direct path to the blob file
 	blobPath, err := c.store.GetBlobPath(reference)
 	if err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to get blob path")
+		c.log.Errorln("Failed to get blob path:", err, "reference:", reference)
 		return "", fmt.Errorf("getting blob path: %w", err)
 	}
 
@@ -167,7 +167,7 @@ func (c *Client) ListModels() ([]*types.Model, error) {
 	c.log.Infoln("Listing available models")
 	models, err := c.store.List()
 	if err != nil {
-		c.log.WithError(err).Error("Failed to list models")
+		c.log.Errorln("Failed to list models:", err)
 		return nil, fmt.Errorf("listing models: %w", err)
 	}
 
@@ -177,16 +177,16 @@ func (c *Client) ListModels() ([]*types.Model, error) {
 		result[i] = &modelCopy
 	}
 
-	c.log.WithField("count", len(result)).Infoln("Successfully listed models")
+	c.log.Infoln("Successfully listed models, count:", len(result))
 	return result, nil
 }
 
 // GetModel returns a model by reference
 func (c *Client) GetModel(reference string) (*types.Model, error) {
-	c.log.WithField("reference", reference).Infoln("Getting model by reference")
+	c.log.Infoln("Getting model by reference:", reference)
 	model, err := c.store.GetByTag(reference)
 	if err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Model not found")
+		c.log.Errorln("Model not found:", err, "reference:", reference)
 		return nil, ErrModelNotFound
 	}
 
@@ -195,22 +195,19 @@ func (c *Client) GetModel(reference string) (*types.Model, error) {
 
 // PushModel pushes a model to a registry
 func (c *Client) PushModel(ctx context.Context, source, reference string) error {
-	c.log.WithFields(logrus.Fields{
-		"source":    source,
-		"reference": reference,
-	}).Infoln("Starting model push")
+	c.log.Infoln("Starting model push, source:", source, "reference:", reference)
 
 	// Parse the reference
 	ref, err := name.ParseReference(reference)
 	if err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to parse reference")
+		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
 		return fmt.Errorf("parsing reference: %w", err)
 	}
 
 	// Read the model file
 	fileContent, err := os.ReadFile(source)
 	if err != nil {
-		c.log.WithError(err).WithField("source", source).Error("Failed to read model file")
+		c.log.Errorln("Failed to read model file:", err, "source:", source)
 		return fmt.Errorf("reading model file: %w", err)
 	}
 
@@ -220,7 +217,7 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	// Create image with layer
 	img, err := image.CreateImage(layer)
 	if err != nil {
-		c.log.WithError(err).Error("Failed to create image")
+		c.log.Errorln("Failed to create image:", err)
 		return fmt.Errorf("creating image: %w", err)
 	}
 
@@ -229,35 +226,35 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithContext(ctx),
 	); err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to push image")
+		c.log.Errorln("Failed to push image:", err, "reference:", reference)
 		return fmt.Errorf("pushing image: %w", err)
 	}
 
 	// Store the model in the local store
 	if err := c.store.Push(source, []string{reference}); err != nil {
-		c.log.WithError(err).WithField("reference", reference).Error("Failed to store model in local store")
+		c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
 		return fmt.Errorf("storing model in local store: %w", err)
 	}
 
-	c.log.WithField("reference", reference).Info("Successfully pushed model")
+	c.log.Infoln("Successfully pushed model:", reference)
 	return nil
 }
 
 // getImageFromLocalStore creates an image from a model in the local store
 func (c *Client) getImageFromLocalStore(model *types.Model) (v1.Image, error) {
-	c.log.WithField("model", model.Tags[0]).Infoln("Getting image from local store")
+	c.log.Infoln("Getting image from local store:", model.Tags[0])
 
 	// Get the direct path to the blob file
 	blobPath, err := c.store.GetBlobPath(model.Tags[0])
 	if err != nil {
-		c.log.WithError(err).WithField("model", model.Tags[0]).Error("Failed to get blob path")
+		c.log.Errorln("Failed to get blob path:", err, "model:", model.Tags[0])
 		return nil, fmt.Errorf("getting blob path: %w", err)
 	}
 
 	// Read the model content directly from the blob file
 	modelContent, err := os.ReadFile(blobPath)
 	if err != nil {
-		c.log.WithError(err).WithField("path", blobPath).Error("Failed to read model content")
+		c.log.Errorln("Failed to read model content:", err, "path:", blobPath)
 		return nil, fmt.Errorf("reading model content: %w", err)
 	}
 
@@ -267,7 +264,7 @@ func (c *Client) getImageFromLocalStore(model *types.Model) (v1.Image, error) {
 	// Create image with layer
 	img, err := image.CreateImage(layer)
 	if err != nil {
-		c.log.WithError(err).Error("Failed to create image from layer")
+		c.log.Errorln("Failed to create image from layer:", err)
 		return nil, err
 	}
 
@@ -276,11 +273,11 @@ func (c *Client) getImageFromLocalStore(model *types.Model) (v1.Image, error) {
 
 // DeleteModel deletes a model by tag
 func (c *Client) DeleteModel(tag string) error {
-	c.log.WithField("tag", tag).Infoln("Deleting model")
+	c.log.Infoln("Deleting model:", tag)
 	if err := c.store.Delete(tag); err != nil {
-		c.log.WithError(err).WithField("tag", tag).Error("Failed to delete model")
+		c.log.Errorln("Failed to delete model:", err, "tag:", tag)
 		return fmt.Errorf("deleting model: %w", err)
 	}
-	c.log.WithField("tag", tag).Info("Successfully deleted model")
+	c.log.Infoln("Successfully deleted model:", tag)
 	return nil
 }
