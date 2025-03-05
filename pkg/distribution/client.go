@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/docker/model-distribution/pkg/image"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
@@ -19,6 +21,7 @@ import (
 // Client provides model distribution functionality
 type Client struct {
 	store *store.LocalStore
+	log   *logrus.Entry
 }
 
 // GetStorePath returns the root path where models are stored
@@ -26,15 +29,45 @@ func (c *Client) GetStorePath() string {
 	return c.store.RootPath()
 }
 
+// ClientOptions represents options for creating a new Client
+type ClientOptions struct {
+	storeRootPath string
+	logger        *logrus.Entry
+}
+
+// WithStoreRootPath sets the store root path
+func WithStoreRootPath(path string) func(*ClientOptions) {
+	return func(o *ClientOptions) {
+		o.storeRootPath = path
+	}
+}
+
+// WithLogger sets the logger
+func WithLogger(logger *logrus.Entry) func(*ClientOptions) {
+	return func(o *ClientOptions) {
+		o.logger = logger
+	}
+}
+
 // NewClient creates a new distribution client
-func NewClient(storeRootPath string) (*Client, error) {
-	s, err := store.New(types.StoreOptions{RootPath: storeRootPath})
+func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
+	options := &ClientOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	if options.storeRootPath == "" {
+		return nil, fmt.Errorf("store root path is required")
+	}
+
+	s, err := store.New(types.StoreOptions{RootPath: options.storeRootPath})
 	if err != nil {
 		return nil, fmt.Errorf("initializing store: %w", err)
 	}
 
 	return &Client{
 		store: s,
+		log:   options.logger,
 	}, nil
 }
 

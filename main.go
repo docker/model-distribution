@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Create the client
-	client, err := distribution.NewClient(absStorePath)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(absStorePath))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 		os.Exit(1)

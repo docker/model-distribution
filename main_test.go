@@ -76,7 +76,7 @@ func TestMainPull(t *testing.T) {
 	}
 
 	// Create a client for testing
-	client, err := distribution.NewClient(storeDir)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(storeDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestMainPush(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a client for testing
-	client, err := distribution.NewClient(tempDir)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestMainList(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a client for testing
-	client, err := distribution.NewClient(tempDir)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestMainGet(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a client for testing
-	client, err := distribution.NewClient(tempDir)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestMainGetPath(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a client for testing
-	client, err := distribution.NewClient(tempDir)
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

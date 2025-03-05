@@ -31,7 +31,7 @@ func TestClientPullModel(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestClientGetModel(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestClientGetModelNotFound(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestClientListModels(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestClientGetStorePath(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestClientDeleteModel(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create client
-	client, err := NewClient(tempDir)
+	client, err := NewClient(WithStoreRootPath(tempDir))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
