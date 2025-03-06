@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 
 // Define an interface for the client methods we use in the commands
 type ClientInterface interface {
-	PullModel(ctx context.Context, reference string) (string, error)
+	PullModel(ctx context.Context, reference string, progressWriter io.Writer) (string, error)
 	PushModel(ctx context.Context, source, reference string) error
 	ListModels() ([]*types.Model, error)
 	GetModel(reference string) (*types.Model, error)

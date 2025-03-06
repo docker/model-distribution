@@ -1,10 +1,12 @@
 package distribution
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -52,21 +54,50 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to push model: %v", err)
 	}
 
-	// Pull model from registry
-	modelPath, err := client.PullModel(context.Background(), tag)
-	if err != nil {
-		t.Fatalf("Failed to pull model: %v", err)
-	}
+	t.Run("pull without progress writer", func(t *testing.T) {
+		// Pull model from registry without progress writer
+		modelPath, err := client.PullModel(context.Background(), tag, nil)
+		if err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
 
-	// Verify model content
-	pulledContent, err := os.ReadFile(modelPath)
-	if err != nil {
-		t.Fatalf("Failed to read pulled model: %v", err)
-	}
+		// Verify model content
+		pulledContent, err := os.ReadFile(modelPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled model: %v", err)
+		}
 
-	if string(pulledContent) != string(modelContent) {
-		t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
-	}
+		if string(pulledContent) != string(modelContent) {
+			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
+		}
+	})
+
+	t.Run("pull with progress writer", func(t *testing.T) {
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Pull model from registry with progress writer
+		modelPath, err := client.PullModel(context.Background(), tag, &progressBuffer)
+		if err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
+
+		// Verify progress output
+		progressOutput := progressBuffer.String()
+		if !strings.Contains(progressOutput, "Downloading") {
+			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
+		}
+
+		// Verify model content
+		pulledContent, err := os.ReadFile(modelPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled model: %v", err)
+		}
+
+		if string(pulledContent) != string(modelContent) {
+			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
+		}
+	})
 }
 
 func TestClientGetModel(t *testing.T) {
