@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/v1/static"
+
+	"github.com/docker/model-distribution/pkg/model"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -42,6 +45,34 @@ func TestStoreAPI(t *testing.T) {
 		err := s.Push(modelPath, []string{"api-model:latest"})
 		if err != nil {
 			t.Fatalf("Push failed: %v", err)
+		}
+	})
+
+	t.Run("Write", func(t *testing.T) {
+		wmdl, err := model.FromGGUF(static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf"))
+		if err != nil {
+			t.Fatalf("Create model failed: %v", err)
+		}
+		writeDigest, err := wmdl.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if err := s.Write(wmdl, []string{"http://example.com/some-repo:some-tag"}); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+		rmdl, err := s.FromTag("http://example.com/some-repo:some-tag")
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		readDigest, err := rmdl.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if writeDigest != readDigest {
+			t.Fatalf("Digest mismatch")
 		}
 	})
 

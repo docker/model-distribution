@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 )
 
 func FromGGUF(ggufLayer v1.Layer) (*Model, error) {
@@ -23,7 +24,7 @@ func FromGGUF(ggufLayer v1.Layer) (*Model, error) {
 			},
 		},
 	}
-
+	layout.FromPath(ggufLayer)
 	return &Model{
 		configFile: cfg,
 		layers:     []v1.Layer{ggufLayer},

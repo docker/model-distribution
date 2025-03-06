@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/static"
 
 	"github.com/docker/model-distribution/pkg/image"
+	"github.com/docker/model-distribution/pkg/model"
 	"github.com/docker/model-distribution/pkg/types"
 )
 
@@ -568,4 +570,114 @@ func (s *LocalStore) Upgrade() error {
 	}
 
 	return nil
+}
+
+func (s *LocalStore) Write(mdl *model.Model, tags []string) error {
+	// Get manifest from the model
+	manifest, err := mdl.Manifest()
+	if err != nil {
+		return fmt.Errorf("getting manifest: %w", err)
+	}
+
+	cf, err := mdl.RawConfigFile()
+	if err != nil {
+		return fmt.Errorf("get raw config file: %w", err)
+	}
+	name, err := mdl.ConfigName()
+	if err != nil {
+		return fmt.Errorf("getting config name: %w", err)
+	}
+	cofigPath := filepath.Join(s.rootPath, "blobs", "sha256", name.Hex)
+	f, err := os.Create(cofigPath)
+	if err != nil {
+		return fmt.Errorf("opening config blob: %w", err)
+	}
+	_, err = f.Write(cf)
+	if err != nil {
+		return fmt.Errorf("writing config blob: %w", err)
+	}
+
+	// Gets SHA256 digest
+	//digest := manifest.Layers[0].Digest
+
+	layers, err := mdl.Layers()
+	if err != nil {
+		return fmt.Errorf("getting layers: %w", err)
+	}
+
+	for _, layer := range layers {
+		d, err := layer.Digest()
+		if err != nil {
+			return fmt.Errorf("getting layer digest: %w", err)
+		}
+		blobPath := filepath.Join(s.rootPath, "blobs", "sha256", d.Hex)
+		f, err := os.Create(blobPath)
+		if err != nil {
+			return fmt.Errorf("opening blob file: %w", err)
+		}
+		lr, err := layer.Compressed()
+		if err != nil {
+			return fmt.Errorf("opening layer: %w", err)
+		}
+		_, err = io.Copy(f, lr)
+		if err != nil {
+			return fmt.Errorf("writing layer content: %w", err)
+		}
+	}
+	//// Store the model blob
+	//blobPath := filepath.Join(s.rootPath, "blobs", "sha256", digestHex)
+	//if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+	//	if err := os.WriteFile(blobPath, modelContent, 0644); err != nil {
+	//		return fmt.Errorf("writing blob file: %w", err)
+	//	}
+	//}
+
+	// Marshal the manifest
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling manifest: %w", err)
+	}
+
+	// Calculate manifest digest
+	manifestDigest := sha256.Sum256(manifestData)
+	manifestDigestHex := hex.EncodeToString(manifestDigest[:])
+
+	// Store the manifest
+	manifestPath := filepath.Join(s.rootPath, "manifests", "sha256", manifestDigestHex)
+	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
+		return fmt.Errorf("writing manifest file: %w", err)
+	}
+
+	// Update the models index
+	if err := s.updateModelsIndex(manifestDigestHex, tags); err != nil {
+		return fmt.Errorf("updating models index: %w", err)
+	}
+
+	return nil
+}
+
+func (s *LocalStore) FromTag(tag string) (*Model, error) {
+	// Read the models index
+	modelsPath := filepath.Join(s.rootPath, "models.json")
+	modelsData, err := os.ReadFile(modelsPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading models file: %w", err)
+	}
+
+	// Unmarshal the models index
+	var models types.ModelIndex
+	if err := json.Unmarshal(modelsData, &models); err != nil {
+		return nil, fmt.Errorf("unmarshaling models: %w", err)
+	}
+
+	// Find the model by tag
+	for _, model := range models.Models {
+		for _, modelTag := range model.Tags {
+			if modelTag == tag {
+				return &Model{path: s.rootPath, ref: tag}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("model with tag %s not found", tag)
 }

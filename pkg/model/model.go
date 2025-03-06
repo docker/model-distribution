@@ -25,7 +25,7 @@ func (m *Model) Size() (int64, error) {
 }
 
 func (m *Model) ConfigName() (v1.Hash, error) {
-	panic("implement me")
+	return partial.ConfigName(m)
 }
 
 func (m *Model) ConfigFile() (*v1.ConfigFile, error) {
@@ -46,7 +46,7 @@ func (m *Model) Manifest() (*v1.Manifest, error) {
 		return nil, fmt.Errorf("get config descriptor: %w", err)
 	}
 	cfgDsc.MediaType = MediaTypeModelConfig
-	
+
 	ls, err := m.Layers()
 	if err != nil {
 		return nil, fmt.Errorf("get layers: %w", err)
