@@ -84,7 +84,7 @@ func TestClientPullModel(t *testing.T) {
 
 		// Verify progress output
 		progressOutput := progressBuffer.String()
-		if !strings.Contains(progressOutput, "Downloading") {
+		if !strings.Contains(progressOutput, "Using cached model") && !strings.Contains(progressOutput, "Downloading") {
 			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
 		}
 

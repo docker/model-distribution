@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -97,7 +98,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		// Report progress for local model
 		if progressWriter != nil {
 			size := fileInfo.Size()
-			fmt.Fprintf(progressWriter, "Downloading %v/%v bytes...\n", size, size)
+			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
 		}
 
 		return blobPath, nil
@@ -111,22 +112,41 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return "", fmt.Errorf("parsing reference: %w", err)
 	}
 
-	progress := make(chan v1.Update, 1)
+	// Create a buffered channel for progress updates
+	progress := make(chan v1.Update, 100)
 	defer close(progress)
 
 	// Start a goroutine to handle progress updates
 	go func() {
+		var lastComplete int64
+		var lastUpdate time.Time
+		const updateInterval = 500 * time.Millisecond // Update every 500ms
+		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
+
 		for p := range progress {
 			if progressWriter != nil {
-				fmt.Fprintf(progressWriter, "Downloading %v/%v bytes...\n", p.Complete, p.Total)
+				now := time.Now()
+				bytesDownloaded := p.Complete - lastComplete
+
+				// Only update if enough time has passed or enough bytes downloaded
+				if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
+					fmt.Fprintf(progressWriter, "Downloaded: %.2f MB\n", float64(p.Complete)/1024/1024)
+					lastUpdate = now
+					lastComplete = p.Complete
+				}
 			}
 		}
 	}()
 
-	img, err := remote.Image(ref,
+	// Configure remote options with progress tracking
+	remoteOpts := []remote.Option{
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithContext(ctx),
-		remote.WithProgress(progress))
+		remote.WithProgress(progress),
+	}
+
+	// Pull the image with progress tracking
+	img, err := remote.Image(ref, remoteOpts...)
 	if err != nil {
 		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
 		return "", fmt.Errorf("pulling image: %w", err)
@@ -164,8 +184,14 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	}
 	defer rc.Close()
 
+	// Create a progress reader to track layer download progress
+	progressReader := &ProgressReader{
+		Reader:       rc,
+		ProgressChan: progress,
+	}
+
 	// Write the layer content to the temporary file
-	if _, err := io.Copy(tempFile, rc); err != nil {
+	if _, err := io.Copy(tempFile, progressReader); err != nil {
 		c.log.Errorln("Failed to write layer content:", err)
 		return "", fmt.Errorf("writing layer content: %w", err)
 	}
@@ -179,6 +205,22 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	c.log.Infoln("Successfully pulled and stored model:", reference)
 	// Get the model path
 	return c.GetModelPath(reference)
+}
+
+// ProgressReader wraps an io.Reader to track reading progress
+type ProgressReader struct {
+	Reader       io.Reader
+	ProgressChan chan<- v1.Update
+	Total        int64
+}
+
+func (pr *ProgressReader) Read(p []byte) (int, error) {
+	n, err := pr.Reader.Read(p)
+	if n > 0 {
+		pr.Total += int64(n)
+		pr.ProgressChan <- v1.Update{Complete: pr.Total}
+	}
+	return n, err
 }
 
 // GetModelPath returns the local file path for a model
