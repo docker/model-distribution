@@ -15,6 +15,7 @@ GOBIN=$(GOBASE)/bin
 SOURCE?=
 TAG?=
 STORE_PATH?=./model-store
+OUTPUT?=openai_api_compatibility_report.md
 
 # Use linker flags to provide version/build information
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
@@ -62,6 +63,10 @@ run-get-path:
 	@echo "Getting path for model ${TAG}..."
 	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} get-path ${TAG}
 
+run-test-api:
+	@echo "Testing OpenAI API parameter compatibility..."
+	@${GOBIN}/${BINARY_NAME} test-api --output=${OUTPUT}
+
 help:
 	@echo "Available targets:"
 	@echo "  all              - Clean, build, and test"
@@ -73,4 +78,4 @@ help:
 	@echo "  run-list         - List all models"
 	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
 	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"
-
+	@echo "  run-test-api     - Test OpenAI API parameter compatibility (OUTPUT=report.md)"

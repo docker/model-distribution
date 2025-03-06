@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -72,6 +73,8 @@ func main() {
 		exitCode = cmdGet(client, args)
 	case "get-path":
 		exitCode = cmdGetPath(client, args)
+	case "test-api":
+		exitCode = cmdTestAPI(args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -91,10 +94,12 @@ func printUsage() {
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
+	fmt.Println("  test-api [--output=file.md]     Test OpenAI API parameter compatibility")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
+	fmt.Println("  model-distribution-tool test-api --output=api_report.md")
 }
 
 func cmdPull(client *distribution.Client, args []string) int {
@@ -216,5 +221,29 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Println(modelPath)
+	return 0
+}
+
+// cmdTestAPI runs the OpenAI API parameter compatibility tests
+func cmdTestAPI(args []string) int {
+	// Execute the API tester command
+	cmd := exec.Command("go", "run", "cmd/api-tester/main.go")
+
+	// Add any arguments
+	if len(args) > 0 {
+		cmd.Args = append(cmd.Args, args...)
+	}
+
+	// Set up stdout and stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Run the command
+	err := cmd.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running API tester: %v\n", err)
+		return 1
+	}
+
 	return 0
 }
