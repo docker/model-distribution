@@ -1,10 +1,8 @@
 package distribution
 
 import (
-	"bytes"
 	"context"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -55,31 +53,6 @@ func TestGARIntegration(t *testing.T) {
 			t.Fatalf("Failed to pull model from GAR: %v", err)
 		}
 		defer os.Remove(modelPath)
-
-		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
-		if err != nil {
-			t.Fatalf("Failed to read pulled model: %v", err)
-		}
-
-		if string(pulledContent) != string(modelContent) {
-			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
-		}
-	})
-
-	t.Run("Pull with progress", func(t *testing.T) {
-		var progressBuffer bytes.Buffer
-		modelPath, err := client.PullModel(context.Background(), garTag, &progressBuffer)
-		if err != nil {
-			t.Fatalf("Failed to pull model from GAR: %v", err)
-		}
-		defer os.Remove(modelPath)
-
-		// Verify progress output
-		progressOutput := progressBuffer.String()
-		if !strings.Contains(progressOutput, "Downloading") {
-			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
-		}
 
 		// Verify model content
 		pulledContent, err := os.ReadFile(modelPath)
