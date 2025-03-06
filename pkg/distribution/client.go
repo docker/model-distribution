@@ -75,7 +75,7 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 }
 
 // PullModel pulls a model from a registry and returns the local file path
-func (c *Client) PullModel(ctx context.Context, reference string) (string, error) {
+func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) (string, error) {
 	c.log.Infoln("Starting model pull:", reference)
 
 	// Check if model exists in local store
@@ -83,7 +83,24 @@ func (c *Client) PullModel(ctx context.Context, reference string) (string, error
 	if err == nil {
 		c.log.Infoln("Model found in local store:", reference)
 		// Model exists in local store, get its path
-		return c.GetModelPath(reference)
+		blobPath, err := c.GetModelPath(reference)
+		if err != nil {
+			return "", err
+		}
+
+		// Get file size for progress reporting
+		fileInfo, err := os.Stat(blobPath)
+		if err != nil {
+			return "", fmt.Errorf("getting file info: %w", err)
+		}
+
+		// Report progress for local model
+		if progressWriter != nil {
+			size := fileInfo.Size()
+			fmt.Fprintf(progressWriter, "Downloading %v/%v bytes...\n", size, size)
+		}
+
+		return blobPath, nil
 	}
 
 	c.log.Infoln("Model not found in local store, pulling from remote:", reference)
@@ -94,7 +111,22 @@ func (c *Client) PullModel(ctx context.Context, reference string) (string, error
 		return "", fmt.Errorf("parsing reference: %w", err)
 	}
 
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx))
+	progress := make(chan v1.Update, 1)
+	defer close(progress)
+
+	// Start a goroutine to handle progress updates
+	go func() {
+		for p := range progress {
+			if progressWriter != nil {
+				fmt.Fprintf(progressWriter, "Downloading %v/%v bytes...\n", p.Complete, p.Total)
+			}
+		}
+	}()
+
+	img, err := remote.Image(ref,
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(ctx),
+		remote.WithProgress(progress))
 	if err != nil {
 		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
 		return "", fmt.Errorf("pulling image: %w", err)
