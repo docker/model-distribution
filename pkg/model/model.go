@@ -6,14 +6,17 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
-	"github.com/google/go-containerregistry/pkg/v1/types"
+	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
+
+	"github.com/docker/model-distribution/pkg/types"
 )
 
 var _ v1.Image = &Model{}
 
 type Model struct {
-	configFile ConfigFile
+	configFile types.ConfigFile
 	layers     []v1.Layer
+	manifest   *v1.Manifest
 }
 
 func (m *Model) Layers() ([]v1.Layer, error) {
@@ -45,7 +48,7 @@ func (m *Model) Manifest() (*v1.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get config descriptor: %w", err)
 	}
-	cfgDsc.MediaType = MediaTypeModelConfig
+	cfgDsc.MediaType = types.MediaTypeModelConfig
 
 	ls, err := m.Layers()
 	if err != nil {
@@ -63,7 +66,7 @@ func (m *Model) Manifest() (*v1.Manifest, error) {
 
 	return &v1.Manifest{
 		SchemaVersion: 2,
-		MediaType:     types.OCIManifestSchema1,
+		MediaType:     ggcr.OCIManifestSchema1,
 		Config:        *cfgDsc,
 		Layers:        layers,
 	}, nil
@@ -85,7 +88,7 @@ func (m *Model) RawConfigFile() ([]byte, error) {
 	return json.Marshal(m.configFile)
 }
 
-func (m *Model) MediaType() (types.MediaType, error) {
+func (m *Model) MediaType() (ggcr.MediaType, error) {
 	manifest, err := m.Manifest()
 	if err != nil {
 		return "", fmt.Errorf("compute maniest: %w", err)

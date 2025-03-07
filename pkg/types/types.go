@@ -9,10 +9,10 @@ type Store interface {
 	Pull(tag string, destPath string) error
 
 	// List all models in the store
-	List() ([]Model, error)
+	List() ([]ModelInfo, error)
 
 	// GetByTag Get model info by tag
-	GetByTag(tag string) (*Model, error)
+	GetByTag(tag string) (*ModelInfo, error)
 
 	// Delete a model by tag
 	Delete(tag string) error
@@ -30,15 +30,21 @@ type Store interface {
 	Upgrade() error
 }
 
-// Model represents a model with its metadata and tags
-type Model struct {
-	ManifestDigest string   `json:"manifestDigest"`
-	Tags           []string `json:"tags"`
+// ModelInfo represents a model with its metadata and tags
+type ModelInfo struct {
+	// ID is the globally unique model identifier.
+	ID string `json:"id"`
+	// Tags are the list of tags associated with the model.
+	Tags []string `json:"tags"`
+	// Files are the GGUF files associated with the model.
+	Files []string `json:"files"`
+	// Created is the Unix epoch timestamp corresponding to the model creation.
+	Created int64 `json:"created"`
 }
 
 // ModelIndex represents the index of all models in the store
 type ModelIndex struct {
-	Models []Model `json:"models"`
+	Models []ModelInfo `json:"models"`
 }
 
 // StoreLayout represents the layout information of the store

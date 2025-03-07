@@ -37,3 +37,4 @@ test/artifacts/
 # OS specific
 .DS_Store
 Thumbs.db
+model-store

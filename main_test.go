@@ -2,358 +2,177 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
-	tc "github.com/testcontainers/testcontainers-go/modules/registry"
+	"github.com/docker/model-distribution/pkg/distribution"
+	"github.com/docker/model-distribution/pkg/types"
 )
 
-func TestPushModel(t *testing.T) {
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+// Define an interface for the client methods we use in the commands
+type ClientInterface interface {
+	PullModel(ctx context.Context, reference string, progressWriter io.Writer) (string, error)
+	PushModel(ctx context.Context, source, reference string) error
+	ListModels() ([]*types.ModelInfo, error)
+	GetModel(reference string) (*types.ModelInfo, error)
+	GetModelPath(reference string) (string, error)
+}
+
+// Ensure distribution.Client implements ClientInterface
+var _ ClientInterface = (*distribution.Client)(nil)
+
+// TestMainHelp tests the help command
+func TestMainHelp(t *testing.T) {
+	cmd := exec.Command("go", "run", "main.go", "--help")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
-	}
-	registry, err := registryContainer.HostAddress(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
+		t.Fatalf("Failed to run help command: %v\nOutput: %s", err, output)
 	}
 
-	// Test cases
-	tests := []struct {
-		name    string
-		source  string
-		tag     string
-		wantErr bool
-	}{
-		{
-			name:    "Valid push",
-			source:  "assets/dummy.gguf",
-			tag:     registry + "/myartifact:v1.0.0",
-			wantErr: false,
-		},
-		{
-			name:    "Invalid source file",
-			source:  "nonexistent/file.gguf",
-			tag:     registry + "/myartifact:v1.0.0",
-			wantErr: true,
-		},
-		{
-			name:    "Invalid tag format",
-			source:  "assets/dummy.gguf",
-			tag:     "invalid:tag:format",
-			wantErr: true,
-		},
-		{
-			name:    "Empty source",
-			source:  "",
-			tag:     registry + "/myartifact:v1.0.0",
-			wantErr: true,
-		},
-		{
-			name:    "Empty tag",
-			source:  "assets/dummy.gguf",
-			tag:     "",
-			wantErr: true,
-		},
+	// Check that the output contains the usage information
+	if !strings.Contains(string(output), "Usage:") {
+		t.Errorf("Help output does not contain usage information")
 	}
 
-	// Run tests
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ref, err := PushModel(tt.source, tt.tag)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PushModel() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err == nil {
-				if ref.String() != tt.tag {
-					t.Errorf("PushModel() ref = %v, want %v", ref.String(), tt.tag)
-				}
-			}
-		})
+	// Check that the output contains the commands
+	commands := []string{"pull", "push", "list", "get", "get-path"}
+	for _, cmd := range commands {
+		if !strings.Contains(string(output), cmd) {
+			t.Errorf("Help output does not contain command: %s", cmd)
+		}
 	}
 }
 
-func TestPullModel(t *testing.T) {
-	// Set up test registry
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+// TestMainVersion tests the version command
+func TestMainVersion(t *testing.T) {
+	cmd := exec.Command("go", "run", "main.go", "--version")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
+		t.Fatalf("Failed to run version command: %v\nOutput: %s", err, output)
 	}
 
-	registry, err := registryContainer.HostAddress(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
-	}
-
-	// First push a test model
-	source := "assets/dummy.gguf"
-	tag := registry + "/pulltest:v1.0.0"
-
-	_, err = PushModel(source, tag)
-	if err != nil {
-		t.Fatalf("Failed to push test model: %v", err)
-	}
-
-	// Test cases
-	tests := []struct {
-		name    string
-		tag     string
-		wantErr bool
-	}{
-		{
-			name:    "Valid pull",
-			tag:     tag,
-			wantErr: false,
-		},
-		{
-			name:    "Invalid tag format",
-			tag:     "invalid:tag:format",
-			wantErr: true,
-		},
-		{
-			name:    "Nonexistent image",
-			tag:     registry + "/nonexistent:v1.0.0",
-			wantErr: true,
-		},
-		{
-			name:    "Empty tag",
-			tag:     "",
-			wantErr: true,
-		},
-	}
-
-	// Run tests
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			img, err := PullModel(tt.tag)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PullModel() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if tt.wantErr {
-				return
-			}
-
-			// Verify the pulled image is valid
-			manifest, err := img.Manifest()
-			if err != nil {
-				t.Errorf("Failed to get manifest from pulled image: %v", err)
-			}
-			if manifest == nil {
-				t.Error("Pulled image manifest is nil")
-			}
-		})
+	// Check that the output contains the version information
+	if !strings.Contains(string(output), "version") {
+		t.Errorf("Version output does not contain version information")
 	}
 }
 
-// TestLocalStorePullModel tests the local store functionality of PullModel
-func TestLocalStorePullModel(t *testing.T) {
-	// Set up test registry
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+// TestMainPull tests the pull command
+func TestMainPull(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a model store directory
+	storeDir := filepath.Join(tempDir, "model-store")
+	if err := os.MkdirAll(storeDir, 0755); err != nil {
+		t.Fatalf("Failed to create model store directory: %v", err)
 	}
 
-	registry, err := registryContainer.HostAddress(context.Background())
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(storeDir))
 	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
+		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// First push a test model
-	source := "assets/dummy.gguf"
-	tag := registry + "/localstoretest:v1.0.0"
-
-	_, err = PushModel(source, tag)
-	if err != nil {
-		t.Fatalf("Failed to push test model: %v", err)
-	}
-
-	// First pull - should pull from remote and store locally
-	t.Log("First pull - should pull from remote")
-	img1, err := PullModel(tag)
-	if err != nil {
-		t.Fatalf("Failed to pull model from remote: %v", err)
-	}
-
-	// Verify the pulled image is valid
-	manifest1, err := img1.Manifest()
-	if err != nil {
-		t.Fatalf("Failed to get manifest from pulled image: %v", err)
-	}
-
-	// Terminate the registry container to ensure the next pull is from local store
-	err = registryContainer.Terminate(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to terminate registry container: %v", err)
-	}
-
-	// Second pull - should retrieve from local store
-	t.Log("Second pull - should retrieve from local store")
-	img2, err := PullModel(tag)
-	if err != nil {
-		t.Fatalf("Failed to pull model from local store: %v", err)
-	}
-
-	// Verify the pulled image is valid
-	manifest2, err := img2.Manifest()
-	if err != nil {
-		t.Fatalf("Failed to get manifest from pulled image: %v", err)
-	}
-
-	// Verify both manifests are the same
-	if manifest1.Config.Digest.String() != manifest2.Config.Digest.String() {
-		t.Errorf("Manifests from remote and local store don't match")
+	// Test the pull command with invalid arguments
+	exitCode := cmdPull(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Pull command with invalid arguments should fail")
 	}
 }
 
-// TestLocalStoreErrorHandling tests error handling in the local store functionality
-func TestLocalStoreErrorHandling(t *testing.T) {
-	// Save original home directory
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome) // Restore original home directory after test
+// TestMainPush tests the push command
+func TestMainPush(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
 
-	// Test with invalid home directory to simulate local store initialization failure
-	t.Run("Local store initialization failure", func(t *testing.T) {
-		// Set HOME to a non-existent directory
-		os.Setenv("HOME", "/nonexistent/directory")
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
 
-		// Set up test registry
-		registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
-		if err != nil {
-			t.Fatalf("Failed to start registry container: %v", err)
-		}
-
-		registry, err := registryContainer.HostAddress(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get registry address: %v", err)
-		}
-
-		// Try to pull a model
-		tag := registry + "/errortest:v1.0.0"
-
-		// Should fall back to remote pull even if local store initialization fails
-		img, err := PullModel(tag)
-		// We expect an error here because the image doesn't exist in the registry
-		if err == nil {
-			t.Errorf("Expected error when pulling non-existent model with invalid store")
-
-			// If no error, verify the image
-			manifest, err := img.Manifest()
-			if err != nil {
-				t.Errorf("Failed to get manifest from pulled image: %v", err)
-			}
-			if manifest == nil {
-				t.Error("Pulled image manifest is nil")
-			}
-		}
-	})
+	// Test the push command with invalid arguments
+	exitCode := cmdPush(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Push command with invalid arguments should fail")
+	}
 }
 
-// TestGARIntegration tests pushing and pulling a model to/from Google Artifact Registry
-func TestGARIntegration(t *testing.T) {
-	// Skip if not running in CI with GAR enabled
-	if os.Getenv("TEST_GAR_ENABLED") != "true" {
-		t.Skip("Skipping GAR integration test - not enabled")
-	}
-
-	// Get tag from environment variable
-	tag := os.Getenv("TEST_GAR_TAG")
-	if tag == "" {
-		t.Fatal("Missing required environment variable for GAR test: TEST_GAR_TAG")
-	}
-
-	// Register cleanup function
-	t.Cleanup(func() {
-		t.Log("Cleaning up GAR artifact:", tag)
-		if err := DeleteModel(tag); err != nil {
-			t.Logf("Warning: Failed to cleanup GAR artifact: %v", err)
-		} else {
-			t.Log("Successfully cleaned up GAR artifact")
-		}
-	})
-
-	// Log authentication method
-	if credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credFile != "" {
-		t.Logf("Using Google Application Credentials file: %s", credFile)
-	} else {
-		t.Log("GOOGLE_APPLICATION_CREDENTIALS not set, will try other authentication methods")
-	}
-
-	source := "assets/dummy.gguf"
-
-	// Test push to GAR
-	t.Log("Pushing model to GAR:", tag)
-	if _, err := PushModel(source, tag); err != nil {
-		t.Fatalf("Failed to push test model: %v", err)
-	}
-	t.Log("Successfully pushed model to GAR:", tag)
-
-	// Test pull from GAR
-	t.Log("Pulling model from GAR:", tag)
-	img, err := PullModel(tag)
+// TestMainList tests the list command
+func TestMainList(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
-		t.Fatalf("Failed to pull model from GAR: %v", err)
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Verify the pulled image
-	manifest, err := img.Manifest()
-	if err != nil {
-		t.Fatalf("Failed to get manifest from pulled GAR image: %v", err)
+	// Test the list command
+	exitCode := cmdList(client, []string{})
+	if exitCode != 0 {
+		t.Errorf("List command failed with exit code: %d", exitCode)
 	}
-	if manifest == nil {
-		t.Fatal("Pulled GAR image manifest is nil")
-	}
-	t.Log("Successfully pulled and verified model from GAR")
 }
 
-// TestECRIntegration tests pushing and pulling a model to/from Amazon ECR
-func TestECRIntegration(t *testing.T) {
-	// Skip if not running in CI with ECR enabled
-	if os.Getenv("TEST_ECR_ENABLED") != "true" {
-		t.Skip("Skipping ECR integration test - not enabled")
-	}
-
-	// Get tag from environment variable
-	tag := os.Getenv("TEST_ECR_TAG")
-	if tag == "" {
-		t.Fatal("Missing required environment variable for ECR test: TEST_ECR_TAG")
-	}
-
-	// Register cleanup function
-	t.Cleanup(func() {
-		t.Log("Cleaning up ECR artifact:", tag)
-		if err := DeleteModel(tag); err != nil {
-			t.Logf("Warning: Failed to cleanup ECR artifact: %v", err)
-		} else {
-			t.Log("Successfully cleaned up ECR artifact")
-		}
-	})
-
-	source := "assets/dummy.gguf"
-
-	// Test push to ECR
-	t.Log("Pushing model to ECR:", tag)
-	ref, err := PushModel(source, tag)
+// TestMainGet tests the get command
+func TestMainGet(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
-		t.Fatalf("Failed to push model to ECR: %v", err)
+		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	t.Log("Successfully pushed model to ECR:", ref.String())
+	defer os.RemoveAll(tempDir)
 
-	// Test pull from ECR
-	t.Log("Pulling model from ECR:", tag)
-	img, err := PullModel(tag)
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
 	if err != nil {
-		t.Fatalf("Failed to pull model from ECR: %v", err)
+		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Verify the pulled image
-	manifest, err := img.Manifest()
+	// Test the get command with invalid arguments
+	exitCode := cmdGet(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Get command with invalid arguments should fail")
+	}
+}
+
+// TestMainGetPath tests the get-path command
+func TestMainGetPath(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
-		t.Fatalf("Failed to get manifest from pulled ECR image: %v", err)
+		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	if manifest == nil {
-		t.Fatal("Pulled ECR image manifest is nil")
+	defer os.RemoveAll(tempDir)
+
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
 	}
-	t.Log("Successfully pulled and verified model from ECR")
+
+	// Test the get-path command with invalid arguments
+	exitCode := cmdGetPath(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Get-path command with invalid arguments should fail")
+	}
 }

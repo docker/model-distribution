@@ -12,10 +12,9 @@ import (
 var _ v1.Image = &Model{}
 
 type Model struct {
-	path        string
-	ref         string
 	rawManfiest []byte
-	manifest   *v1.Manifest
+	rawMConfigFile []byte
+	layres	  []v1.Layer
 }
 
 func (m Model) Layers() ([]v1.Layer, error) {
@@ -72,9 +71,9 @@ func (m Model) LayerByDiffID(hash v1.Hash) (v1.Layer, error) {
 }
 
 func new(rawManfiest []byte) *Model {
-	os.O
+	os.RemoveAll(filepath.Join(tempDir, "test-model.gguf")
 	return &Model{
 		rawManfiest: rawManfiest,
-		manifest: partial.M
+		rawConfigFile
 	}
 }

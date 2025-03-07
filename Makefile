@@ -14,6 +14,7 @@ GOBIN=$(GOBASE)/bin
 # Run configuration
 SOURCE?=
 TAG?=
+STORE_PATH?=./model-store
 
 # Use linker flags to provide version/build information
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
@@ -22,6 +23,7 @@ all: clean lint build test
 
 build:
 	@echo "Building ${BINARY_NAME}..."
+	@mkdir -p ${GOBIN}
 	@go build ${LDFLAGS} -o ${GOBIN}/${BINARY_NAME} .
 
 test:
@@ -40,22 +42,35 @@ lint:
 	@gofmt -s -l . | tee /dev/stderr | xargs -r false
 	@go vet ./...
 
-run: build
-	@if [ -z "$(SOURCE)" ] || [ -z "$(TAG)" ]; then \
-		echo "Error: SOURCE and TAG must be provided"; \
-		echo "Usage: make run SOURCE=<path-or-url> TAG=<registry/repo:tag>"; \
-		exit 1; \
-	fi
-	@echo "Running ${BINARY_NAME}..."
-	${GOBIN}/${BINARY_NAME} --source "$(SOURCE)" --tag "$(TAG)"
+run-pull:
+	@echo "Pulling model from ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} pull ${TAG}
+
+run-push:
+	@echo "Pushing model ${SOURCE} to ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} push ${SOURCE} ${TAG}
+
+run-list:
+	@echo "Listing models..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} list
+
+run-get:
+	@echo "Getting model ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} get ${TAG}
+
+run-get-path:
+	@echo "Getting path for model ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} get-path ${TAG}
 
 help:
 	@echo "Available targets:"
 	@echo "  all              - Clean, build, and test"
-	@echo "  build           - Build the binary"
-	@echo "  test            - Run tests"
-	@echo "  clean           - Clean build artifacts"
-	@echo "  run             - Build and run the tool (requires SOURCE and TAG)"
-	@echo ""
-	@echo "Run example:"
-	@echo "  make run SOURCE=path/to/model.gguf TAG=registry.example.com/model:latest"
+	@echo "  build            - Build the binary"
+	@echo "  test             - Run unit tests"
+	@echo "  clean            - Clean build artifacts"
+	@echo "  run-pull         - Pull a model (TAG=registry/model:tag)"
+	@echo "  run-push         - Push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag)"
+	@echo "  run-list         - List all models"
+	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
+	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"
+
