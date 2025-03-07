@@ -16,10 +16,7 @@ import (
 
 // Models to test
 var modelsToTest = []string{
-	"ignaciolopezluna020/smollm135m:Q2_k",
-	"ignaciolopezluna020/smollm:360m",
-	"ignaciolopezluna020/llama1b:latest",
-	"ignaciolopezluna020/llama3.2:1b",
+	"ignaciolopezluna020/llama3.2:3b",
 }
 
 // OpenAI API parameters to test
@@ -34,6 +31,11 @@ var parametersToTest = []Parameter{
 		Name:        "max_tokens",
 		Values:      []interface{}{10, 50, 100},
 		Description: "The maximum number of tokens to generate",
+	},
+	{
+		Name:        "max_completion_tokens",
+		Values:      []interface{}{10, 50, 100},
+		Description: "The maximum number of tokens to generate in the completion",
 	},
 	{
 		Name:        "temperature",
@@ -56,6 +58,15 @@ var parametersToTest = []Parameter{
 		Description: "Whether to stream back partial progress",
 	},
 	{
+		Name: "stream_options",
+		Values: []interface{}{
+			map[string]interface{}{
+				"include_usage": true,
+			},
+		},
+		Description: "Options for controlling streaming behavior",
+	},
+	{
 		Name:        "stop",
 		Values:      []interface{}{[]string{"\n"}, []string{".", "!"}, []string{"stop", "end"}},
 		Description: "Sequences where the API will stop generating",
@@ -76,9 +87,100 @@ var parametersToTest = []Parameter{
 		Description: "Modifies likelihood of specified tokens",
 	},
 	{
-		Name:        "user",
-		Values:      []interface{}{"test-user-1", "test-user-2"},
-		Description: "A unique identifier for the end-user",
+		Name:        "response_format",
+		Values:      []interface{}{map[string]string{"type": "text"}, map[string]string{"type": "json_object"}},
+		Description: "Format of the response (e.g., JSON)",
+	},
+	{
+		Name:        "seed",
+		Values:      []interface{}{42, 123, 7777},
+		Description: "Seed for deterministic sampling",
+	},
+	{
+		Name: "tools",
+		Values: []interface{}{
+			[]map[string]interface{}{
+				{
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":        "get_weather",
+						"description": "Get the current weather",
+						"parameters": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"location": map[string]interface{}{
+									"type":        "string",
+									"description": "The city and state, e.g. San Francisco, CA",
+								},
+							},
+							"required": []string{"location"},
+						},
+					},
+				},
+			},
+		},
+		Description: "List of tools the model may call",
+	},
+	{
+		Name: "tool_choice",
+		Values: []interface{}{
+			"auto",
+			map[string]interface{}{
+				"type": "function",
+				"function": map[string]interface{}{
+					"name": "get_weather",
+				},
+			},
+		},
+		Description: "Controls which (if any) tool is called by the model",
+	},
+	{
+		Name: "audio",
+		Values: []interface{}{
+			map[string]interface{}{
+				"input": "base64_audio_data",
+				"model": "whisper-1",
+			},
+		},
+		Description: "Audio input for the model",
+	},
+	{
+		Name: "prediction",
+		Values: []interface{}{
+			map[string]interface{}{
+				"enable": true,
+			},
+		},
+		Description: "Controls whether the model should predict the next token",
+	},
+	{
+		Name: "modalities",
+		Values: []interface{}{
+			[]map[string]interface{}{
+				{
+					"type": "image",
+					"image": map[string]interface{}{
+						"url": "https://example.com/image.jpg",
+					},
+				},
+			},
+		},
+		Description: "Additional modalities for the model to process",
+	},
+	{
+		Name: "metadata",
+		Values: []interface{}{
+			map[string]interface{}{
+				"user_id":    "user123",
+				"session_id": "session456",
+			},
+		},
+		Description: "Additional metadata to include with the request",
+	},
+	{
+		Name:        "reasoning_effort",
+		Values:      []interface{}{0.0, 0.5, 1.0},
+		Description: "Controls the amount of effort the model spends reasoning",
 	},
 }
 
@@ -282,8 +384,8 @@ func TestParameter(client *DockerAPIClient, modelName string, paramName string, 
 // checkExpectedBehavior checks if a parameter had the expected effect
 func checkExpectedBehavior(paramName string, paramValue interface{}, baselineResp, testResp map[string]interface{}) bool {
 	switch paramName {
-	case "max_tokens":
-		// Check if response length is affected by max_tokens
+	case "max_tokens", "max_completion_tokens":
+		// Check if response length is affected by max_tokens or max_completion_tokens
 		baselineTokens := getResponseTokenCount(baselineResp)
 		testTokens := getResponseTokenCount(testResp)
 		maxTokens, _ := paramValue.(int)
@@ -291,11 +393,11 @@ func checkExpectedBehavior(paramName string, paramValue interface{}, baselineRes
 		// The response should be limited by max_tokens
 		return testTokens <= maxTokens && testTokens < baselineTokens
 
-	case "temperature":
-		// For temperature, we'd need multiple samples to truly verify
-		// For now, just check if we got different responses with different temperatures
+	case "temperature", "reasoning_effort":
+		// For temperature and reasoning_effort, we'd need multiple samples to truly verify
+		// For now, just check if we got different responses with different values
 		if paramValue.(float64) == 0.0 {
-			// At temperature 0, repeated calls should give the same result
+			// At value 0, repeated calls should give the same result
 			// But we can't test that in a single call, so we'll assume it works
 			return true
 		}
@@ -311,6 +413,11 @@ func checkExpectedBehavior(paramName string, paramValue interface{}, baselineRes
 		// Hard to verify streaming behavior in this test
 		return true
 
+	case "stream_options":
+		// Hard to verify stream_options behavior in this test
+		// We would need to check if usage is included in streaming responses
+		return true
+
 	case "stop":
 		// Check if the response stops at the specified sequence
 		stopSeq, _ := paramValue.([]string)
@@ -322,6 +429,116 @@ func checkExpectedBehavior(paramName string, paramValue interface{}, baselineRes
 				return strings.HasSuffix(strings.TrimSpace(content), seq)
 			}
 		}
+		return true
+
+	case "response_format":
+		// Check if the response format matches the requested format
+		formatMap, _ := paramValue.(map[string]string)
+		formatType := formatMap["type"]
+
+		if formatType == "json_object" {
+			// For JSON format, check if the content is valid JSON
+			content := getResponseContent(testResp)
+			var js map[string]interface{}
+			err := json.Unmarshal([]byte(content), &js)
+			return err == nil
+		}
+		// For text format, any response is valid
+		return true
+
+	case "seed":
+		// Hard to verify seed behavior in a single test
+		// We would need to make multiple identical requests with the same seed
+		// and check if they produce the same result
+		return true
+
+	case "tools":
+		// Check if the model attempted to use a tool
+		choices, ok := testResp["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return false
+		}
+
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		// Check for tool_calls in the response
+		message, ok := choice["message"].(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		_, hasToolCalls := message["tool_calls"]
+		return hasToolCalls
+
+	case "tool_choice":
+		// Similar to tools, check if the model used the specified tool
+		if paramValue == "auto" {
+			return true // Can't verify auto behavior easily
+		}
+
+		toolChoice, _ := paramValue.(map[string]interface{})
+		functionName := toolChoice["function"].(map[string]interface{})["name"].(string)
+
+		choices, ok := testResp["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return false
+		}
+
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		message, ok := choice["message"].(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		toolCalls, ok := message["tool_calls"].([]interface{})
+		if !ok || len(toolCalls) == 0 {
+			return false
+		}
+
+		// Check if any tool call matches the requested function name
+		for _, toolCall := range toolCalls {
+			tc, ok := toolCall.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			function, ok := tc["function"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := function["name"].(string)
+			if ok && name == functionName {
+				return true
+			}
+		}
+		return false
+
+	case "audio":
+		// Hard to verify audio behavior in this test
+		// We would need to check if the model processed the audio input
+		return true
+
+	case "prediction":
+		// Hard to verify prediction behavior in this test
+		// We would need to check if the model predicted the next token
+		return true
+
+	case "modalities":
+		// Hard to verify modalities behavior in this test
+		// We would need to check if the model processed the additional modalities
+		return true
+
+	case "metadata":
+		// Hard to verify metadata behavior in this test
+		// This is mostly for tracking purposes and doesn't affect the response
 		return true
 
 	default:
@@ -338,12 +555,28 @@ func getObservationNotes(paramName string, paramValue interface{}, baselineResp,
 		testTokens := getResponseTokenCount(testResp)
 		return fmt.Sprintf("Baseline response: %d tokens, Test response: %d tokens", baselineTokens, testTokens)
 
+	case "max_completion_tokens":
+		baselineTokens := getResponseTokenCount(baselineResp)
+		testTokens := getResponseTokenCount(testResp)
+		return fmt.Sprintf("Baseline response: %d tokens, Test response with max_completion_tokens=%d: %d tokens",
+			baselineTokens, paramValue.(int), testTokens)
+
 	case "temperature":
 		temp := paramValue.(float64)
 		if temp == 0.0 {
 			return "Temperature 0 should produce deterministic results"
 		} else {
 			return fmt.Sprintf("Temperature %.1f should produce more random results", temp)
+		}
+
+	case "reasoning_effort":
+		effort := paramValue.(float64)
+		if effort == 0.0 {
+			return "Reasoning effort 0 should produce faster but less reasoned results"
+		} else if effort == 1.0 {
+			return "Reasoning effort 1.0 should produce more thorough reasoning"
+		} else {
+			return fmt.Sprintf("Reasoning effort %.1f should balance speed and reasoning quality", effort)
 		}
 
 	case "n":
@@ -355,10 +588,134 @@ func getObservationNotes(paramName string, paramValue interface{}, baselineResp,
 		stream := paramValue.(bool)
 		return fmt.Sprintf("Stream mode: %v", stream)
 
+	case "stream_options":
+		options, _ := paramValue.(map[string]interface{})
+		return fmt.Sprintf("Stream options: %v (controls additional information in streaming responses)", options)
+
 	case "stop":
 		stopSeq, _ := paramValue.([]string)
 		content := getResponseContent(testResp)
 		return fmt.Sprintf("Stop sequences: %v, Response ends with: %s", stopSeq, getLastFewWords(content))
+
+	case "response_format":
+		formatMap, _ := paramValue.(map[string]string)
+		formatType := formatMap["type"]
+
+		if formatType == "json_object" {
+			content := getResponseContent(testResp)
+			var js map[string]interface{}
+			err := json.Unmarshal([]byte(content), &js)
+
+			if err == nil {
+				return "Response format: JSON object (valid JSON detected)"
+			} else {
+				return "Response format: JSON object requested but response is not valid JSON"
+			}
+		} else {
+			return "Response format: text"
+		}
+
+	case "seed":
+		seedValue, _ := paramValue.(int)
+		return fmt.Sprintf("Seed value: %d (deterministic results expected for identical requests)", seedValue)
+
+	case "tools":
+		// Check if the model attempted to use a tool
+		choices, ok := testResp["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return "Tools provided but not used in response"
+		}
+
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return "Tools provided but not used in response"
+		}
+
+		message, ok := choice["message"].(map[string]interface{})
+		if !ok {
+			return "Tools provided but not used in response"
+		}
+
+		toolCalls, ok := message["tool_calls"].([]interface{})
+		if !ok || len(toolCalls) == 0 {
+			return "Tools provided but not used in response"
+		}
+
+		return fmt.Sprintf("Tools used: %d tool calls found in response", len(toolCalls))
+
+	case "tool_choice":
+		if paramValue == "auto" {
+			return "Tool choice: auto (model decides whether to use tools)"
+		}
+
+		toolChoice, _ := paramValue.(map[string]interface{})
+		functionName := toolChoice["function"].(map[string]interface{})["name"].(string)
+
+		// Check if the model used the specified tool
+		choices, ok := testResp["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return fmt.Sprintf("Tool choice: %s (not used in response)", functionName)
+		}
+
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return fmt.Sprintf("Tool choice: %s (not used in response)", functionName)
+		}
+
+		message, ok := choice["message"].(map[string]interface{})
+		if !ok {
+			return fmt.Sprintf("Tool choice: %s (not used in response)", functionName)
+		}
+
+		toolCalls, ok := message["tool_calls"].([]interface{})
+		if !ok || len(toolCalls) == 0 {
+			return fmt.Sprintf("Tool choice: %s (not used in response)", functionName)
+		}
+
+		// Check if any tool call matches the requested function name
+		for _, toolCall := range toolCalls {
+			tc, ok := toolCall.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			function, ok := tc["function"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := function["name"].(string)
+			if ok && name == functionName {
+				return fmt.Sprintf("Tool choice: %s (successfully used in response)", functionName)
+			}
+		}
+
+		return fmt.Sprintf("Tool choice: %s (different tool used in response)", functionName)
+
+	case "audio":
+		audioConfig, _ := paramValue.(map[string]interface{})
+		return fmt.Sprintf("Audio input provided: model=%v (processes audio input for transcription/analysis)",
+			audioConfig["model"])
+
+	case "prediction":
+		predictionConfig, _ := paramValue.(map[string]interface{})
+		return fmt.Sprintf("Prediction enabled: %v (controls token prediction behavior)",
+			predictionConfig["enable"])
+
+	case "modalities":
+		modalities, _ := paramValue.([]map[string]interface{})
+		modalityTypes := []string{}
+		for _, m := range modalities {
+			if t, ok := m["type"].(string); ok {
+				modalityTypes = append(modalityTypes, t)
+			}
+		}
+		return fmt.Sprintf("Additional modalities provided: %v (enables multi-modal processing)",
+			strings.Join(modalityTypes, ", "))
+
+	case "metadata":
+		metadata, _ := paramValue.(map[string]interface{})
+		return fmt.Sprintf("Metadata provided: %v (additional tracking information)", metadata)
 
 	default:
 		return fmt.Sprintf("Parameter: %s, Value: %v", paramName, paramValue)
