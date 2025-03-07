@@ -130,7 +130,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 				// Only update if enough time has passed or enough bytes downloaded
 				if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
-					fmt.Fprintf(progressWriter, "Downloaded: %.2f MB\n", float64(p.Complete)/1024/1024)
+					fmt.Fprintf(progressWriter, "Downloaded: %.2f MB\r\n", float64(p.Complete)/1024/1024)
 					lastUpdate = now
 					lastComplete = p.Complete
 				}
