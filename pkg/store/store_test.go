@@ -93,7 +93,7 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("Digest failed: %v", err)
 		}
 		if writeDigest != readDigest {
-			t.Fatalf("Digest mismatch")
+			t.Fatalf("Digest mismatch %s != %s", writeDigest.Hex, readDigest.Hex)
 		}
 	})
 

@@ -48,10 +48,16 @@ func TestECRIntegration(t *testing.T) {
 
 	// Test pull from ECR
 	t.Run("Pull without progress", func(t *testing.T) {
-		modelPath, err := client.PullModel(context.Background(), ecrTag, nil)
+		err := client.PullModel(context.Background(), ecrTag, nil)
 		if err != nil {
 			t.Fatalf("Failed to pull model from ECR: %v", err)
 		}
+
+		modelPath, err := client.GetModelPath(ecrTag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
+		}
+
 		defer os.Remove(modelPath)
 
 		// Verify model content

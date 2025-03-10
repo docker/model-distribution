@@ -56,11 +56,15 @@ func TestClientPullModel(t *testing.T) {
 
 	t.Run("pull without progress writer", func(t *testing.T) {
 		// Pull model from registry without progress writer
-		modelPath, err := client.PullModel(context.Background(), tag, nil)
+		err := client.PullModel(context.Background(), tag, nil)
 		if err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
+		modelPath, err := client.GetModelPath(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
+		}
 		// Verify model content
 		pulledContent, err := os.ReadFile(modelPath)
 		if err != nil {
@@ -77,8 +81,7 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Pull model from registry with progress writer
-		modelPath, err := client.PullModel(context.Background(), tag, &progressBuffer)
-		if err != nil {
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -86,6 +89,11 @@ func TestClientPullModel(t *testing.T) {
 		progressOutput := progressBuffer.String()
 		if !strings.Contains(progressOutput, "Using cached model") && !strings.Contains(progressOutput, "Downloading") {
 			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
+		}
+
+		modelPath, err := client.GetModelPath(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
 		}
 
 		// Verify model content

@@ -1,5 +1,7 @@
 package types
 
+import v1 "github.com/google/go-containerregistry/pkg/v1"
+
 // Store interface for model storage operations
 type Store interface {
 	// Push a model to the store with given tags
@@ -62,4 +64,5 @@ type ManifestReference struct {
 // StoreOptions represents options for creating a store
 type StoreOptions struct {
 	RootPath string
+	Progress chan<- v1.Update
 }

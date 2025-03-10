@@ -107,14 +107,14 @@ func cmdPull(client *distribution.Client, args []string) int {
 	reference := args[0]
 	ctx := context.Background()
 
-	modelPath, err := client.PullModel(ctx, reference, os.Stdout)
+	err := client.PullModel(ctx, reference, os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error pulling model: %v\n", err)
 		return 1
 	}
 
 	fmt.Printf("Successfully pulled model: %s\n", reference)
-	fmt.Printf("Model path: %s\n", modelPath)
+	//fmt.Printf("Model path: %s\n", modelPath)
 	return 0
 }
 

@@ -65,7 +65,9 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 		return nil, fmt.Errorf("store root path is required")
 	}
 
-	s, err := store.New(types.StoreOptions{RootPath: options.storeRootPath})
+	s, err := store.New(types.StoreOptions{
+		RootPath: options.storeRootPath,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initializing store: %w", err)
 	}
@@ -78,7 +80,7 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 }
 
 // PullModel pulls a model from a registry and returns the local file path
-func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) (string, error) {
+func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
 	c.log.Infoln("Starting model pull:", reference)
 
 	// Check if model exists in local store
@@ -88,13 +90,13 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		// Model exists in local store, get its path
 		blobPath, err := c.GetModelPath(reference)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		// Get file size for progress reporting
 		fileInfo, err := os.Stat(blobPath)
 		if err != nil {
-			return "", fmt.Errorf("getting file info: %w", err)
+			return fmt.Errorf("getting file info: %w", err)
 		}
 
 		// Report progress for local model
@@ -103,7 +105,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
 		}
 
-		return blobPath, nil
+		return nil
 	}
 
 	c.log.Infoln("Model not found in local store, pulling from remote:", reference)
@@ -111,7 +113,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	ref, err := name.ParseReference(reference)
 	if err != nil {
 		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
-		return "", fmt.Errorf("parsing reference: %w", err)
+		return fmt.Errorf("parsing reference: %w", err)
 	}
 
 	// Create a buffered channel for progress updates
@@ -151,62 +153,68 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	img, err := remote.Image(ref, remoteOpts...)
 	if err != nil {
 		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
-		return "", fmt.Errorf("pulling image: %w", err)
+		return fmt.Errorf("pulling image: %w", err)
 	}
 
-	// Create a temporary file to store the model content
-	tempFile, err := os.CreateTemp("", "model-*.gguf")
-	if err != nil {
-		c.log.Errorln("Failed to create temporary file:", err)
-		return "", fmt.Errorf("creating temp file: %w", err)
-	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
-
-	// Get the model content from the image
-	layers, err := img.Layers()
-	if err != nil {
-		c.log.Errorln("Failed to get image layers:", err)
-		return "", fmt.Errorf("getting layers: %w", err)
+	if err = c.store.Write(img, []string{reference}, progress); err != nil {
+		return fmt.Errorf("writing image to store: %w", err)
 	}
 
-	if len(layers) == 0 {
-		c.log.Errorln("No layers found in image")
-		return "", fmt.Errorf("no layers in image")
-	}
-
-	// Use the first layer (assuming there's only one for models)
-	layer := layers[0]
-
-	// Get the layer content
-	rc, err := layer.Uncompressed()
-	if err != nil {
-		c.log.Errorln("Failed to get layer content:", err)
-		return "", fmt.Errorf("getting layer content: %w", err)
-	}
-	defer rc.Close()
-
-	// Create a progress reader to track layer download progress
-	progressReader := &ProgressReader{
-		Reader:       rc,
-		ProgressChan: progress,
-	}
-
-	// Write the layer content to the temporary file
-	if _, err := io.Copy(tempFile, progressReader); err != nil {
-		c.log.Errorln("Failed to write layer content:", err)
-		return "", fmt.Errorf("writing layer content: %w", err)
-	}
-
-	// Push the model to the local store
-	if err := c.store.Push(tempFile.Name(), []string{reference}); err != nil {
-		c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
-		return "", fmt.Errorf("storing model in local store: %w", err)
-	}
-
-	c.log.Infoln("Successfully pulled and stored model:", reference)
-	// Get the model path
-	return c.GetModelPath(reference)
+	return nil
+	//
+	//// Create a temporary file to store the model content
+	//tempFile, err := os.CreateTemp("", "model-*.gguf")
+	//if err != nil {
+	//	c.log.Errorln("Failed to create temporary file:", err)
+	//	return "", fmt.Errorf("creating temp file: %w", err)
+	//}
+	//defer os.Remove(tempFile.Name())
+	//defer tempFile.Close()
+	//
+	//// Get the model content from the image
+	//layers, err := img.Layers()
+	//if err != nil {
+	//	c.log.Errorln("Failed to get image layers:", err)
+	//	return "", fmt.Errorf("getting layers: %w", err)
+	//}
+	//
+	//if len(layers) == 0 {
+	//	c.log.Errorln("No layers found in image")
+	//	return "", fmt.Errorf("no layers in image")
+	//}
+	//
+	//// Use the first layer (assuming there's only one for models)
+	//layer := layers[0]
+	//
+	//// Get the layer content
+	//rc, err := layer.Uncompressed()
+	//if err != nil {
+	//	c.log.Errorln("Failed to get layer content:", err)
+	//	return "", fmt.Errorf("getting layer content: %w", err)
+	//}
+	//defer rc.Close()
+	//
+	//// Create a progress reader to track layer download progress
+	//progressReader := &ProgressReader{
+	//	Reader:       rc,
+	//	ProgressChan: progress,
+	//}
+	//
+	//// Write the layer content to the temporary file
+	//if _, err := io.Copy(tempFile, progressReader); err != nil {
+	//	c.log.Errorln("Failed to write layer content:", err)
+	//	return "", fmt.Errorf("writing layer content: %w", err)
+	//}
+	//
+	//// Push the model to the local store
+	//if err := c.store.Push(tempFile.Name(), []string{reference}); err != nil {
+	//	c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
+	//	return "", fmt.Errorf("storing model in local store: %w", err)
+	//}
+	//
+	//c.log.Infoln("Successfully pulled and stored model:", reference)
+	//// Get the model path
+	//return c.GetModelPath(reference)
 }
 
 // ProgressReader wraps an io.Reader to track reading progress
@@ -306,11 +314,11 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 		return fmt.Errorf("pushing image: %w", err)
 	}
 
-	// Store the model in the local store
-	if err := c.store.Push(source, []string{reference}); err != nil {
-		c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
-		return fmt.Errorf("storing model in local store: %w", err)
-	}
+	//// Store the model in the local store
+	//if err := c.store.Push(source, []string{reference}); err != nil {
+	//	c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
+	//	return fmt.Errorf("storing model in local store: %w", err)
+	//}
 
 	c.log.Infoln("Successfully pushed model:", reference)
 	return nil

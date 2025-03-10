@@ -15,7 +15,7 @@ import (
 
 // Define an interface for the client methods we use in the commands
 type ClientInterface interface {
-	PullModel(ctx context.Context, reference string, progressWriter io.Writer) (string, error)
+	PullModel(ctx context.Context, reference string, progressWriter io.Writer) error
 	PushModel(ctx context.Context, source, reference string) error
 	ListModels() ([]*types.ModelInfo, error)
 	GetModel(reference string) (*types.ModelInfo, error)

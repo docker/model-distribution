@@ -15,7 +15,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/static"
 
 	"github.com/docker/model-distribution/pkg/image"
-	"github.com/docker/model-distribution/pkg/model"
 	"github.com/docker/model-distribution/pkg/types"
 )
 
@@ -27,6 +26,7 @@ const (
 // LocalStore implements the Store interface for local storage
 type LocalStore struct {
 	rootPath string
+	progress chan<- v1.Update
 }
 
 // RootPath returns the root path of the store
@@ -638,13 +638,7 @@ func (s *LocalStore) Upgrade() error {
 	return nil
 }
 
-func (s *LocalStore) Write(mdl *model.Model, tags []string) error {
-	// Get manifest from the model
-	manifest, err := mdl.Manifest()
-	if err != nil {
-		return fmt.Errorf("getting manifest: %w", err)
-	}
-
+func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
 	cf, err := mdl.RawConfigFile()
 	if err != nil {
 		return fmt.Errorf("get raw config file: %w", err)
@@ -671,6 +665,12 @@ func (s *LocalStore) Write(mdl *model.Model, tags []string) error {
 		return fmt.Errorf("getting layers: %w", err)
 	}
 
+	var blobDigest v1.Hash
+	sz, err := mdl.Size()
+	if err != nil {
+		return fmt.Errorf("getting model size: %w", err)
+	}
+
 	for _, layer := range layers {
 		d, err := layer.Digest()
 		if err != nil {
@@ -681,11 +681,15 @@ func (s *LocalStore) Write(mdl *model.Model, tags []string) error {
 		if err != nil {
 			return fmt.Errorf("opening blob file: %w", err)
 		}
-		lr, err := layer.Compressed()
+		lr, err := layer.Uncompressed()
 		if err != nil {
 			return fmt.Errorf("opening layer: %w", err)
 		}
-		_, err = io.Copy(f, lr)
+		_, err = io.Copy(f, &ProgressReader{
+			Reader:       lr,
+			ProgressChan: progress,
+			Total:        sz,
+		})
 		if err != nil {
 			return fmt.Errorf("writing layer content: %w", err)
 		}
@@ -698,24 +702,24 @@ func (s *LocalStore) Write(mdl *model.Model, tags []string) error {
 	//	}
 	//}
 
-	// Marshal the manifest
-	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	rawManifest, err := mdl.RawManifest()
 	if err != nil {
-		return fmt.Errorf("marshaling manifest: %w", err)
+		return err
+	}
+	// Calculate manifest digest
+	digest, err := mdl.Digest()
+	if err != nil {
+		return fmt.Errorf("getting model digest: %w", err)
 	}
 
-	// Calculate manifest digest
-	manifestDigest := sha256.Sum256(manifestData)
-	manifestDigestHex := hex.EncodeToString(manifestDigest[:])
-
 	// Store the manifest
-	manifestPath := filepath.Join(s.rootPath, "manifests", "sha256", manifestDigestHex)
-	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
+	manifestPath := filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex)
+	if err := os.WriteFile(manifestPath, rawManifest, 0644); err != nil {
 		return fmt.Errorf("writing manifest file: %w", err)
 	}
 
 	// Update the models index
-	if err := s.updateModelsIndex(manifestDigestHex, tags); err != nil {
+	if err := s.updateModelsIndex(digest.Hex, tags, blobDigest.Hex); err != nil {
 		return fmt.Errorf("updating models index: %w", err)
 	}
 
@@ -740,14 +744,37 @@ func (s *LocalStore) FromTag(tag string) (*Model, error) {
 	for _, model := range models.Models {
 		for _, modelTag := range model.Tags {
 			if modelTag == tag {
-				rm, err := os.ReadFile(filepath.Join(s.rootPath, "manifest", "sha256", model.ID))
+				hash, err := v1.NewHash(model.ID)
+				if err != nil {
+					return nil, fmt.Errorf("parsing hash: %w", err)
+				}
+				rawManifest, err := os.ReadFile(filepath.Join(s.rootPath, "manifests", hash.Algorithm, hash.Hex))
 				if err != nil {
 					return nil, fmt.Errorf("reading manifest file: %w", err)
 				}
-				rc,
+				return &Model{
+					rawManfiest: rawManifest,
+					blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
+				}, nil
 			}
 		}
 	}
 
 	return nil, fmt.Errorf("model with tag %s not found", tag)
+}
+
+// ProgressReader wraps an io.Reader to track reading progress
+type ProgressReader struct {
+	Reader       io.Reader
+	ProgressChan chan<- v1.Update
+	Total        int64
+}
+
+func (pr *ProgressReader) Read(p []byte) (int, error) {
+	n, err := pr.Reader.Read(p)
+	if n > 0 {
+		pr.Total += int64(n)
+		pr.ProgressChan <- v1.Update{Complete: pr.Total}
+	}
+	return n, err
 }
