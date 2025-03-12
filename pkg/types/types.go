@@ -40,8 +40,6 @@ type ModelInfo struct {
 	Tags []string `json:"tags"`
 	// Files are the GGUF files associated with the model.
 	Files []string `json:"files"`
-	// Created is the Unix epoch timestamp corresponding to the model creation.
-	Created int64 `json:"created"`
 }
 
 // ModelIndex represents the index of all models in the store

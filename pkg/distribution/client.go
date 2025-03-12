@@ -15,7 +15,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/static"
 
-	"github.com/docker/model-distribution/pkg/image"
 	"github.com/docker/model-distribution/pkg/model"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
@@ -84,17 +83,17 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	c.log.Infoln("Starting model pull:", reference)
 
 	// Check if model exists in local store
-	_, err := c.store.GetByTag(reference)
+	mdl, err := c.store.Read(reference)
 	if err == nil {
 		c.log.Infoln("Model found in local store:", reference)
 		// Model exists in local store, get its path
-		blobPath, err := c.GetModelPath(reference)
+		ggufPath, err := mdl.GGUFPath()
 		if err != nil {
-			return err
+			return fmt.Errorf("getting gguf path: %w", err)
 		}
 
 		// Get file size for progress reporting
-		fileInfo, err := os.Stat(blobPath)
+		fileInfo, err := os.Stat(ggufPath)
 		if err != nil {
 			return fmt.Errorf("getting file info: %w", err)
 		}
@@ -161,60 +160,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	}
 
 	return nil
-	//
-	//// Create a temporary file to store the model content
-	//tempFile, err := os.CreateTemp("", "model-*.gguf")
-	//if err != nil {
-	//	c.log.Errorln("Failed to create temporary file:", err)
-	//	return "", fmt.Errorf("creating temp file: %w", err)
-	//}
-	//defer os.Remove(tempFile.Name())
-	//defer tempFile.Close()
-	//
-	//// Get the model content from the image
-	//layers, err := img.Layers()
-	//if err != nil {
-	//	c.log.Errorln("Failed to get image layers:", err)
-	//	return "", fmt.Errorf("getting layers: %w", err)
-	//}
-	//
-	//if len(layers) == 0 {
-	//	c.log.Errorln("No layers found in image")
-	//	return "", fmt.Errorf("no layers in image")
-	//}
-	//
-	//// Use the first layer (assuming there's only one for models)
-	//layer := layers[0]
-	//
-	//// Get the layer content
-	//rc, err := layer.Uncompressed()
-	//if err != nil {
-	//	c.log.Errorln("Failed to get layer content:", err)
-	//	return "", fmt.Errorf("getting layer content: %w", err)
-	//}
-	//defer rc.Close()
-	//
-	//// Create a progress reader to track layer download progress
-	//progressReader := &ProgressReader{
-	//	Reader:       rc,
-	//	ProgressChan: progress,
-	//}
-	//
-	//// Write the layer content to the temporary file
-	//if _, err := io.Copy(tempFile, progressReader); err != nil {
-	//	c.log.Errorln("Failed to write layer content:", err)
-	//	return "", fmt.Errorf("writing layer content: %w", err)
-	//}
-	//
-	//// Push the model to the local store
-	//if err := c.store.Push(tempFile.Name(), []string{reference}); err != nil {
-	//	c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
-	//	return "", fmt.Errorf("storing model in local store: %w", err)
-	//}
-	//
-	//c.log.Infoln("Successfully pulled and stored model:", reference)
-	//// Get the model path
-	//return c.GetModelPath(reference)
 }
 
 // ProgressReader wraps an io.Reader to track reading progress
@@ -268,13 +213,29 @@ func (c *Client) ListModels() ([]*types.ModelInfo, error) {
 // GetModel returns a model by reference
 func (c *Client) GetModel(reference string) (*types.ModelInfo, error) {
 	c.log.Infoln("Getting model by reference:", reference)
-	model, err := c.store.GetByTag(reference)
+	model, err := c.store.Read(reference)
 	if err != nil {
 		c.log.Errorln("Model not found:", err, "reference:", reference)
 		return nil, ErrModelNotFound
 	}
 
-	return model, nil
+	dgst, err := model.Digest()
+	if err != nil {
+		c.log.Errorln("Failed to get model digest:", err)
+		return nil, fmt.Errorf("getting model digest: %w", err)
+	}
+
+	ggufPath, err := model.GGUFPath()
+	if err != nil {
+		c.log.Errorln("Failed to get path to GGUF file: %w", err)
+		return nil, fmt.Errorf("getting model digest: %w", err)
+	}
+
+	return &types.ModelInfo{
+		ID:    dgst.String(),
+		Tags:  model.Tags(), // todo: actually handle this
+		Files: []string{ggufPath},
+	}, nil
 }
 
 // PushModel pushes a model to a registry
@@ -299,7 +260,7 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	layer := static.NewLayer(fileContent, "application/vnd.docker.ai.model.file.v1+gguf")
 
 	// Create image with layer
-	mdl, err := model.FromGGUF(layer)
+	mdl, err := model.FromGGUFLayer(layer)
 	if err != nil {
 		c.log.Errorln("Failed to create image:", err)
 		return fmt.Errorf("creating image: %w", err)
@@ -314,45 +275,8 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 		return fmt.Errorf("pushing image: %w", err)
 	}
 
-	//// Store the model in the local store
-	//if err := c.store.Push(source, []string{reference}); err != nil {
-	//	c.log.Errorln("Failed to store model in local store:", err, "reference:", reference)
-	//	return fmt.Errorf("storing model in local store: %w", err)
-	//}
-
 	c.log.Infoln("Successfully pushed model:", reference)
 	return nil
-}
-
-// getImageFromLocalStore creates an image from a model in the local store
-func (c *Client) getImageFromLocalStore(model *types.ModelInfo) (v1.Image, error) {
-	c.log.Infoln("Getting image from local store:", model.Tags[0])
-
-	// Get the direct path to the blob file
-	blobPath, err := c.store.GetBlobPath(model.Tags[0])
-	if err != nil {
-		c.log.Errorln("Failed to get blob path:", err, "model:", model.Tags[0])
-		return nil, fmt.Errorf("getting blob path: %w", err)
-	}
-
-	// Read the model content directly from the blob file
-	modelContent, err := os.ReadFile(blobPath)
-	if err != nil {
-		c.log.Errorln("Failed to read model content:", err, "path:", blobPath)
-		return nil, fmt.Errorf("reading model content: %w", err)
-	}
-
-	// Create layer from model content
-	layer := static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf")
-
-	// Create image with layer
-	img, err := image.CreateImage(layer)
-	if err != nil {
-		c.log.Errorln("Failed to create image from layer:", err)
-		return nil, err
-	}
-
-	return img, nil
 }
 
 // DeleteModel deletes a model by tag

@@ -9,6 +9,9 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+
+	"github.com/docker/model-distribution/pkg/model"
+	mdtypes "github.com/docker/model-distribution/pkg/types"
 )
 
 var _ v1.Image = &Model{}
@@ -16,6 +19,7 @@ var _ v1.Image = &Model{}
 type Model struct {
 	rawManfiest []byte
 	blobsDir    string
+	tags        []string
 }
 
 func (m Model) Layers() ([]v1.Layer, error) {
@@ -25,8 +29,8 @@ func (m Model) Layers() ([]v1.Layer, error) {
 	}
 	var layers []v1.Layer
 	for _, ld := range manifest.Layers {
-		layers = append(layers, &Layer{
-			path:       filepath.Join(m.blobsDir, ld.Digest.Hex),
+		layers = append(layers, &model.Layer{
+			Path:       filepath.Join(m.blobsDir, ld.Digest.Hex),
 			Descriptor: ld,
 		})
 	}
@@ -106,9 +110,13 @@ func (m Model) GGUFPath() (string, error) {
 		return "", fmt.Errorf("get manifest: %w", err)
 	}
 	for _, l := range manifest.Layers {
-		if l.MediaType == "application/vnd.docker.ai.model.config.v1+json" {
+		if l.MediaType == mdtypes.MediaTypeGGUF {
 			return filepath.Join(m.blobsDir, l.Digest.Hex), nil
 		}
 	}
 	return "", errors.New("missing GGUF layer in manifest")
+}
+
+func (m Model) Tags() []string {
+	return m.tags
 }

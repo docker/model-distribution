@@ -11,6 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
+
+	"github.com/docker/model-distribution/pkg/model"
 )
 
 func TestClientPullModel(t *testing.T) {
@@ -125,21 +127,26 @@ func TestClientGetModel(t *testing.T) {
 	// Use the dummy.gguf file from assets directory
 	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
+	model, err := model.FromGGUF(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag}); err != nil {
+	if err := client.store.Write(model, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
 	// Get model
-	model, err := client.GetModel(tag)
+	mi, err := client.GetModel(tag)
 	if err != nil {
 		t.Fatalf("Failed to get model: %v", err)
 	}
 
 	// Verify model
-	if len(model.Tags) == 0 || model.Tags[0] != tag {
-		t.Errorf("Model tags don't match: got %v, want [%s]", model.Tags, tag)
+	if len(mi.Tags) == 0 || mi.Tags[0] != tag {
+		t.Errorf("Model tags don't match: got %v, want [%s]", mi.Tags, tag)
 	}
 }
 
@@ -185,10 +192,15 @@ func TestClientListModels(t *testing.T) {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
 
+	mdl, err := model.FromGGUF(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
 	// Push models to local store with different manifest digests
 	// First model
 	tag1 := "test/model1:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag1}); err != nil {
+	if err := client.store.Write(mdl, []string{tag1}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -198,10 +210,14 @@ func TestClientListModels(t *testing.T) {
 	if err := os.WriteFile(modelFile2, modelContent2, 0644); err != nil {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
+	mdl2, err := model.FromGGUF(modelFile2)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 
 	// Second model
 	tag2 := "test/model2:v1.0.0"
-	if err := client.store.Push(modelFile2, []string{tag2}); err != nil {
+	if err := client.store.Write(mdl2, []string{tag2}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -277,11 +293,14 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 
 	// Use the dummy.gguf file from assets directory
-	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+	mdl, err := model.FromGGUF(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag}); err != nil {
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 

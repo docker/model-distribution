@@ -1,12 +1,10 @@
 package store_test
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -46,49 +44,25 @@ func TestStoreAPI(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	// Test Push
-	t.Run("Push", func(t *testing.T) {
-		err := s.Push(modelPath, []string{"api-model:latest"})
-		if err != nil {
-			t.Fatalf("Push failed: %v", err)
-		}
-
-		// Verify the model was stored correctly
-		models, err := s.List()
-		if err != nil {
-			t.Fatalf("List failed: %v", err)
-		}
-		if len(models) != 1 {
-			t.Fatalf("Expected 1 model, got %d", len(models))
-		}
-		if len(models[0].Files) != 1 {
-			t.Fatalf("Expected 1 file, got %d", len(models[0].Files))
-		}
-		if models[0].Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, models[0].Files[0])
-		}
-	})
-
-	t.Run("Write", func(t *testing.T) {
-		wmdl, err := model.FromGGUF(static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf"))
+	t.Run("Read/Write", func(t *testing.T) {
+		layer := static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf")
+		mdl1, err := model.FromGGUFLayer(layer)
 		if err != nil {
 			t.Fatalf("Create model failed: %v", err)
 		}
-		writeDigest, err := wmdl.Digest()
+		writeDigest, err := mdl1.Digest()
 		if err != nil {
 			t.Fatalf("Digest failed: %v", err)
 		}
-		if err := s.Write(wmdl, []string{"http://example.com/some-repo:some-tag"}); err != nil {
+		if err := s.Write(mdl1, []string{"api-model:latest"}, nil); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
-		rmdl, err := s.FromTag("http://example.com/some-repo:some-tag")
+
+		mdl2, err := s.Read("api-model:latest")
 		if err != nil {
 			t.Fatalf("Read failed: %v", err)
 		}
-		readDigest, err := rmdl.Digest()
-		if err != nil {
-			t.Fatalf("Digest failed: %v", err)
-		}
+		readDigest, err := mdl2.Digest()
 		if err != nil {
 			t.Fatalf("Digest failed: %v", err)
 		}
@@ -151,30 +125,6 @@ func TestStoreAPI(t *testing.T) {
 		}
 	})
 
-	// Test Pull
-	t.Run("Pull", func(t *testing.T) {
-		pulledPath := filepath.Join(tempDir, "api-pulled-model.gguf")
-		err := s.Pull("api-model:latest", pulledPath)
-		if err != nil {
-			t.Fatalf("Pull failed: %v", err)
-		}
-
-		// Verify pulled content
-		pulledContent, err := os.ReadFile(pulledPath)
-		if err != nil {
-			t.Fatalf("Failed to read pulled file: %v", err)
-		}
-		if !bytes.Equal(pulledContent, modelContent) {
-			t.Errorf("Pulled content doesn't match original")
-		}
-
-		// Verify blob path exists
-		blobPath := filepath.Join(storePath, "blobs", "sha256", hex.EncodeToString(hash[:]))
-		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-			t.Errorf("Blob file does not exist at expected path: %s", blobPath)
-		}
-	})
-
 	// Test RemoveTags
 	t.Run("RemoveTags", func(t *testing.T) {
 		err := s.RemoveTags([]string{"api-model:api-v1.0"})
@@ -210,19 +160,6 @@ func TestStoreAPI(t *testing.T) {
 			t.Errorf("Expected error after deletion, got nil")
 		}
 	})
-}
-
-// Helper function to run the model-distribution command
-func runCommand(binaryPath string, args ...string) (string, error) {
-	cmd := exec.Command(binaryPath, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Sprintf("stdout: %s\nstderr: %s", stdout.String(), stderr.String()), err
-	}
-	return stdout.String(), nil
 }
 
 // Helper function to check if a tag is in a slice of tags

@@ -1,20 +1,15 @@
 package store
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/static"
 
-	"github.com/docker/model-distribution/pkg/image"
 	"github.com/docker/model-distribution/pkg/types"
 )
 
@@ -26,7 +21,6 @@ const (
 // LocalStore implements the Store interface for local storage
 type LocalStore struct {
 	rootPath string
-	progress chan<- v1.Update
 }
 
 // RootPath returns the root path of the store
@@ -100,65 +94,6 @@ func (s *LocalStore) initialize() error {
 	return nil
 }
 
-// Push pushes a model to the store with the given tags
-func (s *LocalStore) Push(modelPath string, tags []string) error {
-	// Read model file
-	modelContent, err := os.ReadFile(modelPath)
-	if err != nil {
-		return fmt.Errorf("reading model file: %w", err)
-	}
-
-	// Create layer from model content
-	ggufLayer := static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf")
-
-	// Create image with layer
-	img, err := image.CreateImage(ggufLayer)
-	if err != nil {
-		return fmt.Errorf("creating image: %w", err)
-	}
-
-	// Get manifest from image
-	manifest, err := img.Manifest()
-	if err != nil {
-		return fmt.Errorf("getting manifest: %w", err)
-	}
-
-	// Gets SHA256 digest
-	digest := manifest.Layers[0].Digest
-	digestHex := digest.Hex
-
-	// Store the model blob
-	blobPath := filepath.Join(s.rootPath, "blobs", "sha256", digestHex)
-	if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-		if err := os.WriteFile(blobPath, modelContent, 0644); err != nil {
-			return fmt.Errorf("writing blob file: %w", err)
-		}
-	}
-
-	// Marshal the manifest
-	manifestData, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling manifest: %w", err)
-	}
-
-	// Calculate manifest digest
-	manifestDigest := sha256.Sum256(manifestData)
-	manifestDigestHex := hex.EncodeToString(manifestDigest[:])
-
-	// Store the manifest
-	manifestPath := filepath.Join(s.rootPath, "manifests", "sha256", manifestDigestHex)
-	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
-		return fmt.Errorf("writing manifest file: %w", err)
-	}
-
-	// Update the models index with the layer digest
-	if err := s.updateModelsIndex(manifestDigestHex, tags, digestHex); err != nil {
-		return fmt.Errorf("updating models index: %w", err)
-	}
-
-	return nil
-}
-
 // updateModelsIndex updates the models index with a new model
 func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, blobDigest string) error {
 	// Ensure the manifest digest has the correct format (sha256:...)
@@ -191,10 +126,9 @@ func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, blo
 	if model == nil {
 		// Model doesn't exist, add it
 		models.Models = append(models.Models, types.ModelInfo{
-			ID:      manifestDigest,
-			Tags:    tags,
-			Files:   []string{fmt.Sprintf("sha256:%s", blobDigest)},
-			Created: time.Now().Unix(),
+			ID:    manifestDigest,
+			Tags:  tags,
+			Files: []string{fmt.Sprintf("sha256:%s", blobDigest)},
 		})
 	} else {
 		// Model exists, update tags
@@ -221,82 +155,6 @@ func (s *LocalStore) updateModelsIndex(manifestDigest string, tags []string, blo
 	// Write the models index
 	if err := os.WriteFile(modelsPath, modelsData, 0644); err != nil {
 		return fmt.Errorf("writing models file: %w", err)
-	}
-
-	return nil
-}
-
-// Pull pulls a model from the store by tag
-func (s *LocalStore) Pull(tag string, destPath string) error {
-	// Get the model by tag
-	model, err := s.GetByTag(tag)
-	if err != nil {
-		return fmt.Errorf("getting model by tag: %w", err)
-	}
-
-	// Read the manifest
-	manifestDigestParts := strings.Split(model.ID, ":")
-	var algorithm, hash string
-
-	if len(manifestDigestParts) == 2 {
-		// Format is already "algorithm:hash"
-		algorithm = manifestDigestParts[0]
-		hash = manifestDigestParts[1]
-	} else if len(manifestDigestParts) == 1 {
-		// Format is just the hash, assume sha256
-		algorithm = "sha256"
-		hash = manifestDigestParts[0]
-	} else {
-		return fmt.Errorf("invalid manifest digest format: %s", model.ID)
-	}
-
-	manifestPath := filepath.Join(s.rootPath, "manifests", algorithm, hash)
-	manifestData, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return fmt.Errorf("reading manifest file: %w", err)
-	}
-
-	// Unmarshal the manifest
-	var manifest v1.Manifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return fmt.Errorf("unmarshaling manifest: %w", err)
-	}
-
-	// Get the layer
-	if len(manifest.Layers) == 0 {
-		return fmt.Errorf("no layers in manifest")
-	}
-
-	// Use the first layer (assuming there's only one for models)
-	layer := manifest.Layers[0]
-	layerDigest := layer.Digest.String()
-
-	// Parse the layer digest
-	layerDigestParts := strings.Split(layerDigest, ":")
-	var layerAlgorithm, layerHash string
-
-	if len(layerDigestParts) == 2 {
-		// Format is already "algorithm:hash"
-		layerAlgorithm = layerDigestParts[0]
-		layerHash = layerDigestParts[1]
-	} else if len(layerDigestParts) == 1 {
-		// Format is just the hash, assume sha256
-		layerAlgorithm = "sha256"
-		layerHash = layerDigestParts[0]
-	} else {
-		return fmt.Errorf("invalid digest format: %s", layerDigest)
-	}
-
-	// Read the layer blob
-	blobPath := filepath.Join(s.rootPath, "blobs", layerAlgorithm, layerHash)
-	blobContent, err := os.ReadFile(blobPath)
-	if err != nil {
-		return fmt.Errorf("reading blob file: %w", err)
-	}
-
-	// Write the blob content to the destination file
-	if err := os.WriteFile(destPath, blobContent, 0644); err != nil {
-		return fmt.Errorf("writing to destination file: %w", err)
 	}
 
 	return nil
@@ -647,11 +505,12 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	if err != nil {
 		return fmt.Errorf("getting config name: %w", err)
 	}
-	cofigPath := filepath.Join(s.rootPath, "blobs", "sha256", name.Hex)
-	f, err := os.Create(cofigPath)
+	configPath := filepath.Join(s.rootPath, "blobs", "sha256", name.Hex)
+	f, err := os.Create(configPath)
 	if err != nil {
 		return fmt.Errorf("opening config blob: %w", err)
 	}
+	defer f.Close()
 	_, err = f.Write(cf)
 	if err != nil {
 		return fmt.Errorf("writing config blob: %w", err)
@@ -659,6 +518,10 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 
 	// Gets SHA256 digest
 	//digest := manifest.Layers[0].Digest
+	sz, err := mdl.Size()
+	if err != nil {
+		return fmt.Errorf("getting model size: %w", err)
+	}
 
 	layers, err := mdl.Layers()
 	if err != nil {
@@ -666,11 +529,6 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	}
 
 	var blobDigest v1.Hash
-	sz, err := mdl.Size()
-	if err != nil {
-		return fmt.Errorf("getting model size: %w", err)
-	}
-
 	for _, layer := range layers {
 		d, err := layer.Digest()
 		if err != nil {
@@ -681,26 +539,36 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		if err != nil {
 			return fmt.Errorf("opening blob file: %w", err)
 		}
+		defer f.Close()
 		lr, err := layer.Uncompressed()
 		if err != nil {
 			return fmt.Errorf("opening layer: %w", err)
 		}
-		_, err = io.Copy(f, &ProgressReader{
-			Reader:       lr,
-			ProgressChan: progress,
-			Total:        sz,
-		})
-		if err != nil {
+		defer lr.Close()
+
+		var r io.Reader
+		if progress != nil {
+			r = &ProgressReader{
+				Reader:       lr,
+				ProgressChan: progress,
+				Total:        sz,
+			}
+		} else {
+			r = lr
+		}
+		if _, err = io.Copy(f, r); err != nil {
 			return fmt.Errorf("writing layer content: %w", err)
 		}
+
+		mt, err := layer.MediaType()
+		if err != nil {
+			return fmt.Errorf("getting layer media type: %w", err)
+		}
+
+		if mt == types.MediaTypeGGUF {
+			blobDigest = d
+		}
 	}
-	//// Store the model blob
-	//blobPath := filepath.Join(s.rootPath, "blobs", "sha256", digestHex)
-	//if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-	//	if err := os.WriteFile(blobPath, modelContent, 0644); err != nil {
-	//		return fmt.Errorf("writing blob file: %w", err)
-	//	}
-	//}
 
 	rawManifest, err := mdl.RawManifest()
 	if err != nil {
@@ -726,7 +594,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	return nil
 }
 
-func (s *LocalStore) FromTag(tag string) (*Model, error) {
+func (s *LocalStore) Read(tag string) (*Model, error) {
 	// Read the models index
 	modelsPath := filepath.Join(s.rootPath, "models.json")
 	modelsData, err := os.ReadFile(modelsPath)
@@ -741,7 +609,7 @@ func (s *LocalStore) FromTag(tag string) (*Model, error) {
 	}
 
 	// Find the model by tag
-	for _, model := range models.Models {
+	for i, model := range models.Models {
 		for _, modelTag := range model.Tags {
 			if modelTag == tag {
 				hash, err := v1.NewHash(model.ID)
@@ -755,6 +623,7 @@ func (s *LocalStore) FromTag(tag string) (*Model, error) {
 				return &Model{
 					rawManfiest: rawManifest,
 					blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
+					tags:        models.Models[i].Tags,
 				}, nil
 			}
 		}
