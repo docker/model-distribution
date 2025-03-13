@@ -1,15 +1,14 @@
 package store_test
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/docker/model-distribution/pkg/gguf"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -43,26 +42,29 @@ func TestStoreAPI(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	// Test Push
-	t.Run("Push", func(t *testing.T) {
-		err := s.Push(modelPath, []string{"api-model:latest"})
+	t.Run("Read/Write", func(t *testing.T) {
+		mdl1, err := gguf.NewModel(modelPath)
 		if err != nil {
-			t.Fatalf("Push failed: %v", err)
+			t.Fatalf("Create model failed: %v", err)
+		}
+		writeDigest, err := mdl1.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if err := s.Write(mdl1, []string{"api-model:latest"}, nil); err != nil {
+			t.Fatalf("Write failed: %v", err)
 		}
 
-		// Verify the model was stored correctly
-		models, err := s.List()
+		mdl2, err := s.Read("api-model:latest")
 		if err != nil {
-			t.Fatalf("List failed: %v", err)
+			t.Fatalf("Read failed: %v", err)
 		}
-		if len(models) != 1 {
-			t.Fatalf("Expected 1 model, got %d", len(models))
+		readDigest, err := mdl2.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
 		}
-		if len(models[0].Files) != 1 {
-			t.Fatalf("Expected 1 file, got %d", len(models[0].Files))
-		}
-		if models[0].Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, models[0].Files[0])
+		if writeDigest != readDigest {
+			t.Fatalf("Digest mismatch %s != %s", writeDigest.Hex, readDigest.Hex)
 		}
 	})
 
@@ -83,23 +85,6 @@ func TestStoreAPI(t *testing.T) {
 		}
 	})
 
-	// Test GetByTag
-	t.Run("GetByTag", func(t *testing.T) {
-		model, err := s.GetByTag("api-model:latest")
-		if err != nil {
-			t.Fatalf("GetByTag failed: %v", err)
-		}
-		if model == nil {
-			t.Fatalf("Expected model, got nil")
-		}
-		if !containsTag(model.Tags, "api-model:latest") {
-			t.Errorf("Expected tag api-model:latest, got %v", model.Tags)
-		}
-		if model.Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
-		}
-	})
-
 	// Test AddTags
 	t.Run("AddTags", func(t *testing.T) {
 		err := s.AddTags("api-model:latest", []string{"api-v1.0", "api-stable"})
@@ -107,40 +92,25 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("AddTags failed: %v", err)
 		}
 
-		// Verify tags were added
-		model, err := s.GetByTag("api-model:latest")
+		// Verify tags were added to model
+		model, err := s.Read("api-model:latest")
 		if err != nil {
 			t.Fatalf("GetByTag failed: %v", err)
 		}
-		if !containsTag(model.Tags, "api-v1.0") || !containsTag(model.Tags, "api-stable") {
-			t.Errorf("Expected new tags, got %v", model.Tags)
+		if !containsTag(model.Tags(), "api-v1.0") || !containsTag(model.Tags(), "api-stable") {
+			t.Errorf("Expected new tags, got %v", model.Tags())
 		}
-		if model.Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
-		}
-	})
 
-	// Test Pull
-	t.Run("Pull", func(t *testing.T) {
-		pulledPath := filepath.Join(tempDir, "api-pulled-model.gguf")
-		err := s.Pull("api-model:latest", pulledPath)
+		// Verify tags were added to list
+		models, err := s.List()
 		if err != nil {
-			t.Fatalf("Pull failed: %v", err)
+			t.Fatalf("List failed: %v", err)
 		}
-
-		// Verify pulled content
-		pulledContent, err := os.ReadFile(pulledPath)
-		if err != nil {
-			t.Fatalf("Failed to read pulled file: %v", err)
+		if len(models) != 1 {
+			t.Fatalf("Expected 1 model, got %d", len(models))
 		}
-		if !bytes.Equal(pulledContent, modelContent) {
-			t.Errorf("Pulled content doesn't match original")
-		}
-
-		// Verify blob path exists
-		blobPath := filepath.Join(storePath, "blobs", "sha256", hex.EncodeToString(hash[:]))
-		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-			t.Errorf("Blob file does not exist at expected path: %s", blobPath)
+		if len(models[0].Tags) != 3 {
+			t.Fatalf("Expected 3 tags, got %d", len(models[0].Tags))
 		}
 	})
 
@@ -151,7 +121,7 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("RemoveTags failed: %v", err)
 		}
 
-		// Verify tag was removed
+		// Verify tag was removed from list
 		models, err := s.List()
 		if err != nil {
 			t.Fatalf("List failed: %v", err)
@@ -164,6 +134,11 @@ func TestStoreAPI(t *testing.T) {
 				t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
 			}
 		}
+
+		// Verify read by tag fails
+		if _, err = s.Read("api-model:api-v1.0"); err == nil {
+			t.Errorf("Expected read error after tag removal, got nil")
+		}
 	})
 
 	// Test Delete
@@ -174,24 +149,11 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Verify model with that tag is gone
-		_, err = s.GetByTag("api-model:latest")
+		_, err = s.Read("api-model:latest")
 		if err == nil {
 			t.Errorf("Expected error after deletion, got nil")
 		}
 	})
-}
-
-// Helper function to run the model-distribution command
-func runCommand(binaryPath string, args ...string) (string, error) {
-	cmd := exec.Command(binaryPath, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Sprintf("stdout: %s\nstderr: %s", stdout.String(), stderr.String()), err
-	}
-	return stdout.String(), nil
 }
 
 // Helper function to check if a tag is in a slice of tags

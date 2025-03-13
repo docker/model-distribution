@@ -11,6 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
+
+	"github.com/docker/model-distribution/pkg/gguf"
 )
 
 func TestClientPullModel(t *testing.T) {
@@ -56,11 +58,15 @@ func TestClientPullModel(t *testing.T) {
 
 	t.Run("pull without progress writer", func(t *testing.T) {
 		// Pull model from registry without progress writer
-		modelPath, err := client.PullModel(context.Background(), tag, nil)
+		err := client.PullModel(context.Background(), tag, nil)
 		if err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
+		modelPath, err := client.GetModelPath(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
+		}
 		// Verify model content
 		pulledContent, err := os.ReadFile(modelPath)
 		if err != nil {
@@ -77,8 +83,7 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Pull model from registry with progress writer
-		modelPath, err := client.PullModel(context.Background(), tag, &progressBuffer)
-		if err != nil {
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -86,6 +91,11 @@ func TestClientPullModel(t *testing.T) {
 		progressOutput := progressBuffer.String()
 		if !strings.Contains(progressOutput, "Using cached model") && !strings.Contains(progressOutput, "Downloading") {
 			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
+		}
+
+		modelPath, err := client.GetModelPath(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
 		}
 
 		// Verify model content
@@ -117,21 +127,26 @@ func TestClientGetModel(t *testing.T) {
 	// Use the dummy.gguf file from assets directory
 	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
+	model, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag}); err != nil {
+	if err := client.store.Write(model, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
 	// Get model
-	model, err := client.GetModel(tag)
+	mi, err := client.GetModel(tag)
 	if err != nil {
 		t.Fatalf("Failed to get model: %v", err)
 	}
 
 	// Verify model
-	if len(model.Tags) == 0 || model.Tags[0] != tag {
-		t.Errorf("Model tags don't match: got %v, want [%s]", model.Tags, tag)
+	if len(mi.Tags) == 0 || mi.Tags[0] != tag {
+		t.Errorf("Model tags don't match: got %v, want [%s]", mi.Tags, tag)
 	}
 }
 
@@ -177,10 +192,15 @@ func TestClientListModels(t *testing.T) {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
 
+	mdl, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
 	// Push models to local store with different manifest digests
 	// First model
 	tag1 := "test/model1:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag1}); err != nil {
+	if err := client.store.Write(mdl, []string{tag1}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -190,10 +210,14 @@ func TestClientListModels(t *testing.T) {
 	if err := os.WriteFile(modelFile2, modelContent2, 0644); err != nil {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
+	mdl2, err := gguf.NewModel(modelFile2)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 
 	// Second model
 	tag2 := "test/model2:v1.0.0"
-	if err := client.store.Push(modelFile2, []string{tag2}); err != nil {
+	if err := client.store.Write(mdl2, []string{tag2}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -269,11 +293,14 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 
 	// Use the dummy.gguf file from assets directory
-	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Push(modelFile, []string{tag}); err != nil {
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 

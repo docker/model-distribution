@@ -48,9 +48,14 @@ func TestGARIntegration(t *testing.T) {
 
 	// Test pull from GAR
 	t.Run("Pull without progress", func(t *testing.T) {
-		modelPath, err := client.PullModel(context.Background(), garTag, nil)
+		err := client.PullModel(context.Background(), garTag, nil)
 		if err != nil {
 			t.Fatalf("Failed to pull model from GAR: %v", err)
+		}
+
+		modelPath, err := client.GetModelPath(garTag)
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
 		}
 		defer os.Remove(modelPath)
 

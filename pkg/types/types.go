@@ -1,50 +1,36 @@
 package types
 
-// Store interface for model storage operations
-type Store interface {
-	// Push a model to the store with given tags
-	Push(modelPath string, tags []string) error
-
-	// Pull a model by tag
-	Pull(tag string, destPath string) error
-
-	// List all models in the store
-	List() ([]Model, error)
-
-	// GetByTag Get model info by tag
-	GetByTag(tag string) (*Model, error)
-
-	// Delete a model by tag
-	Delete(tag string) error
-
-	// AddTags Add tags to an existing model
-	AddTags(tag string, newTags []string) error
-
-	// RemoveTags Remove tags from a model
-	RemoveTags(tags []string) error
-
-	// Version Get store version
-	Version() string
-
-	// Upgrade store to latest version
-	Upgrade() error
-}
-
-// Model represents a model with its metadata and tags
-type Model struct {
+// ModelInfo represents a model with its metadata and tags
+type ModelInfo struct {
 	// ID is the globally unique model identifier.
 	ID string `json:"id"`
 	// Tags are the list of tags associated with the model.
 	Tags []string `json:"tags"`
 	// Files are the GGUF files associated with the model.
 	Files []string `json:"files"`
-	// Created is the Unix epoch timestamp corresponding to the model creation.
-	Created int64 `json:"created"`
+}
+
+func (m ModelInfo) HasTag(tag string) bool {
+	for _, t := range m.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // ModelIndex represents the index of all models in the store
 type ModelIndex struct {
-	Models []Model `json:"models"`
+	Models []ModelInfo `json:"models"`
+}
+
+func (mi ModelIndex) ByTag(tag string) *ModelInfo {
+	for _, m := range mi.Models {
+		if m.HasTag(tag) {
+			return &m
+		}
+	}
+	return nil
 }
 
 // StoreLayout represents the layout information of the store
