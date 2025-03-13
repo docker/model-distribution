@@ -13,9 +13,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/static"
 
-	"github.com/docker/model-distribution/pkg/model"
+	"github.com/docker/model-distribution/pkg/gguf"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -249,18 +248,8 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 		return fmt.Errorf("parsing reference: %w", err)
 	}
 
-	// Read the model file
-	fileContent, err := os.ReadFile(source)
-	if err != nil {
-		c.log.Errorln("Failed to read model file:", err, "source:", source)
-		return fmt.Errorf("reading model file: %w", err)
-	}
-
-	// Create layer from model content
-	layer := static.NewLayer(fileContent, "application/vnd.docker.ai.model.file.v1+gguf")
-
 	// Create image with layer
-	mdl, err := model.FromGGUFLayer(layer)
+	mdl, err := gguf.NewModel(source)
 	if err != nil {
 		c.log.Errorln("Failed to create image:", err)
 		return fmt.Errorf("creating image: %w", err)

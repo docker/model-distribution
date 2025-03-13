@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
-	"github.com/docker/model-distribution/pkg/model"
+	"github.com/docker/model-distribution/pkg/gguf"
 )
 
 func TestClientPullModel(t *testing.T) {
@@ -127,7 +127,7 @@ func TestClientGetModel(t *testing.T) {
 	// Use the dummy.gguf file from assets directory
 	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
 
-	model, err := model.FromGGUF(modelFile)
+	model, err := gguf.NewModel(modelFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestClientListModels(t *testing.T) {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
 
-	mdl, err := model.FromGGUF(modelFile)
+	mdl, err := gguf.NewModel(modelFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestClientListModels(t *testing.T) {
 	if err := os.WriteFile(modelFile2, modelContent2, 0644); err != nil {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
-	mdl2, err := model.FromGGUF(modelFile2)
+	mdl2, err := gguf.NewModel(modelFile2)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 
 	// Use the dummy.gguf file from assets directory
-	mdl, err := model.FromGGUF(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

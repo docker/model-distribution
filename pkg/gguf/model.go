@@ -1,4 +1,4 @@
-package model
+package gguf
 
 import (
 	"encoding/json"

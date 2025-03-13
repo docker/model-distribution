@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 
-	"github.com/docker/model-distribution/pkg/model"
+	"github.com/docker/model-distribution/pkg/gguf"
 	mdtypes "github.com/docker/model-distribution/pkg/types"
 )
 
@@ -29,7 +29,7 @@ func (m Model) Layers() ([]v1.Layer, error) {
 	}
 	var layers []v1.Layer
 	for _, ld := range manifest.Layers {
-		layers = append(layers, &model.Layer{
+		layers = append(layers, &gguf.Layer{
 			Path:       filepath.Join(m.blobsDir, ld.Digest.Hex),
 			Descriptor: ld,
 		})

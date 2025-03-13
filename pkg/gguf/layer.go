@@ -1,4 +1,4 @@
-package model
+package gguf
 
 import (
 	"io"
@@ -35,8 +35,7 @@ func NewLayer(path string) (*Layer, error) {
 }
 
 func (l Layer) Digest() (v1.Hash, error) {
-
-	return l.Descriptor.Digest, nil
+	return l.DiffID()
 }
 
 func (l Layer) DiffID() (v1.Hash, error) {
@@ -44,7 +43,7 @@ func (l Layer) DiffID() (v1.Hash, error) {
 }
 
 func (l Layer) Compressed() (io.ReadCloser, error) {
-	return os.Open(l.Path)
+	return l.Uncompressed()
 }
 
 func (l Layer) Uncompressed() (io.ReadCloser, error) {

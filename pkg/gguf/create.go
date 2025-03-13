@@ -1,4 +1,4 @@
-package model
+package gguf
 
 import (
 	"fmt"
@@ -8,16 +8,12 @@ import (
 	"github.com/docker/model-distribution/pkg/types"
 )
 
-func FromGGUF(path string) (*Model, error) {
+func NewModel(path string) (*Model, error) {
 	layer, err := NewLayer(path)
 	if err != nil {
 		return nil, fmt.Errorf("create gguf layer: %w", err)
 	}
-	return FromGGUFLayer(layer)
-}
-
-func FromGGUFLayer(ggufLayer v1.Layer) (*Model, error) {
-	diffID, err := ggufLayer.DiffID()
+	diffID, err := layer.DiffID()
 	if err != nil {
 		return nil, fmt.Errorf("get gguf layer diffID: %w", err)
 	}
@@ -34,6 +30,6 @@ func FromGGUFLayer(ggufLayer v1.Layer) (*Model, error) {
 				},
 			},
 		},
-		layers: []v1.Layer{ggufLayer},
+		layers: []v1.Layer{layer},
 	}, nil
 }

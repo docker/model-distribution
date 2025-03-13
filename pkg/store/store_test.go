@@ -8,9 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/v1/static"
-
-	"github.com/docker/model-distribution/pkg/model"
+	"github.com/docker/model-distribution/pkg/gguf"
 	"github.com/docker/model-distribution/pkg/store"
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -45,8 +43,7 @@ func TestStoreAPI(t *testing.T) {
 	}
 
 	t.Run("Read/Write", func(t *testing.T) {
-		layer := static.NewLayer(modelContent, "application/vnd.docker.ai.model.file.v1+gguf")
-		mdl1, err := model.FromGGUFLayer(layer)
+		mdl1, err := gguf.NewModel(modelPath)
 		if err != nil {
 			t.Fatalf("Create model failed: %v", err)
 		}
