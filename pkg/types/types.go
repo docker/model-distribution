@@ -1,37 +1,5 @@
 package types
 
-import v1 "github.com/google/go-containerregistry/pkg/v1"
-
-// Store interface for model storage operations
-type Store interface {
-	// Push a model to the store with given tags
-	Push(modelPath string, tags []string) error
-
-	// Pull a model by tag
-	Pull(tag string, destPath string) error
-
-	// List all models in the store
-	List() ([]ModelInfo, error)
-
-	// GetByTag Get model info by tag
-	GetByTag(tag string) (*ModelInfo, error)
-
-	// Delete a model by tag
-	Delete(tag string) error
-
-	// AddTags Add tags to an existing model
-	AddTags(tag string, newTags []string) error
-
-	// RemoveTags Remove tags from a model
-	RemoveTags(tags []string) error
-
-	// Version Get store version
-	Version() string
-
-	// Upgrade store to latest version
-	Upgrade() error
-}
-
 // ModelInfo represents a model with its metadata and tags
 type ModelInfo struct {
 	// ID is the globally unique model identifier.
@@ -62,5 +30,4 @@ type ManifestReference struct {
 // StoreOptions represents options for creating a store
 type StoreOptions struct {
 	RootPath string
-	Progress chan<- v1.Update
 }

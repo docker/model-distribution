@@ -54,8 +54,7 @@ func (m Model) ConfigName() (v1.Hash, error) {
 }
 
 func (m Model) ConfigFile() (*v1.ConfigFile, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, errors.New("invalid for model")
 }
 
 func (m Model) RawConfigFile() ([]byte, error) {
