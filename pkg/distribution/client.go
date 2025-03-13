@@ -181,13 +181,19 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 func (c *Client) GetModelPath(reference string) (string, error) {
 	c.log.Infoln("Getting model path:", reference)
 	// Get the direct path to the blob file
-	blobPath, err := c.store.GetBlobPath(reference)
+	mdl, err := c.store.Read(reference)
 	if err != nil {
 		c.log.Errorln("Failed to get blob path:", err, "reference:", reference)
-		return "", fmt.Errorf("getting blob path: %w", err)
+		return "", fmt.Errorf("read model from store: %w", err)
 	}
 
-	return blobPath, nil
+	ggufPath, err := mdl.GGUFPath()
+	if err != nil {
+		c.log.Errorln("Failed to get path to GGUF file: %w", err)
+		return "", fmt.Errorf("getting model file path: %w", err)
+	}
+
+	return ggufPath, nil
 }
 
 // ListModels returns all available models

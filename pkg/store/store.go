@@ -178,98 +178,6 @@ func (s *LocalStore) List() ([]types.ModelInfo, error) {
 	return models.Models, nil
 }
 
-// GetByTag gets a model by tag
-func (s *LocalStore) GetByTag(tag string) (*types.ModelInfo, error) {
-	// Read the models index
-	modelsPath := filepath.Join(s.rootPath, "models.json")
-	modelsData, err := os.ReadFile(modelsPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading models file: %w", err)
-	}
-
-	// Unmarshal the models index
-	var models types.ModelIndex
-	if err := json.Unmarshal(modelsData, &models); err != nil {
-		return nil, fmt.Errorf("unmarshaling models: %w", err)
-	}
-
-	// Find the model by tag
-	for _, model := range models.Models {
-		for _, modelTag := range model.Tags {
-			if modelTag == tag {
-				return &model, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("model with tag %s not found", tag)
-}
-
-// GetBlobPath returns the direct path to the blob file for a model
-func (s *LocalStore) GetBlobPath(tag string) (string, error) {
-	// Get the model by tag
-	model, err := s.GetByTag(tag)
-	if err != nil {
-		return "", fmt.Errorf("getting model by tag: %w", err)
-	}
-
-	// Read the manifest
-	manifestDigestParts := strings.Split(model.ID, ":")
-	var algorithm, hash string
-
-	if len(manifestDigestParts) == 2 {
-		// Format is already "algorithm:hash"
-		algorithm = manifestDigestParts[0]
-		hash = manifestDigestParts[1]
-	} else if len(manifestDigestParts) == 1 {
-		// Format is just the hash, assume sha256
-		algorithm = "sha256"
-		hash = manifestDigestParts[0]
-	} else {
-		return "", fmt.Errorf("invalid manifest digest format: %s", model.ID)
-	}
-
-	manifestPath := filepath.Join(s.rootPath, "manifests", algorithm, hash)
-	manifestData, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return "", fmt.Errorf("reading manifest file: %w", err)
-	}
-
-	// Unmarshal the manifest
-	var manifest v1.Manifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return "", fmt.Errorf("unmarshaling manifest: %w", err)
-	}
-
-	// Get the layer
-	if len(manifest.Layers) == 0 {
-		return "", fmt.Errorf("no layers in manifest")
-	}
-
-	// Use the first layer (assuming there's only one for models)
-	layer := manifest.Layers[0]
-	layerDigest := layer.Digest.String()
-
-	// Parse the layer digest
-	layerDigestParts := strings.Split(layerDigest, ":")
-	var layerAlgorithm, layerHash string
-
-	if len(layerDigestParts) == 2 {
-		// Format is already "algorithm:hash"
-		layerAlgorithm = layerDigestParts[0]
-		layerHash = layerDigestParts[1]
-	} else if len(layerDigestParts) == 1 {
-		// Format is just the hash, assume sha256
-		layerAlgorithm = "sha256"
-		layerHash = layerDigestParts[0]
-	} else {
-		return "", fmt.Errorf("invalid digest format: %s", layerDigest)
-	}
-
-	// Return the path to the blob file
-	return filepath.Join(s.rootPath, "blobs", layerAlgorithm, layerHash), nil
-}
-
 // Delete deletes a model by tag
 func (s *LocalStore) Delete(tag string) error {
 	// Read the models index
@@ -330,12 +238,6 @@ func (s *LocalStore) Delete(tag string) error {
 
 // AddTags adds tags to an existing model
 func (s *LocalStore) AddTags(tag string, newTags []string) error {
-	// Get the model by tag
-	model, err := s.GetByTag(tag)
-	if err != nil {
-		return fmt.Errorf("getting model by tag: %w", err)
-	}
-
 	// Read the models index
 	modelsPath := filepath.Join(s.rootPath, "models.json")
 	modelsData, err := os.ReadFile(modelsPath)
@@ -351,7 +253,7 @@ func (s *LocalStore) AddTags(tag string, newTags []string) error {
 
 	// Find the model in the index
 	for i, m := range models.Models {
-		if m.ID == model.ID {
+		if m.HasTag(tag) {
 			// Add new tags
 			existingTags := make(map[string]bool)
 			for _, t := range m.Tags {
@@ -496,6 +398,7 @@ func (s *LocalStore) Upgrade() error {
 	return nil
 }
 
+// Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
 	cf, err := mdl.RawConfigFile()
 	if err != nil {
@@ -594,6 +497,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	return nil
 }
 
+// Read reads a model from the store by tag
 func (s *LocalStore) Read(tag string) (*Model, error) {
 	// Read the models index
 	modelsPath := filepath.Join(s.rootPath, "models.json")

@@ -10,9 +10,27 @@ type ModelInfo struct {
 	Files []string `json:"files"`
 }
 
+func (m ModelInfo) HasTag(tag string) bool {
+	for _, t := range m.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
 // ModelIndex represents the index of all models in the store
 type ModelIndex struct {
 	Models []ModelInfo `json:"models"`
+}
+
+func (mi ModelIndex) ByTag(tag string) *ModelInfo {
+	for _, m := range mi.Models {
+		if m.HasTag(tag) {
+			return &m
+		}
+	}
+	return nil
 }
 
 // StoreLayout represents the layout information of the store

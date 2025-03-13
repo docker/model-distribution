@@ -85,23 +85,6 @@ func TestStoreAPI(t *testing.T) {
 		}
 	})
 
-	// Test GetByTag
-	t.Run("GetByTag", func(t *testing.T) {
-		model, err := s.GetByTag("api-model:latest")
-		if err != nil {
-			t.Fatalf("GetByTag failed: %v", err)
-		}
-		if model == nil {
-			t.Fatalf("Expected model, got nil")
-		}
-		if !containsTag(model.Tags, "api-model:latest") {
-			t.Errorf("Expected tag api-model:latest, got %v", model.Tags)
-		}
-		if model.Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
-		}
-	})
-
 	// Test AddTags
 	t.Run("AddTags", func(t *testing.T) {
 		err := s.AddTags("api-model:latest", []string{"api-v1.0", "api-stable"})
@@ -109,16 +92,25 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("AddTags failed: %v", err)
 		}
 
-		// Verify tags were added
-		model, err := s.GetByTag("api-model:latest")
+		// Verify tags were added to model
+		model, err := s.Read("api-model:latest")
 		if err != nil {
 			t.Fatalf("GetByTag failed: %v", err)
 		}
-		if !containsTag(model.Tags, "api-v1.0") || !containsTag(model.Tags, "api-stable") {
-			t.Errorf("Expected new tags, got %v", model.Tags)
+		if !containsTag(model.Tags(), "api-v1.0") || !containsTag(model.Tags(), "api-stable") {
+			t.Errorf("Expected new tags, got %v", model.Tags())
 		}
-		if model.Files[0] != expectedBlobHash {
-			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
+
+		// Verify tags were added to list
+		models, err := s.List()
+		if err != nil {
+			t.Fatalf("List failed: %v", err)
+		}
+		if len(models) != 1 {
+			t.Fatalf("Expected 1 model, got %d", len(models))
+		}
+		if len(models[0].Tags) != 3 {
+			t.Fatalf("Expected 3 tags, got %d", len(models[0].Tags))
 		}
 	})
 
@@ -129,7 +121,7 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("RemoveTags failed: %v", err)
 		}
 
-		// Verify tag was removed
+		// Verify tag was removed from list
 		models, err := s.List()
 		if err != nil {
 			t.Fatalf("List failed: %v", err)
@@ -142,6 +134,11 @@ func TestStoreAPI(t *testing.T) {
 				t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, model.Files[0])
 			}
 		}
+
+		// Verify read by tag fails
+		if _, err = s.Read("api-model:api-v1.0"); err == nil {
+			t.Errorf("Expected read error after tag removal, got nil")
+		}
 	})
 
 	// Test Delete
@@ -152,7 +149,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Verify model with that tag is gone
-		_, err = s.GetByTag("api-model:latest")
+		_, err = s.Read("api-model:latest")
 		if err == nil {
 			t.Errorf("Expected error after deletion, got nil")
 		}
