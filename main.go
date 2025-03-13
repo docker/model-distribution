@@ -187,11 +187,30 @@ func cmdGet(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Model: %s\n", reference)
-	fmt.Printf("ID: %s\n", model.ID)
-	fmt.Printf("Tags: %s\n", strings.Join(model.Tags, ", "))
-	if len(model.Files) > 0 {
-		fmt.Printf("Files: %s\n", strings.Join(model.Files, ", "))
+
+	id, err := model.ID()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting model ID %v\n", err)
+		return 1
 	}
+	fmt.Printf("ID: %s\n", id)
+
+	ggufPath, err := model.GGUFPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting gguf path %v\n", err)
+		return 1
+	}
+	fmt.Printf("GGUF Path: %s\n", ggufPath)
+
+	cfg, err := model.Config()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading model config: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Format: %s\n", cfg.Format)
+	fmt.Printf("Architecture: %s\n", cfg.Architecture)
+	fmt.Printf("Parameters: %s\n", cfg.Parameters)
+	fmt.Printf("Quantization: %s\n", cfg.Quantization)
 	return 0
 }
 

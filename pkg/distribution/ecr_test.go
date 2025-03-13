@@ -78,8 +78,8 @@ func TestECRIntegration(t *testing.T) {
 			t.Fatalf("Failed to get model info: %v", err)
 		}
 
-		if len(model.Tags) == 0 || model.Tags[0] != ecrTag {
-			t.Errorf("Model tags don't match: got %v, want [%s]", model.Tags, ecrTag)
+		if len(model.Tags()) == 0 || model.Tags()[0] != ecrTag {
+			t.Errorf("Model tags don't match: got %v, want [%s]", model.Tags(), ecrTag)
 		}
 	})
 }

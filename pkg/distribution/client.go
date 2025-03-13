@@ -216,7 +216,7 @@ func (c *Client) ListModels() ([]*types.ModelInfo, error) {
 }
 
 // GetModel returns a model by reference
-func (c *Client) GetModel(reference string) (*types.ModelInfo, error) {
+func (c *Client) GetModel(reference string) (types.Model, error) {
 	c.log.Infoln("Getting model by reference:", reference)
 	model, err := c.store.Read(reference)
 	if err != nil {
@@ -224,23 +224,7 @@ func (c *Client) GetModel(reference string) (*types.ModelInfo, error) {
 		return nil, ErrModelNotFound
 	}
 
-	dgst, err := model.Digest()
-	if err != nil {
-		c.log.Errorln("Failed to get model digest:", err)
-		return nil, fmt.Errorf("getting model digest: %w", err)
-	}
-
-	ggufPath, err := model.GGUFPath()
-	if err != nil {
-		c.log.Errorln("Failed to get path to GGUF file: %w", err)
-		return nil, fmt.Errorf("getting model digest: %w", err)
-	}
-
-	return &types.ModelInfo{
-		ID:    dgst.String(),
-		Tags:  model.Tags(), // todo: actually handle this
-		Files: []string{ggufPath},
-	}, nil
+	return model, nil
 }
 
 // PushModel pushes a model to a registry

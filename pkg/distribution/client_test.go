@@ -145,8 +145,8 @@ func TestClientGetModel(t *testing.T) {
 	}
 
 	// Verify model
-	if len(mi.Tags) == 0 || mi.Tags[0] != tag {
-		t.Errorf("Model tags don't match: got %v, want [%s]", mi.Tags, tag)
+	if len(mi.Tags()) == 0 || mi.Tags()[0] != tag {
+		t.Errorf("Model tags don't match: got %v, want [%s]", mi.Tags(), tag)
 	}
 }
 

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -118,4 +119,24 @@ func (m Model) GGUFPath() (string, error) {
 
 func (m Model) Tags() []string {
 	return m.tags
+}
+
+func (m Model) ID() (string, error) {
+	digest, err := m.Digest()
+	if err != nil {
+		return "", fmt.Errorf("get digest: %w", err)
+	}
+	return digest.String(), nil
+}
+
+func (m Model) Config() (mdtypes.Config, error) {
+	raw, err := m.RawConfigFile()
+	if err != nil {
+		return mdtypes.Config{}, fmt.Errorf("get raw config file: %w", err)
+	}
+	var cf mdtypes.ConfigFile
+	if err := json.Unmarshal(raw, &cf); err != nil {
+		return mdtypes.Config{}, fmt.Errorf("unmarshal config: %w", err)
+	}
+	return cf.Config, nil
 }
