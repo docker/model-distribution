@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,20 +8,7 @@ import (
 	"testing"
 
 	"github.com/docker/model-distribution/pkg/distribution"
-	"github.com/docker/model-distribution/pkg/types"
 )
-
-// Define an interface for the client methods we use in the commands
-type ClientInterface interface {
-	PullModel(ctx context.Context, reference string, progressWriter io.Writer) error
-	PushModel(ctx context.Context, source, reference string) error
-	ListModels() ([]*types.ModelInfo, error)
-	GetModel(reference string) (*types.ModelInfo, error)
-	GetModelPath(reference string) (string, error)
-}
-
-// Ensure distribution.Client implements ClientInterface
-var _ ClientInterface = (*distribution.Client)(nil)
 
 // TestMainHelp tests the help command
 func TestMainHelp(t *testing.T) {

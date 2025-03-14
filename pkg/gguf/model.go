@@ -95,3 +95,15 @@ func (m *Model) MediaType() (ggcr.MediaType, error) {
 	}
 	return manifest.MediaType, nil
 }
+
+func (m *Model) Config() (types.Config, error) {
+	return m.configFile.Config, nil
+}
+
+func (m *Model) ID() (string, error) {
+	dgst, err := m.Digest()
+	if err != nil {
+		return "", fmt.Errorf("get digest: %w", err)
+	}
+	return dgst.String(), err
+}
