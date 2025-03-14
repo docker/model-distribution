@@ -154,6 +154,48 @@ func TestStoreAPI(t *testing.T) {
 			t.Errorf("Expected error after deletion, got nil")
 		}
 	})
+
+	// Test that Delete removes the blob files
+	t.Run("DeleteRemovesBlobs", func(t *testing.T) {
+		// Create a new model with unique content
+		modelContent := []byte("unique content for blob deletion test")
+		modelPath := filepath.Join(tempDir, "blob-deletion-test.gguf")
+		if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
+			t.Fatalf("Failed to create test model file: %v", err)
+		}
+
+		// Calculate the blob hash to find it later
+		hash := sha256.Sum256(modelContent)
+		blobHash := hex.EncodeToString(hash[:])
+
+		// Add model to store with a unique tag
+		mdl, err := gguf.NewModel(modelPath)
+		if err != nil {
+			t.Fatalf("Create model failed: %v", err)
+		}
+
+		if err := s.Write(mdl, []string{"blob-test:latest"}, nil); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+
+		// Get the blob path
+		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
+
+		// Verify the blob exists on disk before deletion
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Fatalf("Blob file doesn't exist before deletion: %s", blobPath)
+		}
+
+		// Delete the model
+		if err := s.Delete("blob-test:latest"); err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+
+		// Verify the blob no longer exists on disk after deletion
+		if _, err := os.Stat(blobPath); !os.IsNotExist(err) {
+			t.Errorf("Blob file still exists after deletion: %s", blobPath)
+		}
+	})
 }
 
 // Helper function to check if a tag is in a slice of tags

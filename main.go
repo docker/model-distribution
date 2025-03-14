@@ -72,6 +72,8 @@ func main() {
 		exitCode = cmdGet(client, args)
 	case "get-path":
 		exitCode = cmdGetPath(client, args)
+	case "rm":
+		exitCode = cmdRm(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -91,10 +93,12 @@ func printUsage() {
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
+	fmt.Println("  rm <reference>                  Remove a model by reference")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
+	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
 }
 
 func cmdPull(client *distribution.Client, args []string) int {
@@ -211,5 +215,23 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Println(modelPath)
+	return 0
+}
+
+func cmdRm(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool rm <reference>\n")
+		return 1
+	}
+
+	reference := args[0]
+
+	if err := client.DeleteModel(reference); err != nil {
+		fmt.Fprintf(os.Stderr, "Error removing model: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Successfully removed model: %s\n", reference)
 	return 0
 }

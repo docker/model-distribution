@@ -213,13 +213,29 @@ func (s *LocalStore) Delete(tag string) error {
 		return fmt.Errorf("model with tag %s not found", tag)
 	}
 
-	// Remove the tag
+	// Get the model before removing it
 	model := &models.Models[modelIndex]
+
+	// Remove the tag
 	model.Tags = append(model.Tags[:tagIndex], model.Tags[tagIndex+1:]...)
 
-	// If no more tags, remove the model
+	// If no more tags, remove the model and its blob files
 	if len(model.Tags) == 0 {
 		models.Models = append(models.Models[:modelIndex], models.Models[modelIndex+1:]...)
+		blobFiles := model.Files
+		for _, blobFile := range blobFiles {
+			// Extract the hex part from "sha256:hex"
+			parts := strings.Split(blobFile, ":")
+			if len(parts) != 2 || parts[0] != "sha256" {
+				continue
+			}
+			blobHex := parts[1]
+			blobPath := filepath.Join(s.rootPath, "blobs", "sha256", blobHex)
+			if err := os.Remove(blobPath); err != nil {
+				// Just log the error but don't fail the operation
+				fmt.Printf("Warning: failed to remove blob file %s: %v\n", blobPath, err)
+			}
+		}
 	}
 
 	// Marshal the models index
