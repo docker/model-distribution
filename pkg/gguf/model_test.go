@@ -36,5 +36,15 @@ func TestGGUF(t *testing.T) {
 				t.Fatalf("Unexpected quantization: got %s expected %s", cfg.Quantization, "Unknown")
 			}
 		})
+
+		t.Run("TestDescriptor", func(t *testing.T) {
+			desc, err := mdl.Descriptor()
+			if err != nil {
+				t.Fatalf("Failed to get config: %v", err)
+			}
+			if desc.Created == nil {
+				t.Fatal("Expected created time to be set: got ni")
+			}
+		})
 	})
 }

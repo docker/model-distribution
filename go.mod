@@ -6,6 +6,8 @@ toolchain go1.23.5
 
 require (
 	github.com/google/go-containerregistry v0.20.3
+	github.com/gpustack/gguf-parser-go v0.13.19
+	github.com/sirupsen/logrus v1.9.3
 	github.com/testcontainers/testcontainers-go/modules/registry v0.35.0
 )
 
@@ -33,7 +35,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gpustack/gguf-parser-go v0.13.19 // indirect
 	github.com/henvic/httpretty v0.1.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
@@ -57,7 +58,6 @@ require (
 	github.com/rs/dnscache v0.0.0-20230804202142-fc85eb664529 // indirect
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/smallnest/ringbuffer v0.0.0-20241116012123-461381446e3d // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/testcontainers/testcontainers-go v0.35.0 // indirect

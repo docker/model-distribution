@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 
+	mdpartial "github.com/docker/model-distribution/pkg/partial"
 	"github.com/docker/model-distribution/pkg/types"
 )
 
@@ -32,7 +33,7 @@ func (m *Model) ConfigName() (v1.Hash, error) {
 }
 
 func (m *Model) ConfigFile() (*v1.ConfigFile, error) {
-	panic("implement me")
+	return nil, fmt.Errorf("invalid for model")
 }
 
 func (m *Model) Digest() (v1.Hash, error) {
@@ -73,11 +74,29 @@ func (m *Model) Manifest() (*v1.Manifest, error) {
 }
 
 func (m *Model) LayerByDigest(hash v1.Hash) (v1.Layer, error) {
-	panic("implement me")
+	for _, l := range m.layers {
+		d, err := l.Digest()
+		if err != nil {
+			return nil, fmt.Errorf("get layer digest: %w", err)
+		}
+		if d == hash {
+			return l, nil
+		}
+	}
+	return nil, fmt.Errorf("layer not found")
 }
 
 func (m *Model) LayerByDiffID(hash v1.Hash) (v1.Layer, error) {
-	panic("implement me")
+	for _, l := range m.layers {
+		d, err := l.DiffID()
+		if err != nil {
+			return nil, fmt.Errorf("get layer digest: %w", err)
+		}
+		if d == hash {
+			return l, nil
+		}
+	}
+	return nil, fmt.Errorf("layer not found")
 }
 
 func (m *Model) RawManifest() ([]byte, error) {
@@ -96,14 +115,14 @@ func (m *Model) MediaType() (ggcr.MediaType, error) {
 	return manifest.MediaType, nil
 }
 
-func (m *Model) Config() (types.Config, error) {
-	return m.configFile.Config, nil
+func (m *Model) ID() (string, error) {
+	return mdpartial.ID(m)
 }
 
-func (m *Model) ID() (string, error) {
-	dgst, err := m.Digest()
-	if err != nil {
-		return "", fmt.Errorf("get digest: %w", err)
-	}
-	return dgst.String(), err
+func (m *Model) Config() (types.Config, error) {
+	return mdpartial.Config(m)
+}
+
+func (m *Model) Descriptor() (types.Descriptor, error) {
+	return mdpartial.Descriptor(m)
 }

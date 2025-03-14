@@ -525,7 +525,7 @@ func (s *LocalStore) Read(tag string) (*Model, error) {
 					return nil, fmt.Errorf("reading manifest file: %w", err)
 				}
 				return &Model{
-					rawManfiest: rawManifest,
+					rawManifest: rawManifest,
 					blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
 					tags:        models.Models[i].Tags,
 				}, nil
