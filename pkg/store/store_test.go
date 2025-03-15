@@ -182,8 +182,20 @@ func TestStoreAPI(t *testing.T) {
 		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
 
 		// Verify the blob exists on disk before deletion
-		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-			t.Fatalf("Blob file doesn't exist before deletion: %s", blobPath)
+		if _, err := os.Stat(blobPath); err != nil {
+			t.Fatalf("Failed to stat blob at path '%s': %v", blobPath, err)
+		}
+
+		// Get the manifest path
+		digest, err := mdl.Digest()
+		if err != nil {
+			t.Fatalf("Failed to get digest: %v", err)
+		}
+
+		// Verify the model manifest exists
+		manifestPath := filepath.Join(storePath, "manifests", "sha256", digest.Hex)
+		if _, err := os.Stat(manifestPath); err != nil {
+			t.Fatalf("Failed to stat manifest at path '%s': %v", manifestPath, err)
 		}
 
 		// Delete the model
@@ -194,6 +206,11 @@ func TestStoreAPI(t *testing.T) {
 		// Verify the blob no longer exists on disk after deletion
 		if _, err := os.Stat(blobPath); !os.IsNotExist(err) {
 			t.Errorf("Blob file still exists after deletion: %s", blobPath)
+		}
+
+		// Verify the manifest no longer exists on disk after deletion
+		if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
+			t.Errorf("Manifest file still exists after deletion: %s", blobPath)
 		}
 	})
 

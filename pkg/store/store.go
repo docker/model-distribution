@@ -222,15 +222,22 @@ func (s *LocalStore) Delete(tag string) error {
 	// If no more tags, remove the model and its blob files
 	if len(model.Tags) == 0 {
 		models.Models = append(models.Models[:modelIndex], models.Models[modelIndex+1:]...)
+		if digest, err := v1.NewHash(model.ID); err != nil {
+			fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
+		} else if err := os.Remove(filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex)); err != nil {
+			fmt.Printf("Warning: failed to remove manifest file %s: %v\n",
+				filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex), err,
+			)
+		}
 		blobFiles := model.Files
 		for _, blobFile := range blobFiles {
 			// Extract the hex part from "sha256:hex"
-			parts := strings.Split(blobFile, ":")
-			if len(parts) != 2 || parts[0] != "sha256" {
+			hash, err := v1.NewHash(blobFile)
+			if err != nil {
+				fmt.Printf("Warning: failed to parse blob hash %s: %v\n", blobFile, err)
 				continue
 			}
-			blobHex := parts[1]
-			blobPath := filepath.Join(s.rootPath, "blobs", "sha256", blobHex)
+			blobPath := filepath.Join(s.rootPath, "blobs", hash.Algorithm, hash.Hex)
 			if err := os.Remove(blobPath); err != nil {
 				// Just log the error but don't fail the operation
 				fmt.Printf("Warning: failed to remove blob file %s: %v\n", blobPath, err)
