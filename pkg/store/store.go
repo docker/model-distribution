@@ -3,10 +3,11 @@ package store
 import (
 	"encoding/json"
 	"fmt"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"io"
 	"os"
 	"path/filepath"
+
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -144,9 +145,9 @@ func (s *LocalStore) Delete(tag string) error {
 	// Remove the tag
 	model.Tags = append(model.Tags[:tagIndex], model.Tags[tagIndex+1:]...)
 
-	// If no more tags, remove the model and its blob files
+	// If no more tags, remove the model and check if its blobs can be deleted
 	if len(model.Tags) == 0 {
-		models = append(models[:modelIndex], models[modelIndex+1:]...)
+		// Remove manifest file
 		if digest, err := v1.NewHash(model.ID); err != nil {
 			fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
 		} else if err := os.Remove(filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex)); err != nil {
@@ -154,9 +155,22 @@ func (s *LocalStore) Delete(tag string) error {
 				filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex), err,
 			)
 		}
-		blobFiles := model.Files
-		for _, blobFile := range blobFiles {
-			// Extract the hex part from "sha256:hex"
+		// Before deleting blobs, check if they are referenced by other models
+		blobRefs := make(map[string]int)
+		for _, m := range models {
+			if m.ID == model.ID {
+				continue // Skip the model being deleted
+			}
+			for _, file := range m.Files {
+				blobRefs[file]++
+			}
+		}
+		// Only delete blobs that are not referenced by other models
+		for _, blobFile := range model.Files {
+			if blobRefs[blobFile] > 0 {
+				// Skip deletion if blob is referenced by other models
+				continue
+			}
 			hash, err := v1.NewHash(blobFile)
 			if err != nil {
 				fmt.Printf("Warning: failed to parse blob hash %s: %v\n", blobFile, err)
@@ -168,6 +182,9 @@ func (s *LocalStore) Delete(tag string) error {
 				fmt.Printf("Warning: failed to remove blob file %s: %v\n", blobPath, err)
 			}
 		}
+
+		// Remove the model from the list
+		models = append(models[:modelIndex], models[modelIndex+1:]...)
 	}
 
 	return s.writeModelsIndex(types.ModelIndex{Models: models})
