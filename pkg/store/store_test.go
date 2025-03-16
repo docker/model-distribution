@@ -154,6 +154,233 @@ func TestStoreAPI(t *testing.T) {
 			t.Errorf("Expected error after deletion, got nil")
 		}
 	})
+
+	// Test that Delete removes the blob files
+	t.Run("DeleteRemovesBlobs", func(t *testing.T) {
+		// Create a new model with unique content
+		modelContent := []byte("unique content for blob deletion test")
+		modelPath := filepath.Join(tempDir, "blob-deletion-test.gguf")
+		if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
+			t.Fatalf("Failed to create test model file: %v", err)
+		}
+
+		// Calculate the blob hash to find it later
+		hash := sha256.Sum256(modelContent)
+		blobHash := hex.EncodeToString(hash[:])
+
+		// Add model to store with a unique tag
+		mdl, err := gguf.NewModel(modelPath)
+		if err != nil {
+			t.Fatalf("Create model failed: %v", err)
+		}
+
+		if err := s.Write(mdl, []string{"blob-test:latest"}, nil); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+
+		// Get the blob path
+		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
+
+		// Verify the blob exists on disk before deletion
+		if _, err := os.Stat(blobPath); err != nil {
+			t.Fatalf("Failed to stat blob at path '%s': %v", blobPath, err)
+		}
+
+		// Get the manifest path
+		digest, err := mdl.Digest()
+		if err != nil {
+			t.Fatalf("Failed to get digest: %v", err)
+		}
+
+		// Verify the model manifest exists
+		manifestPath := filepath.Join(storePath, "manifests", "sha256", digest.Hex)
+		if _, err := os.Stat(manifestPath); err != nil {
+			t.Fatalf("Failed to stat manifest at path '%s': %v", manifestPath, err)
+		}
+
+		// Delete the model
+		if err := s.Delete("blob-test:latest"); err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+
+		// Verify the blob no longer exists on disk after deletion
+		if _, err := os.Stat(blobPath); !os.IsNotExist(err) {
+			t.Errorf("Blob file still exists after deletion: %s", blobPath)
+		}
+
+		// Verify the manifest no longer exists on disk after deletion
+		if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
+			t.Errorf("Manifest file still exists after deletion: %s", blobPath)
+		}
+	})
+
+	// Test that blobs and model are not removed if there is a tag pointing to it
+	t.Run("BlobsPreservedWithRemainingTags", func(t *testing.T) {
+		// Create a new model with unique content
+		modelContent := []byte("unique content for multi-tag test")
+		modelPath := filepath.Join(tempDir, "multi-tag-test.gguf")
+		if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
+			t.Fatalf("Failed to create test model file: %v", err)
+		}
+
+		// Calculate the blob hash to find it later
+		hash := sha256.Sum256(modelContent)
+		blobHash := hex.EncodeToString(hash[:])
+		expectedBlobDigest := fmt.Sprintf("sha256:%s", blobHash)
+
+		// Add model to store with multiple tags
+		mdl, err := gguf.NewModel(modelPath)
+		if err != nil {
+			t.Fatalf("Create model failed: %v", err)
+		}
+
+		// Write the model with two tags
+		if err := s.Write(mdl, []string{"multi-tag:v1", "multi-tag:latest"}, nil); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+
+		// Get the blob path
+		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
+
+		// Verify the blob exists on disk
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Fatalf("Blob file doesn't exist: %s", blobPath)
+		}
+
+		// Delete one of the tags
+		if err := s.Delete("multi-tag:v1"); err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+
+		// Verify the blob still exists on disk after deleting one tag
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Errorf("Blob file was incorrectly removed: %s", blobPath)
+		}
+
+		// Verify the model is still in the index with the remaining tag
+		models, err := s.List()
+		if err != nil {
+			t.Fatalf("List failed: %v", err)
+		}
+
+		var foundModel bool
+		for _, model := range models {
+			if containsTag(model.Tags, "multi-tag:latest") {
+				foundModel = true
+				// Verify the blob is still associated with the model
+				if len(model.Files) != 1 || model.Files[0] != expectedBlobDigest {
+					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
+				}
+				break
+			}
+		}
+
+		if !foundModel {
+			t.Errorf("Model with tag multi-tag:latest not found after deleting multi-tag:v1")
+		}
+
+		// Verify the model can still be read using the remaining tag
+		remainingModel, err := s.Read("multi-tag:latest")
+		if err != nil {
+			t.Fatalf("Read failed for remaining tag: %v", err)
+		}
+
+		if remainingModel == nil {
+			t.Fatalf("Model is nil despite having a remaining tag")
+		}
+
+		// Verify the remaining tag is present in the model
+		if !containsTag(remainingModel.Tags(), "multi-tag:latest") {
+			t.Errorf("Expected tag multi-tag:latest in model tags, got %v", remainingModel.Tags())
+		}
+	})
+
+	// Test that shared blobs between different models are not deleted
+	t.Run("SharedBlobsPreservation", func(t *testing.T) {
+		// Create a model file with content that will be shared
+		sharedContent := []byte("shared content for multiple models test")
+		sharedModelPath := filepath.Join(tempDir, "shared-model.gguf")
+		if err := os.WriteFile(sharedModelPath, sharedContent, 0644); err != nil {
+			t.Fatalf("Failed to create shared model file: %v", err)
+		}
+
+		// Calculate the blob hash to find it later
+		hash := sha256.Sum256(sharedContent)
+		blobHash := hex.EncodeToString(hash[:])
+		expectedBlobDigest := fmt.Sprintf("sha256:%s", blobHash)
+
+		// Create first model with the shared content
+		model1, err := gguf.NewModel(sharedModelPath)
+		if err != nil {
+			t.Fatalf("Create first model failed: %v", err)
+		}
+
+		// Write the first model
+		if err := s.Write(model1, []string{"shared-model-1:latest"}, nil); err != nil {
+			t.Fatalf("Write first model failed: %v", err)
+		}
+
+		// Create second model with the same shared content
+		model2, err := gguf.NewModel(sharedModelPath)
+		if err != nil {
+			t.Fatalf("Create second model failed: %v", err)
+		}
+
+		// Write the second model
+		if err := s.Write(model2, []string{"shared-model-2:latest"}, nil); err != nil {
+			t.Fatalf("Write second model failed: %v", err)
+		}
+
+		// Get the blob path
+		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
+
+		// Verify the blob exists on disk
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Fatalf("Shared blob file doesn't exist: %s", blobPath)
+		}
+
+		// Delete the first model
+		if err := s.Delete("shared-model-1:latest"); err != nil {
+			t.Fatalf("Delete first model failed: %v", err)
+		}
+
+		// Verify the blob still exists on disk after deleting the first model
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Errorf("Shared blob file was incorrectly removed: %s", blobPath)
+		}
+
+		// Verify the second model is still in the index
+		models, err := s.List()
+		if err != nil {
+			t.Fatalf("List failed: %v", err)
+		}
+
+		var foundModel bool
+		for _, model := range models {
+			if containsTag(model.Tags, "shared-model-2:latest") {
+				foundModel = true
+				// Verify the blob is still associated with the model
+				if len(model.Files) != 1 || model.Files[0] != expectedBlobDigest {
+					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
+				}
+				break
+			}
+		}
+
+		if !foundModel {
+			t.Errorf("Second model not found after deleting first model")
+		}
+
+		// Delete the second model
+		if err := s.Delete("shared-model-2:latest"); err != nil {
+			t.Fatalf("Delete second model failed: %v", err)
+		}
+
+		// Now the blob should be deleted since no models reference it
+		if _, err := os.Stat(blobPath); !os.IsNotExist(err) {
+			t.Errorf("Shared blob file still exists after deleting all referencing models: %s", blobPath)
+		}
+	})
 }
 
 // Helper function to check if a tag is in a slice of tags
