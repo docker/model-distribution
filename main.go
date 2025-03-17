@@ -166,10 +166,17 @@ func cmdList(client *distribution.Client, args []string) int {
 
 	fmt.Println("Models:")
 	for i, model := range models {
-		fmt.Printf("%d. ID: %s\n", i+1, model.ID)
-		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags, ", "))
-		if len(model.Files) > 0 {
-			fmt.Printf("   Files: %s\n", strings.Join(model.Files, ", "))
+		id, err := model.ID()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting model ID: %v\n", err)
+			continue
+		}
+		fmt.Printf("%d. ID: %s\n", i+1, id)
+		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags(), ", "))
+
+		ggufPath, err := model.GGUFPath()
+		if err == nil {
+			fmt.Printf("   GGUF Path: %s\n", ggufPath)
 		}
 	}
 	return 0

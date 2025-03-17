@@ -238,7 +238,7 @@ func TestClientListModels(t *testing.T) {
 	// Check if all tags are present
 	tagMap := make(map[string]bool)
 	for _, model := range models {
-		for _, tag := range model.Tags {
+		for _, tag := range model.Tags() {
 			tagMap[tag] = true
 		}
 	}

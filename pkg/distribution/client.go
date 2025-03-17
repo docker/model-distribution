@@ -197,18 +197,26 @@ func (c *Client) GetModelPath(reference string) (string, error) {
 }
 
 // ListModels returns all available models
-func (c *Client) ListModels() ([]*types.ModelInfo, error) {
+func (c *Client) ListModels() ([]types.Model, error) {
 	c.log.Infoln("Listing available models")
-	models, err := c.store.List()
+	modelInfos, err := c.store.List()
 	if err != nil {
 		c.log.Errorln("Failed to list models:", err)
 		return nil, fmt.Errorf("listing models: %w", err)
 	}
 
-	result := make([]*types.ModelInfo, len(models))
-	for i, model := range models {
-		modelCopy := model // Create a copy to avoid issues with the loop variable
-		result[i] = &modelCopy
+	result := make([]types.Model, 0, len(modelInfos))
+	for _, modelInfo := range modelInfos {
+		// For each model info, find a tag to use for reading the model
+		if len(modelInfo.Tags) > 0 {
+			// Use the first tag to read the model
+			model, err := c.store.Read(modelInfo.Tags[0])
+			if err != nil {
+				c.log.Warnf("Failed to read model with tag %s: %v", modelInfo.Tags[0], err)
+				continue
+			}
+			result = append(result, model)
+		}
 	}
 
 	c.log.Infoln("Successfully listed models, count:", len(result))
