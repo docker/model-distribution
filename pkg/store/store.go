@@ -275,44 +275,6 @@ func (s *LocalStore) Version() string {
 	return layout.Version
 }
 
-// Upgrade upgrades the store to the latest version
-func (s *LocalStore) Upgrade() error {
-	// Read the layout file
-	layoutPath := filepath.Join(s.rootPath, "layout.json")
-	layoutData, err := os.ReadFile(layoutPath)
-	if err != nil {
-		return fmt.Errorf("reading layout file: %w", err)
-	}
-
-	// Unmarshal the layout
-	var layout types.StoreLayout
-	if err := json.Unmarshal(layoutData, &layout); err != nil {
-		return fmt.Errorf("unmarshaling layout: %w", err)
-	}
-
-	// Check if upgrade is needed
-	if layout.Version == CurrentVersion {
-		return nil
-	}
-
-	// Implement upgrade logic here
-	// For now, just update the version
-	layout.Version = CurrentVersion
-
-	// Marshal the layout
-	layoutData, err = json.MarshalIndent(layout, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling layout: %w", err)
-	}
-
-	// Write the layout file
-	if err := os.WriteFile(layoutPath, layoutData, 0644); err != nil {
-		return fmt.Errorf("writing layout file: %w", err)
-	}
-
-	return nil
-}
-
 // Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
 	cf, err := mdl.RawConfigFile()
