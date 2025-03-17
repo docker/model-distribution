@@ -177,25 +177,6 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// GetModelPath returns the local file path for a model
-func (c *Client) GetModelPath(reference string) (string, error) {
-	c.log.Infoln("Getting model path:", reference)
-	// Get the direct path to the blob file
-	mdl, err := c.store.Read(reference)
-	if err != nil {
-		c.log.Errorln("Failed to get blob path:", err, "reference:", reference)
-		return "", fmt.Errorf("read model from store: %w", err)
-	}
-
-	ggufPath, err := mdl.GGUFPath()
-	if err != nil {
-		c.log.Errorln("Failed to get path to GGUF file: %w", err)
-		return "", fmt.Errorf("getting model file path: %w", err)
-	}
-
-	return ggufPath, nil
-}
-
 // ListModels returns all available models
 func (c *Client) ListModels() ([]types.Model, error) {
 	c.log.Infoln("Listing available models")

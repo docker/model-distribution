@@ -53,7 +53,12 @@ func TestECRIntegration(t *testing.T) {
 			t.Fatalf("Failed to pull model from ECR: %v", err)
 		}
 
-		modelPath, err := client.GetModelPath(ecrTag)
+		model, err := client.GetModel(ecrTag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}

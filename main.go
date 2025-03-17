@@ -234,7 +234,13 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 
 	reference := args[0]
 
-	modelPath, err := client.GetModelPath(reference)
+	model, err := client.GetModel(reference)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get model: %v\n", err)
+		return 1
+	}
+
+	modelPath, err := model.GGUFPath()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting model path: %v\n", err)
 		return 1

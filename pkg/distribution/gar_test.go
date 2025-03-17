@@ -53,10 +53,16 @@ func TestGARIntegration(t *testing.T) {
 			t.Fatalf("Failed to pull model from GAR: %v", err)
 		}
 
-		modelPath, err := client.GetModelPath(garTag)
+		model, err := client.GetModel(garTag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+
 		defer os.Remove(modelPath)
 
 		// Verify model content
