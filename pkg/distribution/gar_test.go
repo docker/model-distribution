@@ -62,7 +62,6 @@ func TestGARIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
-
 		defer os.Remove(modelPath)
 
 		// Verify model content
