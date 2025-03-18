@@ -5,4 +5,5 @@ type Model interface {
 	GGUFPath() (string, error)
 	Config() (Config, error)
 	Tags() []string
+	Descriptor() (Descriptor, error)
 }
