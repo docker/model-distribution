@@ -27,8 +27,13 @@ func (s *LocalStore) RootPath() string {
 	return s.rootPath
 }
 
+// Options represents options for creating a store
+type Options struct {
+	RootPath string
+}
+
 // New creates a new LocalStore
-func New(opts types.StoreOptions) (*LocalStore, error) {
+func New(opts Options) (*LocalStore, error) {
 	store := &LocalStore{
 		rootPath: opts.RootPath,
 	}
@@ -63,7 +68,7 @@ func (s *LocalStore) initialize() error {
 	// Check if layout.json exists, create if not
 	layoutPath := filepath.Join(s.rootPath, "layout.json")
 	if _, err := os.Stat(layoutPath); os.IsNotExist(err) {
-		layout := types.StoreLayout{
+		layout := Layout{
 			Version: CurrentVersion,
 		}
 		layoutData, err := json.MarshalIndent(layout, "", "  ")
@@ -78,7 +83,7 @@ func (s *LocalStore) initialize() error {
 	// Check if models.json exists, create if not
 	modelsPath := filepath.Join(s.rootPath, "models.json")
 	if _, err := os.Stat(modelsPath); os.IsNotExist(err) {
-		models := types.ModelIndex{
+		models := Index{
 			Models: []types.ModelInfo{},
 		}
 		modelsData, err := json.MarshalIndent(models, "", "  ")
@@ -95,20 +100,7 @@ func (s *LocalStore) initialize() error {
 
 // List lists all models in the store
 func (s *LocalStore) List() ([]types.ModelInfo, error) {
-	// Read the models index
-	modelsPath := filepath.Join(s.rootPath, "models.json")
-	modelsData, err := os.ReadFile(modelsPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading models file: %w", err)
-	}
-
-	// Unmarshal the models index
-	var index types.ModelIndex
-	if err := json.Unmarshal(modelsData, &index); err != nil {
-		return nil, fmt.Errorf("unmarshaling models: %w", err)
-	}
-
-	return index.Models, nil
+	return s.readIndex()
 }
 
 // Delete deletes a model by tag
@@ -187,7 +179,7 @@ func (s *LocalStore) Delete(tag string) error {
 		models = append(models[:modelIndex], models[modelIndex+1:]...)
 	}
 
-	return s.writeModelsIndex(types.ModelIndex{Models: models})
+	return s.writeIndex(Index{Models: models})
 }
 
 // AddTags adds tags to an existing model
@@ -216,7 +208,7 @@ func (s *LocalStore) AddTags(tag string, newTags []string) error {
 		}
 	}
 
-	return s.writeModelsIndex(types.ModelIndex{Models: models})
+	return s.writeIndex(Index{Models: models})
 }
 
 // RemoveTags removes tags from models
@@ -254,21 +246,13 @@ func (s *LocalStore) RemoveTags(tags []string) error {
 		models = append(models[:index], models[index+1:]...)
 	}
 
-	return s.writeModelsIndex(types.ModelIndex{Models: models})
+	return s.writeIndex(Index{Models: models})
 }
 
 // Version returns the store version
 func (s *LocalStore) Version() string {
-	// Read the layout file
-	layoutPath := filepath.Join(s.rootPath, "layout.json")
-	layoutData, err := os.ReadFile(layoutPath)
+	layout, err := s.readLayout()
 	if err != nil {
-		return "unknown"
-	}
-
-	// Unmarshal the layout
-	var layout types.StoreLayout
-	if err := json.Unmarshal(layoutData, &layout); err != nil {
 		return "unknown"
 	}
 
@@ -403,7 +387,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		}
 	}
 
-	return s.writeModelsIndex(types.ModelIndex{Models: models})
+	return s.writeIndex(Index{Models: models})
 }
 
 // Read reads a model from the store by tag
@@ -435,22 +419,6 @@ func (s *LocalStore) Read(tag string) (*Model, error) {
 	}
 
 	return nil, fmt.Errorf("model with tag %s not found", tag)
-}
-
-func (s *LocalStore) writeModelsIndex(index types.ModelIndex) error {
-	// Marshal the models index
-	modelsData, err := json.MarshalIndent(index, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling models: %w", err)
-	}
-
-	// Write the models index
-	modelsPath := filepath.Join(s.rootPath, "models.json")
-	if err := os.WriteFile(modelsPath, modelsData, 0644); err != nil {
-		return fmt.Errorf("writing models file: %w", err)
-	}
-
-	return nil
 }
 
 // ProgressReader wraps an io.Reader to track reading progress

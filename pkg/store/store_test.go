@@ -10,7 +10,6 @@ import (
 
 	"github.com/docker/model-distribution/pkg/gguf"
 	"github.com/docker/model-distribution/pkg/store"
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 // TestStoreAPI tests the store API directly
@@ -35,7 +34,7 @@ func TestStoreAPI(t *testing.T) {
 
 	// Create store
 	storePath := filepath.Join(tempDir, "api-model-store")
-	s, err := store.New(types.StoreOptions{
+	s, err := store.New(store.Options{
 		RootPath: storePath,
 	})
 	if err != nil {
