@@ -63,7 +63,7 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 		return nil, fmt.Errorf("store root path is required")
 	}
 
-	s, err := store.New(types.StoreOptions{
+	s, err := store.New(store.Options{
 		RootPath: options.storeRootPath,
 	})
 	if err != nil {
