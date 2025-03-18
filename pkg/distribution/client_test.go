@@ -63,7 +63,12 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
-		modelPath, err := client.GetModelPath(tag)
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
@@ -93,7 +98,12 @@ func TestClientPullModel(t *testing.T) {
 			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
 		}
 
-		modelPath, err := client.GetModelPath(tag)
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
@@ -238,7 +248,7 @@ func TestClientListModels(t *testing.T) {
 	// Check if all tags are present
 	tagMap := make(map[string]bool)
 	for _, model := range models {
-		for _, tag := range model.Tags {
+		for _, tag := range model.Tags() {
 			tagMap[tag] = true
 		}
 	}

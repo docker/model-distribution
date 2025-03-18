@@ -166,10 +166,17 @@ func cmdList(client *distribution.Client, args []string) int {
 
 	fmt.Println("Models:")
 	for i, model := range models {
-		fmt.Printf("%d. ID: %s\n", i+1, model.ID)
-		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags, ", "))
-		if len(model.Files) > 0 {
-			fmt.Printf("   Files: %s\n", strings.Join(model.Files, ", "))
+		id, err := model.ID()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting model ID: %v\n", err)
+			continue
+		}
+		fmt.Printf("%d. ID: %s\n", i+1, id)
+		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags(), ", "))
+
+		ggufPath, err := model.GGUFPath()
+		if err == nil {
+			fmt.Printf("   GGUF Path: %s\n", ggufPath)
 		}
 	}
 	return 0
@@ -227,7 +234,13 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 
 	reference := args[0]
 
-	modelPath, err := client.GetModelPath(reference)
+	model, err := client.GetModel(reference)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get model: %v\n", err)
+		return 1
+	}
+
+	modelPath, err := model.GGUFPath()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting model path: %v\n", err)
 		return 1
