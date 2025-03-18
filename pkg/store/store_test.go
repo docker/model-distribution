@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/docker/model-distribution/pkg/gguf"
+	"github.com/docker/model-distribution/pkg/mutate"
+	"github.com/docker/model-distribution/pkg/partial"
 	"github.com/docker/model-distribution/pkg/store"
+	"github.com/docker/model-distribution/pkg/types"
 )
 
 // TestStoreAPI tests the store API directly
@@ -22,17 +25,6 @@ func TestStoreAPI(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a temporary model file with known content
-	modelContent := []byte("test model content for API test")
-	modelPath := filepath.Join(tempDir, "api-test-model.gguf")
-	if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
-		t.Fatalf("Failed to create test model file: %v", err)
-	}
-
-	// Calculate expected blob hash
-	hash := sha256.Sum256(modelContent)
-	expectedBlobHash := fmt.Sprintf("sha256:%s", hex.EncodeToString(hash[:]))
-
 	// Create store
 	storePath := filepath.Join(tempDir, "api-model-store")
 	s, err := store.New(store.Options{
@@ -41,11 +33,17 @@ func TestStoreAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
-
-	model, err := gguf.NewModel(modelPath)
+	model := newTestModel(t)
+	layers, err := model.Layers()
 	if err != nil {
-		t.Fatalf("Create model failed: %v", err)
+		t.Fatalf("Failed to get layers: %v", err)
 	}
+	ggufDiffID, err := layers[0].DiffID()
+	if err != nil {
+		t.Fatalf("Failed to get diff ID: %v", err)
+	}
+	expectedBlobHash := ggufDiffID.String()
+
 	digest, err := model.Digest()
 	if err != nil {
 		t.Fatalf("Digest failed: %v", err)
@@ -87,6 +85,7 @@ func TestStoreAPI(t *testing.T) {
 		if !containsTag(mdl2.Tags(), "api-model:latest") {
 			t.Errorf("Expected tag api-model:latest, got %v", mdl2.Tags())
 		}
+
 	})
 
 	// Test List
@@ -100,6 +99,9 @@ func TestStoreAPI(t *testing.T) {
 		}
 		if !containsTag(models[0].Tags, "api-model:latest") {
 			t.Errorf("Expected tag api-model:latest, got %v", models[0].Tags)
+		}
+		if len(models[0].Files) != 3 {
+			t.Fatalf("Expected 3 files (gguf, license, config), got %d", len(models[0].Files))
 		}
 		if models[0].Files[0] != expectedBlobHash {
 			t.Errorf("Expected blob hash %s, got %s", expectedBlobHash, models[0].Files[0])
@@ -522,4 +524,20 @@ func containsTag(tags []string, tag string) bool {
 		}
 	}
 	return false
+}
+
+func newTestModel(t *testing.T) types.ModelArtifact {
+	var mdl types.ModelArtifact
+	var err error
+
+	mdl, err = gguf.NewModel(filepath.Join("testdata", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("failed to create model from gguf file: %v", err)
+	}
+	licenseLayer, err := partial.NewLayer(filepath.Join("testdata", "license.txt"), types.MediaTypeLicense)
+	if err != nil {
+		t.Fatalf("failed to create license layer: %v", err)
+	}
+	mdl = mutate.AppendLayers(mdl, licenseLayer)
+	return mdl
 }

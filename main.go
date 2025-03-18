@@ -8,7 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+
 	"github.com/docker/model-distribution/pkg/distribution"
+	"github.com/docker/model-distribution/pkg/gguf"
+	"github.com/docker/model-distribution/pkg/mutate"
+	"github.com/docker/model-distribution/pkg/partial"
+	"github.com/docker/model-distribution/pkg/types"
 )
 
 const (
@@ -123,9 +131,17 @@ func cmdPull(client *distribution.Client, args []string) int {
 }
 
 func cmdPush(client *distribution.Client, args []string) int {
+	fs := flag.NewFlagSet("push", flag.ExitOnError)
+	licensePath := fs.String("license", "", "Path to the license file")
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		return 1
+	}
+	args = fs.Args()
+
 	if len(args) < 2 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference>\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--license <path-to-license-file>]\n")
 		return 1
 	}
 
@@ -145,12 +161,49 @@ func cmdPush(client *distribution.Client, args []string) int {
 		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
 	}
 
-	if err := client.PushModel(ctx, source, reference); err != nil {
-		fmt.Fprintf(os.Stderr, "Error pushing model: %v\n", err)
+	// Parse the reference
+	ref, err := name.ParseReference(reference)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
 		return 1
 	}
 
-	fmt.Printf("Successfully pushed model: %s\n", reference)
+	// Create image with layer
+	var mdl types.ModelArtifact
+	mdl, err = gguf.NewModel(source)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating model from gguf: %v\n", err)
+		return 1
+	}
+
+	//licensePath = filepath.Join("assets", "license.txt")
+	// Add the license file if provided
+	if licensePath != nil {
+		fmt.Println("Adding license file:", licensePath)
+		licenseLayer, err := partial.NewLayer(*licensePath, types.MediaTypeLicense)
+		if err != nil {
+			return 1
+		}
+		mdl = mutate.AppendLayers(mdl, licenseLayer)
+	}
+
+	layers, _ := mdl.Layers()
+	fmt.Printf("Layers: %v\n", layers)
+
+	rm, _ := mdl.RawManifest()
+	fmt.Printf("Manifest: %s\n", string(rm))
+
+	rcf, _ := mdl.RawConfigFile()
+	fmt.Printf("Config FILE: %v\n", string(rcf))
+
+	// Push the image
+	if err := remote.Write(ref, mdl,
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(ctx),
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", ref.String(), err)
+		return 1
+	}
 	return 0
 }
 

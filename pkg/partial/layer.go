@@ -5,9 +5,7 @@ import (
 	"os"
 
 	"github.com/google/go-containerregistry/pkg/v1"
-	types2 "github.com/google/go-containerregistry/pkg/v1/types"
-
-	"github.com/docker/model-distribution/pkg/types"
+	ggcrtypes "github.com/google/go-containerregistry/pkg/v1/types"
 )
 
 var _ v1.Layer = &Layer{}
@@ -17,7 +15,7 @@ type Layer struct {
 	v1.Descriptor
 }
 
-func NewLayer(path string) (*Layer, error) {
+func NewLayer(path string, mt ggcrtypes.MediaType) (*Layer, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -29,7 +27,7 @@ func NewLayer(path string) (*Layer, error) {
 		Descriptor: v1.Descriptor{
 			Size:      size,
 			Digest:    hash,
-			MediaType: types.MediaTypeGGUF,
+			MediaType: mt,
 		},
 	}, nil
 }
@@ -54,6 +52,6 @@ func (l Layer) Size() (int64, error) {
 	return l.Descriptor.Size, nil
 }
 
-func (l Layer) MediaType() (types2.MediaType, error) {
+func (l Layer) MediaType() (ggcrtypes.MediaType, error) {
 	return l.Descriptor.MediaType, nil
 }

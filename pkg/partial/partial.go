@@ -76,7 +76,7 @@ func GGUFPath(i WithLayers) (string, error) {
 		if err != nil || mt != types.MediaTypeGGUF {
 			continue
 		}
-		ggufLayer, ok := l.(Layer)
+		ggufLayer, ok := l.(*Layer)
 		if !ok {
 			return "", errors.New("gguf Layer is not available locally")
 		}

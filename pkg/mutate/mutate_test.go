@@ -26,7 +26,7 @@ func TestAppendLayer(t *testing.T) {
 	}
 
 	// Append a layer
-	mdl2, err := mutate.AppendLayers(mdl1,
+	mdl2 := mutate.AppendLayers(mdl1,
 		static.NewLayer([]byte("some layer content"), "application/vnd.example.some.media.type"),
 	)
 	if err != nil {

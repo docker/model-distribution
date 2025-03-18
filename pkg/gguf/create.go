@@ -13,7 +13,7 @@ import (
 )
 
 func NewModel(path string) (*Model, error) {
-	layer, err := partial.NewLayer(path)
+	layer, err := partial.NewLayer(path, types.MediaTypeGGUF)
 	if err != nil {
 		return nil, fmt.Errorf("create gguf layer: %w", err)
 	}
