@@ -1,13 +1,13 @@
-package gguf
+package partial
 
 import (
 	"io"
 	"os"
 
 	"github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/types"
+	types2 "github.com/google/go-containerregistry/pkg/v1/types"
 
-	mdltypes "github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/pkg/types"
 )
 
 var _ v1.Layer = &Layer{}
@@ -29,7 +29,7 @@ func NewLayer(path string) (*Layer, error) {
 		Descriptor: v1.Descriptor{
 			Size:      size,
 			Digest:    hash,
-			MediaType: mdltypes.MediaTypeGGUF,
+			MediaType: types.MediaTypeGGUF,
 		},
 	}, nil
 }
@@ -54,6 +54,6 @@ func (l Layer) Size() (int64, error) {
 	return l.Descriptor.Size, nil
 }
 
-func (l Layer) MediaType() (types.MediaType, error) {
+func (l Layer) MediaType() (types2.MediaType, error) {
 	return l.Descriptor.MediaType, nil
 }

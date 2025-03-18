@@ -12,7 +12,7 @@ import (
 	"github.com/docker/model-distribution/pkg/types"
 )
 
-var _ v1.Image = &Model{}
+var _ types.ModelArtifact = &Model{}
 
 type Model struct {
 	configFile types.ConfigFile
@@ -41,36 +41,7 @@ func (m *Model) Digest() (v1.Hash, error) {
 }
 
 func (m *Model) Manifest() (*v1.Manifest, error) {
-	cfgLayer, err := partial.ConfigLayer(m)
-	if err != nil {
-		return nil, fmt.Errorf("get raw config file: %w", err)
-	}
-	cfgDsc, err := partial.Descriptor(cfgLayer)
-	if err != nil {
-		return nil, fmt.Errorf("get config descriptor: %w", err)
-	}
-	cfgDsc.MediaType = types.MediaTypeModelConfig
-
-	ls, err := m.Layers()
-	if err != nil {
-		return nil, fmt.Errorf("get layers: %w", err)
-	}
-
-	var layers []v1.Descriptor
-	for _, l := range ls {
-		desc, err := partial.Descriptor(l)
-		if err != nil {
-			return nil, fmt.Errorf("get layer descriptor: %w", err)
-		}
-		layers = append(layers, *desc)
-	}
-
-	return &v1.Manifest{
-		SchemaVersion: 2,
-		MediaType:     ggcr.OCIManifestSchema1,
-		Config:        *cfgDsc,
-		Layers:        layers,
-	}, nil
+	return mdpartial.ManifestForLayers(m)
 }
 
 func (m *Model) LayerByDigest(hash v1.Hash) (v1.Layer, error) {
@@ -125,4 +96,12 @@ func (m *Model) Config() (types.Config, error) {
 
 func (m *Model) Descriptor() (types.Descriptor, error) {
 	return mdpartial.Descriptor(m)
+}
+
+func (m *Model) GGUFPath() (string, error) {
+	return mdpartial.GGUFPath(m)
+}
+
+func (m *Model) Tags() []string {
+	return []string{}
 }

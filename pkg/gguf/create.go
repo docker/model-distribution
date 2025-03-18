@@ -8,11 +8,12 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	gguf_parser "github.com/gpustack/gguf-parser-go"
 
+	"github.com/docker/model-distribution/pkg/partial"
 	"github.com/docker/model-distribution/pkg/types"
 )
 
 func NewModel(path string) (*Model, error) {
-	layer, err := NewLayer(path)
+	layer, err := partial.NewLayer(path)
 	if err != nil {
 		return nil, fmt.Errorf("create gguf layer: %w", err)
 	}
