@@ -42,19 +42,19 @@ func TestStoreAPI(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	t.Run("Read/Write", func(t *testing.T) {
-		mdl1, err := gguf.NewModel(modelPath)
-		if err != nil {
-			t.Fatalf("Create model failed: %v", err)
-		}
-		writeDigest, err := mdl1.Digest()
-		if err != nil {
-			t.Fatalf("Digest failed: %v", err)
-		}
-		if err := s.Write(mdl1, []string{"api-model:latest"}, nil); err != nil {
-			t.Fatalf("Write failed: %v", err)
-		}
+	model, err := gguf.NewModel(modelPath)
+	if err != nil {
+		t.Fatalf("Create model failed: %v", err)
+	}
+	digest, err := model.Digest()
+	if err != nil {
+		t.Fatalf("Digest failed: %v", err)
+	}
+	if err := s.Write(model, []string{"api-model:latest"}, nil); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
 
+	t.Run("ReadByTag", func(t *testing.T) {
 		mdl2, err := s.Read("api-model:latest")
 		if err != nil {
 			t.Fatalf("Read failed: %v", err)
@@ -63,8 +63,29 @@ func TestStoreAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Digest failed: %v", err)
 		}
-		if writeDigest != readDigest {
-			t.Fatalf("Digest mismatch %s != %s", writeDigest.Hex, readDigest.Hex)
+		if digest != readDigest {
+			t.Fatalf("Digest mismatch %s != %s", digest.Hex, readDigest.Hex)
+		}
+	})
+
+	t.Run("ReadByID", func(t *testing.T) {
+		id, err := model.ID()
+		if err != nil {
+			t.Fatalf("ID failed: %v", err)
+		}
+		mdl2, err := s.Read(id)
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		readDigest, err := mdl2.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if digest != readDigest {
+			t.Fatalf("Digest mismatch %s != %s", digest.Hex, readDigest.Hex)
+		}
+		if !containsTag(mdl2.Tags(), "api-model:latest") {
+			t.Errorf("Expected tag api-model:latest, got %v", mdl2.Tags())
 		}
 	})
 
@@ -268,7 +289,7 @@ func TestStoreAPI(t *testing.T) {
 			if containsTag(model.Tags, "multi-tag:latest") {
 				foundModel = true
 				// Verify the blob is still associated with the model
-				if len(model.Files) != 1 || model.Files[0] != expectedBlobDigest {
+				if len(model.Files) != 2 || model.Files[0] != expectedBlobDigest {
 					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
 				}
 				break
@@ -334,9 +355,27 @@ func TestStoreAPI(t *testing.T) {
 		// Get the blob path
 		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
 
-		// Verify the blob exists on disk
+		// Get the config blob paths (not shared)
+		name1, err := model1.ConfigName()
+		if err != nil {
+			t.Fatalf("Failed to get config name: %v", err)
+		}
+		config1Path := filepath.Join(storePath, "blobs", "sha256", name1.Hex)
+		name2, err := model2.ConfigName()
+		if err != nil {
+			t.Fatalf("Failed to get config name: %v", err)
+		}
+		config2Path := filepath.Join(storePath, "blobs", "sha256", name2.Hex)
+
+		// Verify the blobs exists on disk
 		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
 			t.Fatalf("Shared blob file doesn't exist: %s", blobPath)
+		}
+		if _, err := os.Stat(config1Path); os.IsNotExist(err) {
+			t.Fatalf("Model 1 config blob file doesn't exist: %s", config1Path)
+		}
+		if _, err := os.Stat(config2Path); os.IsNotExist(err) {
+			t.Fatalf("Model 2 config blob file doesn't exist: %s", config2Path)
 		}
 
 		// Delete the first model
@@ -344,9 +383,19 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("Delete first model failed: %v", err)
 		}
 
-		// Verify the blob still exists on disk after deleting the first model
+		// Verify the shared blob still exists on disk after deleting the first model
 		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
 			t.Errorf("Shared blob file was incorrectly removed: %s", blobPath)
+		}
+
+		// Verify the first model config blob does not exist
+		if _, err := os.Stat(config1Path); !os.IsNotExist(err) {
+			t.Errorf("Model 1 config blob should have been removed: %s", config1Path)
+		}
+
+		// Verify the second model config blob still exists
+		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+			t.Errorf("Model 2 config blob file was incorrectly removed: %s", config2Path)
 		}
 
 		// Verify the second model is still in the index
@@ -360,7 +409,13 @@ func TestStoreAPI(t *testing.T) {
 			if containsTag(model.Tags, "shared-model-2:latest") {
 				foundModel = true
 				// Verify the blob is still associated with the model
-				if len(model.Files) != 1 || model.Files[0] != expectedBlobDigest {
+				if len(model.Files) != 2 {
+					t.Errorf("Expected 2 blobs, got %d", len(model.Files))
+				}
+				if model.Files[0] != expectedBlobDigest {
+					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
+				}
+				if model.Files[1] != name2.String() {
 					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
 				}
 				break
