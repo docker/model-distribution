@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 const (
@@ -233,7 +231,6 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		return fmt.Errorf("getting layers: %w", err)
 	}
 
-	var blobDigest v1.Hash
 	for _, layer := range layers {
 		d, err := layer.Digest()
 		if err != nil {
@@ -264,15 +261,6 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		if _, err = io.Copy(f, r); err != nil {
 			return fmt.Errorf("writing layer content: %w", err)
 		}
-
-		mt, err := layer.MediaType()
-		if err != nil {
-			return fmt.Errorf("getting layer media type: %w", err)
-		}
-
-		if mt == types.MediaTypeGGUF {
-			blobDigest = d
-		}
 	}
 
 	rawManifest, err := mdl.RawManifest()
@@ -291,44 +279,28 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		return fmt.Errorf("writing manifest file: %w", err)
 	}
 
-	models, err := s.List()
+	// Add the model to the index
+	idx, err := s.readIndex()
 	if err != nil {
 		return fmt.Errorf("reading models: %w", err)
 	}
-
-	// Check if the model already exists
-	var model *IndexEntry
-	for i, m := range models {
-		if m.ID == digest.String() {
-			model = &models[i]
-			break
-		}
+	entry, err := newEntry(mdl)
+	if err != nil {
+		return fmt.Errorf("creating index entry: %w", err)
 	}
 
-	if model == nil {
-		// Model doesn't exist, add it
-		models = append(models, IndexEntry{
-			ID:    digest.String(),
-			Tags:  tags,
-			Files: []string{blobDigest.String()},
-		})
-	} else {
-		// Model exists, update tags
-		existingTags := make(map[string]bool)
-		for _, tag := range model.Tags {
-			existingTags[tag] = true
+	// Add the model tags
+	idx = idx.Add(entry)
+	for _, tag := range tags {
+		updatedIdx, err := idx.Tag(entry.ID, tag)
+		if err != nil {
+			fmt.Printf("Warning: failed to tag model %s: %v\n", digest, err)
+			continue
 		}
-
-		// Add new tags
-		for _, tag := range tags {
-			if !existingTags[tag] {
-				model.Tags = append(model.Tags, tag)
-				existingTags[tag] = true
-			}
-		}
+		idx = updatedIdx
 	}
 
-	return s.writeIndex(Index{Models: models})
+	return s.writeIndex(idx)
 }
 
 // Read reads a model from the store by reference (either tag or ID)

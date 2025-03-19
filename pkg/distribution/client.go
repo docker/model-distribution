@@ -188,16 +188,13 @@ func (c *Client) ListModels() ([]types.Model, error) {
 
 	result := make([]types.Model, 0, len(modelInfos))
 	for _, modelInfo := range modelInfos {
-		// For each model info, find a tag to use for reading the model
-		if len(modelInfo.Tags) > 0 {
-			// Use the first tag to read the model
-			model, err := c.store.Read(modelInfo.Tags[0])
-			if err != nil {
-				c.log.Warnf("Failed to read model with tag %s: %v", modelInfo.Tags[0], err)
-				continue
-			}
-			result = append(result, model)
+		// Read the models
+		model, err := c.store.Read(modelInfo.ID)
+		if err != nil {
+			c.log.Warnf("Failed to read model with tag %s: %v", modelInfo.Tags[0], err)
+			continue
 		}
+		result = append(result, model)
 	}
 
 	c.log.Infoln("Successfully listed models, count:", len(result))
@@ -247,13 +244,19 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	return nil
 }
 
-// DeleteModel deletes a model by tag
-func (c *Client) DeleteModel(tag string) error {
-	c.log.Infoln("Deleting model:", tag)
-	if err := c.store.Delete(tag); err != nil {
-		c.log.Errorln("Failed to delete model:", err, "tag:", tag)
+// DeleteModel deletes a model
+func (c *Client) DeleteModel(reference string) error {
+	c.log.Infoln("Deleting model:", reference)
+	if err := c.store.Delete(reference); err != nil {
+		c.log.Errorln("Failed to delete model:", err, "tag:", reference)
 		return fmt.Errorf("deleting model: %w", err)
 	}
-	c.log.Infoln("Successfully deleted model:", tag)
+	c.log.Infoln("Successfully deleted model:", reference)
 	return nil
+}
+
+// Tag adds a tag to a model
+func (c *Client) Tag(source string, target string) error {
+	c.log.Infoln("Tagging model, source:", source, "target:", target)
+	return c.store.AddTags(source, []string{target})
 }

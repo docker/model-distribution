@@ -74,6 +74,8 @@ func main() {
 		exitCode = cmdGetPath(client, args)
 	case "rm":
 		exitCode = cmdRm(client, args)
+	case "tag":
+		exitCode = cmdTag(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -265,5 +267,23 @@ func cmdRm(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Successfully removed model: %s\n", reference)
+	return 0
+}
+
+func cmdTag(client *distribution.Client, args []string) int {
+	if len(args) != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool tag <reference> <tag>\n")
+		return 1
+	}
+
+	source := args[0]
+	target := args[1]
+
+	if err := client.Tag(source, target); err != nil {
+		fmt.Fprintf(os.Stderr, "Error tagging model: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Successfully applied tag %s to model: %s\n", target, source)
 	return 0
 }
