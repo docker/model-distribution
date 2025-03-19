@@ -82,6 +82,9 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
 	c.log.Infoln("Starting model pull:", reference)
 
+	// Clean up any existing incomplete files before starting
+	c.store.CleanupIncompleteFiles()
+
 	// Check if model exists in local store
 	mdl, err := c.store.Read(reference)
 	if err == nil {
@@ -160,7 +163,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	remoteOpts := []remote.Option{
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithContext(ctx),
-		remote.WithProgress(progress),
 	}
 
 	// Pull the image with progress tracking
@@ -177,7 +179,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return NewPullError(reference, "UNKNOWN", err.Error(), err)
 	}
 
-	if err = c.store.Write(img, []string{reference}, progress); err != nil {
+	if err = c.store.Write(ctx, img, []string{reference}, progress); err != nil {
 		return fmt.Errorf("writing image to store: %w", err)
 	}
 

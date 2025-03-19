@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
@@ -185,7 +186,7 @@ func TestClientPullModel(t *testing.T) {
 
 		// Push model to local store
 		tag := registry + "/incomplete-test/model:v1.0.0"
-		if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		if err := client.store.Write(context.Background(), mdl, []string{tag}, nil); err != nil {
 			t.Fatalf("Failed to push model to store: %v", err)
 		}
 
@@ -262,9 +263,96 @@ func TestClientPullModel(t *testing.T) {
 			t.Errorf("Pulled content doesn't match original content")
 		}
 	})
+
+	t.Run("pull with context cancellation", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-cancel-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Use the dummy.gguf file from assets directory
+		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+		// Push model to registry
+		cancelTag := registry + "/cancel-test/model:v1.0.0"
+		if err := client.PushModel(context.Background(), modelFile, cancelTag); err != nil {
+			t.Fatalf("Failed to push model: %v", err)
+		}
+
+		// Create directories for blobs and manifests
+		blobsDir := filepath.Join(tempDir, "blobs", "sha256")
+		if err := os.MkdirAll(blobsDir, 0755); err != nil {
+			t.Fatalf("Failed to create blobs directory: %v", err)
+		}
+
+		// Create a pre-existing .incomplete file to ensure it gets cleaned up
+		preExistingIncomplete := filepath.Join(blobsDir, "pre-existing-file.incomplete")
+		if err := os.WriteFile(preExistingIncomplete, []byte("test content"), 0644); err != nil {
+			t.Fatalf("Failed to create pre-existing incomplete file: %v", err)
+		}
+
+		// Verify the pre-existing incomplete file exists
+		if _, err := os.Stat(preExistingIncomplete); os.IsNotExist(err) {
+			t.Fatalf("Failed to create pre-existing incomplete file: %v", err)
+		}
+
+		// Create a context that we can cancel
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// Start the pull operation in a goroutine
+		pullErr := make(chan error)
+		go func() {
+			pullErr <- client.PullModel(ctx, cancelTag, nil)
+		}()
+
+		// Wait a short time to ensure the client has initialized the store
+		time.Sleep(100 * time.Millisecond)
+
+		// Cancel the context
+		cancel()
+
+		// Wait for the pull to finish with an error
+		err = <-pullErr
+
+		// Verify that the pull operation failed with a context cancellation error
+		if err == nil {
+			t.Fatalf("Expected error due to context cancellation, got nil")
+		}
+		if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
+			t.Fatalf("Expected context cancellation error, got: %v", err)
+		}
+
+		// Check that no .incomplete files remain, including our pre-existing one
+		err = filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if strings.HasSuffix(path, ".incomplete") {
+				t.Errorf("Found .incomplete file after context cancellation: %s", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to walk directory: %v", err)
+		}
+
+		// Specifically check that our pre-existing incomplete file was removed
+		if _, err := os.Stat(preExistingIncomplete); !os.IsNotExist(err) {
+			t.Errorf("Pre-existing incomplete file still exists after context cancellation: %s", preExistingIncomplete)
+		}
+	})
 }
 
 func TestClientGetModel(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -288,7 +376,7 @@ func TestClientGetModel(t *testing.T) {
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Write(model, []string{tag}, nil); err != nil {
+	if err := client.store.Write(context.Background(), model, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -305,6 +393,7 @@ func TestClientGetModel(t *testing.T) {
 }
 
 func TestClientGetModelNotFound(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -326,6 +415,7 @@ func TestClientGetModelNotFound(t *testing.T) {
 }
 
 func TestClientListModels(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -354,7 +444,7 @@ func TestClientListModels(t *testing.T) {
 	// Push models to local store with different manifest digests
 	// First model
 	tag1 := "test/model1:v1.0.0"
-	if err := client.store.Write(mdl, []string{tag1}, nil); err != nil {
+	if err := client.store.Write(context.Background(), mdl, []string{tag1}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -371,7 +461,7 @@ func TestClientListModels(t *testing.T) {
 
 	// Second model
 	tag2 := "test/model2:v1.0.0"
-	if err := client.store.Write(mdl2, []string{tag2}, nil); err != nil {
+	if err := client.store.Write(context.Background(), mdl2, []string{tag2}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -405,6 +495,7 @@ func TestClientListModels(t *testing.T) {
 }
 
 func TestClientGetStorePath(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -433,6 +524,7 @@ func TestClientGetStorePath(t *testing.T) {
 }
 
 func TestClientDeleteModel(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -454,7 +546,7 @@ func TestClientDeleteModel(t *testing.T) {
 
 	// Push model to local store
 	tag := "test/model:v1.0.0"
-	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+	if err := client.store.Write(context.Background(), mdl, []string{tag}, nil); err != nil {
 		t.Fatalf("Failed to push model to store: %v", err)
 	}
 
@@ -471,6 +563,7 @@ func TestClientDeleteModel(t *testing.T) {
 }
 
 func TestClientDefaultLogger(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -506,6 +599,7 @@ func TestClientDefaultLogger(t *testing.T) {
 }
 
 func TestNewReferenceError(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {

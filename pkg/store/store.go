@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -260,7 +261,31 @@ func (s *LocalStore) Version() string {
 }
 
 // Write writes a model to the store
-func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
+func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, progress chan<- v1.Update) error {
+	// Create a done channel to monitor for context cancellation
+	done := make(chan struct{})
+
+	// Create a channel to signal when cleanup is complete
+	cleanupDone := make(chan struct{})
+
+	// Start a goroutine to monitor for context cancellation
+	go func() {
+		select {
+		case <-ctx.Done():
+			// Context was cancelled, clean up any incomplete files
+			s.CleanupIncompleteFiles()
+			close(cleanupDone)
+		case <-done:
+			// Normal completion, do nothing
+			close(cleanupDone)
+		}
+	}()
+
+	// Ensure we wait for cleanup to finish before returning
+	defer func() {
+		close(done)
+		<-cleanupDone
+	}()
 	cf, err := mdl.RawConfigFile()
 	if err != nil {
 		return fmt.Errorf("get raw config file: %w", err)
@@ -472,6 +497,20 @@ func (s *LocalStore) Read(tag string) (*Model, error) {
 	}
 
 	return nil, fmt.Errorf("model with tag %s not found", tag)
+}
+
+// CleanupIncompleteFiles removes any .incomplete files in the store
+func (s *LocalStore) CleanupIncompleteFiles() {
+	// Walk the entire store directory and remove any .incomplete files
+	filepath.Walk(s.rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+		if filepath.Ext(path) == ".incomplete" {
+			os.Remove(path) // Ignore errors on cleanup
+		}
+		return nil
+	})
 }
 
 // ProgressReader wraps an io.Reader to track reading progress

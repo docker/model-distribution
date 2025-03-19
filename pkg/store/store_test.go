@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -51,7 +52,7 @@ func TestStoreAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Digest failed: %v", err)
 		}
-		if err := s.Write(mdl1, []string{"api-model:latest"}, nil); err != nil {
+		if err := s.Write(context.Background(), mdl1, []string{"api-model:latest"}, nil); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
 
@@ -174,7 +175,7 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("Create model failed: %v", err)
 		}
 
-		if err := s.Write(mdl, []string{"blob-test:latest"}, nil); err != nil {
+		if err := s.Write(context.Background(), mdl, []string{"blob-test:latest"}, nil); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
 
@@ -235,7 +236,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Write the model with two tags
-		if err := s.Write(mdl, []string{"multi-tag:v1", "multi-tag:latest"}, nil); err != nil {
+		if err := s.Write(context.Background(), mdl, []string{"multi-tag:v1", "multi-tag:latest"}, nil); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
 
@@ -316,7 +317,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Write the first model
-		if err := s.Write(model1, []string{"shared-model-1:latest"}, nil); err != nil {
+		if err := s.Write(context.Background(), model1, []string{"shared-model-1:latest"}, nil); err != nil {
 			t.Fatalf("Write first model failed: %v", err)
 		}
 
@@ -327,7 +328,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Write the second model
-		if err := s.Write(model2, []string{"shared-model-2:latest"}, nil); err != nil {
+		if err := s.Write(context.Background(), model2, []string{"shared-model-2:latest"}, nil); err != nil {
 			t.Fatalf("Write second model failed: %v", err)
 		}
 
@@ -436,7 +437,7 @@ func TestIncompleteFileHandling(t *testing.T) {
 	}
 
 	// Write the model - this should clean up the incomplete file and create the final file
-	if err := s.Write(mdl, []string{"incomplete-test:latest"}, nil); err != nil {
+	if err := s.Write(context.Background(), mdl, []string{"incomplete-test:latest"}, nil); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
