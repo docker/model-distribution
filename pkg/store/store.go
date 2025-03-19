@@ -325,14 +325,14 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 		return fmt.Errorf("writing config blob: %w", err)
 	}
 
-	// Remove from incomplete files list after successful write
-	incompleteFiles.Pop()
-
 	// Rename config file to final path after successful write
 	if err := os.Rename(configTempPath, configPath); err != nil {
 		cleanup()
 		return fmt.Errorf("renaming config blob: %w", err)
 	}
+
+	// Remove from incomplete files list after successful write
+	incompleteFiles.Pop()
 
 	// Gets SHA256 digest
 	sz, err := mdl.Size()
