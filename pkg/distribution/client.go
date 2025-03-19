@@ -123,8 +123,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
 	}
 
-	// Clean up any incomplete files before starting a new pull
-	// This is done by the store.Write method, which removes .incomplete files before creating new ones
 	// Model doesn't exist in local store, pull from remote
 	ref, err := name.ParseReference(reference)
 	if err != nil {
