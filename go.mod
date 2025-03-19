@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/google/go-containerregistry v0.20.3
-	github.com/gpustack/gguf-parser-go v0.13.19
+	github.com/gpustack/gguf-parser-go v0.13.20
 	github.com/sirupsen/logrus v1.9.3
 	github.com/testcontainers/testcontainers-go/modules/registry v0.35.0
 )

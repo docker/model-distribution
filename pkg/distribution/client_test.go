@@ -118,6 +118,150 @@ func TestClientPullModel(t *testing.T) {
 			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
 		}
 	})
+
+	t.Run("pull non-existent model", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Test with non-existent model
+		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
+		err = client.PullModel(context.Background(), nonExistentRef, nil)
+		if err == nil {
+			t.Fatal("Expected error for non-existent model, got nil")
+		}
+
+		// Verify it's a PullError
+		var pullErr *PullError
+		ok := errors.As(err, &pullErr)
+		if !ok {
+			t.Fatalf("Expected PullError, got %T", err)
+		}
+
+		// Verify error fields
+		if pullErr.Reference != nonExistentRef {
+			t.Errorf("Expected reference %q, got %q", nonExistentRef, pullErr.Reference)
+		}
+		if pullErr.Code != "MANIFEST_UNKNOWN" {
+			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
+		}
+		if pullErr.Message != "Model not found" {
+			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+		}
+		if pullErr.Err == nil {
+			t.Error("Expected underlying error to be non-nil")
+		}
+	})
+
+	t.Run("pull with incomplete files", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-incomplete-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Use the dummy.gguf file from assets directory
+		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+		mdl, err := gguf.NewModel(modelFile)
+		if err != nil {
+			t.Fatalf("Failed to create model: %v", err)
+		}
+
+		// Push model to local store
+		tag := registry + "/incomplete-test/model:v1.0.0"
+		if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+			t.Fatalf("Failed to push model to store: %v", err)
+		}
+
+		// Push model to registry
+		if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
+
+		// Get the model to find the GGUF path
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		ggufPath, err := model.GGUFPath()
+		if err != nil {
+			t.Fatalf("Failed to get GGUF path: %v", err)
+		}
+
+		// Create an incomplete file by copying the GGUF file and adding .incomplete suffix
+		incompletePath := ggufPath + ".incomplete"
+		originalContent, err := os.ReadFile(ggufPath)
+		if err != nil {
+			t.Fatalf("Failed to read GGUF file: %v", err)
+		}
+
+		// Write partial content to simulate an incomplete download
+		partialContent := originalContent[:len(originalContent)/2]
+		if err := os.WriteFile(incompletePath, partialContent, 0644); err != nil {
+			t.Fatalf("Failed to create incomplete file: %v", err)
+		}
+
+		// Verify the incomplete file exists
+		if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+			t.Fatalf("Failed to create incomplete file: %v", err)
+		}
+
+		// Delete the local model to force a pull
+		if err := client.DeleteModel(tag); err != nil {
+			t.Fatalf("Failed to delete model: %v", err)
+		}
+
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Pull the model again - this should detect the incomplete file and pull again
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
+
+		// Verify progress output indicates a new download, not using cached model
+		progressOutput := progressBuffer.String()
+		if strings.Contains(progressOutput, "Using cached model") {
+			t.Errorf("Expected to pull model again due to incomplete file, but used cached model")
+		}
+
+		// Verify the incomplete file no longer exists
+		if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+			t.Errorf("Incomplete file still exists after successful pull: %s", incompletePath)
+		}
+
+		// Verify the complete file exists
+		if _, err := os.Stat(ggufPath); os.IsNotExist(err) {
+			t.Errorf("GGUF file doesn't exist after pull: %s", ggufPath)
+		}
+
+		// Verify the content of the pulled file matches the original
+		pulledContent, err := os.ReadFile(ggufPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled GGUF file: %v", err)
+		}
+
+		if !bytes.Equal(pulledContent, originalContent) {
+			t.Errorf("Pulled content doesn't match original content")
+		}
+	})
 }
 
 func TestClientGetModel(t *testing.T) {
@@ -358,5 +502,41 @@ func TestClientDefaultLogger(t *testing.T) {
 	// Verify that custom logger is used
 	if client.log != customLogger {
 		t.Error("Custom logger should be used when specified")
+	}
+}
+
+func TestNewReferenceError(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Test with invalid reference
+	invalidRef := "invalid:reference:format"
+	err = client.PullModel(context.Background(), invalidRef, nil)
+	if err == nil {
+		t.Fatal("Expected error for invalid reference, got nil")
+	}
+
+	// Verify it's a ReferenceError
+	refErr, ok := err.(*ReferenceError)
+	if !ok {
+		t.Fatalf("Expected ReferenceError, got %T", err)
+	}
+
+	// Verify error fields
+	if refErr.Reference != invalidRef {
+		t.Errorf("Expected reference %q, got %q", invalidRef, refErr.Reference)
+	}
+	if refErr.Err == nil {
+		t.Error("Expected underlying error to be non-nil")
 	}
 }
