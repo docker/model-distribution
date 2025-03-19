@@ -92,22 +92,38 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 			return fmt.Errorf("getting gguf path: %w", err)
 		}
 
-		// Get file size for progress reporting
-		fileInfo, err := os.Stat(ggufPath)
-		if err != nil {
-			return fmt.Errorf("getting file info: %w", err)
+		// Check if there are any incomplete files for this model
+		incompleteFiles := false
+
+		// Check if the GGUF file has an incomplete version
+		if _, err := os.Stat(ggufPath + ".incomplete"); err == nil {
+			c.log.Infoln("Found incomplete GGUF file for model:", reference)
+			incompleteFiles = true
 		}
 
-		// Report progress for local model
-		if progressWriter != nil {
-			size := fileInfo.Size()
-			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
+		// If no incomplete files, use the cached model
+		if !incompleteFiles {
+			// Get file size for progress reporting
+			fileInfo, err := os.Stat(ggufPath)
+			if err != nil {
+				return fmt.Errorf("getting file info: %w", err)
+			}
+
+			// Report progress for local model
+			if progressWriter != nil {
+				size := fileInfo.Size()
+				fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
+			}
+
+			return nil
 		}
 
-		return nil
+		// If we found incomplete files, we'll pull the model again
+		c.log.Infoln("Found incomplete files for model, will pull again:", reference)
+	} else {
+		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
 	}
 
-	c.log.Infoln("Model not found in local store, pulling from remote:", reference)
 	// Model doesn't exist in local store, pull from remote
 	ref, err := name.ParseReference(reference)
 	if err != nil {

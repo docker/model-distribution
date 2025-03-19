@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/docker/model-distribution/pkg/gguf"
@@ -380,6 +381,82 @@ func TestStoreAPI(t *testing.T) {
 			t.Errorf("Shared blob file still exists after deleting all referencing models: %s", blobPath)
 		}
 	})
+}
+
+// TestIncompleteFileHandling tests that files are created with .incomplete suffix and renamed on success
+func TestIncompleteFileHandling(t *testing.T) {
+	// Create a temporary directory for the test store
+	tempDir, err := os.MkdirTemp("", "incomplete-file-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a temporary model file with known content
+	modelContent := []byte("test model content for incomplete file test")
+	modelPath := filepath.Join(tempDir, "incomplete-test-model.gguf")
+	if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
+		t.Fatalf("Failed to create test model file: %v", err)
+	}
+
+	// Calculate expected blob hash
+	hash := sha256.Sum256(modelContent)
+	blobHash := hex.EncodeToString(hash[:])
+
+	// Create store
+	storePath := filepath.Join(tempDir, "incomplete-model-store")
+	s, err := store.New(store.Options{
+		RootPath: storePath,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	// Create the blobs directory
+	blobsDir := filepath.Join(storePath, "blobs", "sha256")
+	if err := os.MkdirAll(blobsDir, 0755); err != nil {
+		t.Fatalf("Failed to create blobs directory: %v", err)
+	}
+
+	// Create an incomplete file directly
+	incompleteFilePath := filepath.Join(blobsDir, blobHash+".incomplete")
+	if err := os.WriteFile(incompleteFilePath, modelContent, 0644); err != nil {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Verify the incomplete file exists
+	if _, err := os.Stat(incompleteFilePath); os.IsNotExist(err) {
+		t.Fatalf("Failed to create test .incomplete file")
+	}
+
+	// Create a model
+	mdl, err := gguf.NewModel(modelPath)
+	if err != nil {
+		t.Fatalf("Create model failed: %v", err)
+	}
+
+	// Write the model - this should clean up the incomplete file and create the final file
+	if err := s.Write(mdl, []string{"incomplete-test:latest"}, nil); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	// Verify that no .incomplete files remain after successful write
+	files, err := os.ReadDir(blobsDir)
+	if err != nil {
+		t.Fatalf("Failed to read blobs directory: %v", err)
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".incomplete") {
+			t.Errorf("Found .incomplete file after successful write: %s", file.Name())
+		}
+	}
+
+	// Verify the blob exists with its final name
+	blobPath := filepath.Join(blobsDir, blobHash)
+	if _, err := os.Stat(blobPath); os.IsNotExist(err) {
+		t.Errorf("Blob file doesn't exist at expected path: %s", blobPath)
+	}
 }
 
 // Helper function to check if a tag is in a slice of tags

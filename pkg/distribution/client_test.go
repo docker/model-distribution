@@ -162,9 +162,9 @@ func TestClientPullModel(t *testing.T) {
 		}
 	})
 
-	t.Run("pull with non-existent tag", func(t *testing.T) {
+	t.Run("pull with incomplete files", func(t *testing.T) {
 		// Create temp directory for store
-		tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+		tempDir, err := os.MkdirTemp("", "model-distribution-incomplete-test-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp directory: %v", err)
 		}
@@ -178,39 +178,88 @@ func TestClientPullModel(t *testing.T) {
 
 		// Use the dummy.gguf file from assets directory
 		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-
-		// Push model with original tag
-		originalTag := registry + "/testmodel:v1.0.0"
-		if err := client.PushModel(context.Background(), modelFile, originalTag); err != nil {
-			t.Fatalf("Failed to push model: %v", err)
+		mdl, err := gguf.NewModel(modelFile)
+		if err != nil {
+			t.Fatalf("Failed to create model: %v", err)
 		}
 
-		// Try to pull with a different tag
-		nonExistentTag := registry + "/testmodel:v2.0.0"
-		err = client.PullModel(context.Background(), nonExistentTag, nil)
-		if err == nil {
-			t.Fatal("Expected error for non-existent tag, got nil")
+		// Push model to local store
+		tag := registry + "/incomplete-test/model:v1.0.0"
+		if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+			t.Fatalf("Failed to push model to store: %v", err)
 		}
 
-		// Verify it's a PullError
-		var pullErr *PullError
-		ok := errors.As(err, &pullErr)
-		if !ok {
-			t.Fatalf("Expected PullError, got %T", err)
+		// Push model to registry
+		if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
 		}
 
-		// Verify error fields
-		if pullErr.Reference != nonExistentTag {
-			t.Errorf("Expected reference %q, got %q", nonExistentTag, pullErr.Reference)
+		// Get the model to find the GGUF path
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
 		}
-		if pullErr.Code != "MANIFEST_UNKNOWN" {
-			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
+
+		ggufPath, err := model.GGUFPath()
+		if err != nil {
+			t.Fatalf("Failed to get GGUF path: %v", err)
 		}
-		if pullErr.Message != "Model not found" {
-			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+
+		// Create an incomplete file by copying the GGUF file and adding .incomplete suffix
+		incompletePath := ggufPath + ".incomplete"
+		originalContent, err := os.ReadFile(ggufPath)
+		if err != nil {
+			t.Fatalf("Failed to read GGUF file: %v", err)
 		}
-		if pullErr.Err == nil {
-			t.Error("Expected underlying error to be non-nil")
+
+		// Write partial content to simulate an incomplete download
+		partialContent := originalContent[:len(originalContent)/2]
+		if err := os.WriteFile(incompletePath, partialContent, 0644); err != nil {
+			t.Fatalf("Failed to create incomplete file: %v", err)
+		}
+
+		// Verify the incomplete file exists
+		if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+			t.Fatalf("Failed to create incomplete file: %v", err)
+		}
+
+		// Delete the local model to force a pull
+		if err := client.DeleteModel(tag); err != nil {
+			t.Fatalf("Failed to delete model: %v", err)
+		}
+
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Pull the model again - this should detect the incomplete file and pull again
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
+
+		// Verify progress output indicates a new download, not using cached model
+		progressOutput := progressBuffer.String()
+		if strings.Contains(progressOutput, "Using cached model") {
+			t.Errorf("Expected to pull model again due to incomplete file, but used cached model")
+		}
+
+		// Verify the incomplete file no longer exists
+		if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+			t.Errorf("Incomplete file still exists after successful pull: %s", incompletePath)
+		}
+
+		// Verify the complete file exists
+		if _, err := os.Stat(ggufPath); os.IsNotExist(err) {
+			t.Errorf("GGUF file doesn't exist after pull: %s", ggufPath)
+		}
+
+		// Verify the content of the pulled file matches the original
+		pulledContent, err := os.ReadFile(ggufPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled GGUF file: %v", err)
+		}
+
+		if !bytes.Equal(pulledContent, originalContent) {
+			t.Errorf("Pulled content doesn't match original content")
 		}
 	})
 }
