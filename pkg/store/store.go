@@ -270,14 +270,27 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		return fmt.Errorf("getting config name: %w", err)
 	}
 	configPath := filepath.Join(s.rootPath, "blobs", "sha256", name.Hex)
-	f, err := os.Create(configPath)
+	configTempPath := configPath + ".incomplete"
+
+	// Clean up any existing incomplete config file
+	os.Remove(configTempPath)
+
+	// Create the temporary config file
+	f, err := os.Create(configTempPath)
 	if err != nil {
 		return fmt.Errorf("opening config blob: %w", err)
 	}
 	defer f.Close()
 	_, err = f.Write(cf)
 	if err != nil {
+		os.Remove(configTempPath) // Clean up on error
 		return fmt.Errorf("writing config blob: %w", err)
+	}
+
+	// Rename config file to final path after successful write
+	if err := os.Rename(configTempPath, configPath); err != nil {
+		os.Remove(configTempPath) // Clean up on error
+		return fmt.Errorf("renaming config blob: %w", err)
 	}
 
 	// Gets SHA256 digest
@@ -293,19 +306,43 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	}
 
 	var blobDigest v1.Hash
+	var createdTempFiles []string // Track created temp files for cleanup on error
+
 	for _, layer := range layers {
 		d, err := layer.Digest()
 		if err != nil {
+			// Clean up any temp files created so far
+			for _, tempFile := range createdTempFiles {
+				os.Remove(tempFile)
+			}
 			return fmt.Errorf("getting layer digest: %w", err)
 		}
 		blobPath := filepath.Join(s.rootPath, "blobs", "sha256", d.Hex)
-		f, err := os.Create(blobPath)
+		blobTempPath := blobPath + ".incomplete"
+
+		// Clean up any existing incomplete file
+		os.Remove(blobTempPath)
+
+		// Create the temporary file
+		f, err := os.Create(blobTempPath)
 		if err != nil {
+			// Clean up any temp files created so far
+			for _, tempFile := range createdTempFiles {
+				os.Remove(tempFile)
+			}
 			return fmt.Errorf("opening blob file: %w", err)
 		}
+
+		// Add to list of temp files for cleanup in case of error
+		createdTempFiles = append(createdTempFiles, blobTempPath)
+
 		defer f.Close()
 		lr, err := layer.Uncompressed()
 		if err != nil {
+			// Clean up any temp files created so far
+			for _, tempFile := range createdTempFiles {
+				os.Remove(tempFile)
+			}
 			return fmt.Errorf("opening layer: %w", err)
 		}
 		defer lr.Close()
@@ -321,7 +358,23 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 			r = lr
 		}
 		if _, err = io.Copy(f, r); err != nil {
+			// Clean up any temp files created so far
+			for _, tempFile := range createdTempFiles {
+				os.Remove(tempFile)
+			}
 			return fmt.Errorf("writing layer content: %w", err)
+		}
+
+		// Close the file before renaming
+		f.Close()
+
+		// Rename to final path after successful write
+		if err := os.Rename(blobTempPath, blobPath); err != nil {
+			// Clean up any temp files created so far
+			for _, tempFile := range createdTempFiles {
+				os.Remove(tempFile)
+			}
+			return fmt.Errorf("renaming blob file: %w", err)
 		}
 
 		mt, err := layer.MediaType()
