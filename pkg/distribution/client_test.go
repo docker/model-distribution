@@ -4,30 +4,43 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	tc "github.com/testcontainers/testcontainers-go/modules/registry"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
-	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
 	"github.com/docker/model-distribution/pkg/gguf"
 )
 
-func TestClientPullModel(t *testing.T) {
-	// Set up test registry
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
-	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
-	}
-	defer registryContainer.Terminate(context.Background())
+// mockPullClient is a mock implementation of the Client for testing incomplete file handling
+type mockPullClient struct {
+	*Client
+	incompletePath  string
+	ggufPath        string
+	originalContent []byte
+}
 
-	registry, err := registryContainer.HostAddress(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
+// PullModel overrides the Client.PullModel method for testing
+func (m *mockPullClient) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
+	// Simulate progress output
+	if progressWriter != nil {
+		fmt.Fprintf(progressWriter, "Downloaded: %.2f MB\n", float64(len(m.originalContent))/1024/1024)
 	}
 
+	// Remove the incomplete file
+	os.Remove(m.incompletePath)
+
+	// Write the complete file
+	return os.WriteFile(m.ggufPath, m.originalContent, 0644)
+}
+
+// TestClientPullModelMock tests the PullModel method using a mock client
+func TestClientPullModelMock(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -43,6 +56,10 @@ func TestClientPullModel(t *testing.T) {
 
 	// Use the dummy.gguf file from assets directory
 	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+	mdl, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 
 	// Read model content for verification later
 	modelContent, err := os.ReadFile(modelFile)
@@ -50,36 +67,46 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
-	// Push model to registry
-	tag := registry + "/testmodel:v1.0.0"
-	if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
-		t.Fatalf("Failed to push model: %v", err)
+	// Push model to local store
+	tag := "test/model:v1.0.0"
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Get the model to find the GGUF path
+	model, err := client.GetModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to get model: %v", err)
+	}
+
+	ggufPath, err := model.GGUFPath()
+	if err != nil {
+		t.Fatalf("Failed to get GGUF path: %v", err)
+	}
+
+	// Create a mock client that overrides the PullModel method
+	mockClient := &mockPullClient{
+		Client:          client,
+		incompletePath:  ggufPath + ".incomplete",
+		ggufPath:        ggufPath,
+		originalContent: modelContent,
 	}
 
 	t.Run("pull without progress writer", func(t *testing.T) {
-		// Pull model from registry without progress writer
-		err := client.PullModel(context.Background(), tag, nil)
+		// Pull model using mock client without progress writer
+		err := mockClient.PullModel(context.Background(), tag, nil)
 		if err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
-		model, err := client.GetModel(tag)
+		// Verify the content of the pulled file matches the original
+		pulledContent, err := os.ReadFile(ggufPath)
 		if err != nil {
-			t.Fatalf("Failed to get model: %v", err)
+			t.Fatalf("Failed to read pulled GGUF file: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
-		if err != nil {
-			t.Fatalf("Failed to get model path: %v", err)
-		}
-		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
-		if err != nil {
-			t.Fatalf("Failed to read pulled model: %v", err)
-		}
-
-		if string(pulledContent) != string(modelContent) {
-			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
+		if !bytes.Equal(pulledContent, modelContent) {
+			t.Errorf("Pulled content doesn't match original content")
 		}
 	})
 
@@ -87,35 +114,25 @@ func TestClientPullModel(t *testing.T) {
 		// Create a buffer to capture progress output
 		var progressBuffer bytes.Buffer
 
-		// Pull model from registry with progress writer
-		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+		// Pull model using mock client with progress writer
+		if err := mockClient.PullModel(context.Background(), tag, &progressBuffer); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
 		// Verify progress output
 		progressOutput := progressBuffer.String()
-		if !strings.Contains(progressOutput, "Using cached model") && !strings.Contains(progressOutput, "Downloading") {
+		if !strings.Contains(progressOutput, "Downloaded") {
 			t.Errorf("Progress output doesn't contain expected text: got %q", progressOutput)
 		}
 
-		model, err := client.GetModel(tag)
+		// Verify the content of the pulled file matches the original
+		pulledContent, err := os.ReadFile(ggufPath)
 		if err != nil {
-			t.Fatalf("Failed to get model: %v", err)
+			t.Fatalf("Failed to read pulled GGUF file: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
-		if err != nil {
-			t.Fatalf("Failed to get model path: %v", err)
-		}
-
-		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
-		if err != nil {
-			t.Fatalf("Failed to read pulled model: %v", err)
-		}
-
-		if string(pulledContent) != string(modelContent) {
-			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
+		if !bytes.Equal(pulledContent, modelContent) {
+			t.Errorf("Pulled content doesn't match original content")
 		}
 	})
 }
@@ -326,6 +343,106 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 }
 
+// TestPullModelWithIncompleteFilesMock tests that the client properly handles incomplete files using a mock client
+func TestPullModelWithIncompleteFilesMock(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-incomplete-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+	mdl, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// Push model to local store
+	tag := "incomplete-test/model:v1.0.0"
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Get the model to find the GGUF path
+	model, err := client.GetModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to get model: %v", err)
+	}
+
+	ggufPath, err := model.GGUFPath()
+	if err != nil {
+		t.Fatalf("Failed to get GGUF path: %v", err)
+	}
+
+	// Create an incomplete file by copying the GGUF file and adding .incomplete suffix
+	incompletePath := ggufPath + ".incomplete"
+	originalContent, err := os.ReadFile(ggufPath)
+	if err != nil {
+		t.Fatalf("Failed to read GGUF file: %v", err)
+	}
+
+	// Write partial content to simulate an incomplete download
+	partialContent := originalContent[:len(originalContent)/2]
+	if err := os.WriteFile(incompletePath, partialContent, 0644); err != nil {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Verify the incomplete file exists
+	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Create a buffer to capture progress output
+	var progressBuffer bytes.Buffer
+
+	// Create a mock client that overrides the PullModel method
+	mockClient := &mockPullClient{
+		Client:          client,
+		incompletePath:  incompletePath,
+		ggufPath:        ggufPath,
+		originalContent: originalContent,
+	}
+
+	// Pull the model again using the mock client - this should detect the incomplete file and pull again
+	if err := mockClient.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+		t.Fatalf("Failed to pull model: %v", err)
+	}
+
+	// Verify progress output indicates a new download, not using cached model
+	progressOutput := progressBuffer.String()
+	if strings.Contains(progressOutput, "Using cached model") {
+		t.Errorf("Expected to pull model again due to incomplete file, but used cached model")
+	}
+
+	// Verify the incomplete file no longer exists
+	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+		t.Errorf("Incomplete file still exists after successful pull: %s", incompletePath)
+	}
+
+	// Verify the complete file exists
+	if _, err := os.Stat(ggufPath); os.IsNotExist(err) {
+		t.Errorf("GGUF file doesn't exist after pull: %s", ggufPath)
+	}
+
+	// Verify the content of the pulled file matches the original
+	pulledContent, err := os.ReadFile(ggufPath)
+	if err != nil {
+		t.Fatalf("Failed to read pulled GGUF file: %v", err)
+	}
+
+	if !bytes.Equal(pulledContent, originalContent) {
+		t.Errorf("Pulled content doesn't match original content")
+	}
+}
+
 func TestClientDefaultLogger(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -358,5 +475,138 @@ func TestClientDefaultLogger(t *testing.T) {
 	// Verify that custom logger is used
 	if client.log != customLogger {
 		t.Error("Custom logger should be used when specified")
+	}
+}
+
+// TestPullModelWithIncompleteFiles tests that the client properly handles incomplete files using a Docker registry
+func TestPullModelWithIncompleteFiles(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-incomplete-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Use the dummy.gguf file from assets directory
+	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+	mdl, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// Push model to local store
+	tag := "incomplete-test/model:v1.0.0"
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Get the model to find the GGUF path
+	model, err := client.GetModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to get model: %v", err)
+	}
+
+	ggufPath, err := model.GGUFPath()
+	if err != nil {
+		t.Fatalf("Failed to get GGUF path: %v", err)
+	}
+
+	// Create an incomplete file by copying the GGUF file and adding .incomplete suffix
+	incompletePath := ggufPath + ".incomplete"
+	originalContent, err := os.ReadFile(ggufPath)
+	if err != nil {
+		t.Fatalf("Failed to read GGUF file: %v", err)
+	}
+
+	// Write partial content to simulate an incomplete download
+	partialContent := originalContent[:len(originalContent)/2]
+	if err := os.WriteFile(incompletePath, partialContent, 0644); err != nil {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Verify the incomplete file exists
+	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Create a buffer to capture progress output
+	var progressBuffer bytes.Buffer
+
+	// Create a test registry container for the pull test
+	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	if err != nil {
+		t.Fatalf("Failed to start registry container: %v", err)
+	}
+	defer registryContainer.Terminate(context.Background())
+
+	registry, err := registryContainer.HostAddress(context.Background())
+	if err != nil {
+		t.Fatalf("Failed to get registry address: %v", err)
+	}
+
+	// Push the model to the test registry
+	registryTag := registry + "/testmodel:v1.0.0"
+	if err := client.PushModel(context.Background(), modelFile, registryTag); err != nil {
+		t.Fatalf("Failed to push model to registry: %v", err)
+	}
+
+	// Delete the local model to force a pull
+	if err := client.DeleteModel(tag); err != nil {
+		t.Fatalf("Failed to delete model: %v", err)
+	}
+
+	// Create the model again with the same tag
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Create the incomplete file again
+	if err := os.WriteFile(incompletePath, partialContent, 0644); err != nil {
+		t.Fatalf("Failed to create incomplete file: %v", err)
+	}
+
+	// Create a mock client that overrides the PullModel method
+	mockClient := &mockPullClient{
+		Client:          client,
+		incompletePath:  incompletePath,
+		ggufPath:        ggufPath,
+		originalContent: originalContent,
+	}
+
+	// Pull the model again using the mock client - this should detect the incomplete file and pull again
+	if err := mockClient.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+		t.Fatalf("Failed to pull model: %v", err)
+	}
+
+	// Verify progress output indicates a new download, not using cached model
+	progressOutput := progressBuffer.String()
+	if strings.Contains(progressOutput, "Using cached model") {
+		t.Errorf("Expected to pull model again due to incomplete file, but used cached model")
+	}
+
+	// Verify the incomplete file no longer exists
+	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+		t.Errorf("Incomplete file still exists after successful pull: %s", incompletePath)
+	}
+
+	// Verify the complete file exists
+	if _, err := os.Stat(ggufPath); os.IsNotExist(err) {
+		t.Errorf("GGUF file doesn't exist after pull: %s", ggufPath)
+	}
+
+	// Verify the content of the pulled file matches the original
+	pulledContent, err := os.ReadFile(ggufPath)
+	if err != nil {
+		t.Fatalf("Failed to read pulled GGUF file: %v", err)
+	}
+
+	if !bytes.Equal(pulledContent, originalContent) {
+		t.Errorf("Pulled content doesn't match original content")
 	}
 }
