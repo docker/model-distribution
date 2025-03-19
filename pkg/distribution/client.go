@@ -130,19 +130,20 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return NewReferenceError(reference, err)
 	}
 
-	// Create a buffered channel for progress updates
-	progress := make(chan v1.Update, 100)
-	defer close(progress)
+	var progress chan v1.Update
+	if progressWriter != nil {
+		// Create a buffered channel for progress updates
+		progress = make(chan v1.Update, 100)
+		defer close(progress)
 
-	// Start a goroutine to handle progress updates
-	go func() {
-		var lastComplete int64
-		var lastUpdate time.Time
-		const updateInterval = 500 * time.Millisecond // Update every 500ms
-		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
+		// Start a goroutine to handle progress updates
+		go func() {
+			var lastComplete int64
+			var lastUpdate time.Time
+			const updateInterval = 500 * time.Millisecond // Update every 500ms
+			const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
 
-		for p := range progress {
-			if progressWriter != nil {
+			for p := range progress {
 				now := time.Now()
 				bytesDownloaded := p.Complete - lastComplete
 
@@ -153,8 +154,8 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 					lastComplete = p.Complete
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// Configure remote options with progress tracking
 	remoteOpts := []remote.Option{
