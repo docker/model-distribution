@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -130,6 +131,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return NewReferenceError(reference, err)
 	}
 
+	var wg sync.WaitGroup
 	var progress chan v1.Update
 	if progressWriter != nil {
 		// Create a buffered channel for progress updates
@@ -137,7 +139,11 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		defer close(progress)
 
 		// Start a goroutine to handle progress updates
+		// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
+		wg.Add(1)
+		defer wg.Wait()
 		go func() {
+			defer wg.Done()
 			var lastComplete int64
 			var lastUpdate time.Time
 			const updateInterval = 500 * time.Millisecond // Update every 500ms
