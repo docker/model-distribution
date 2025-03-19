@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -110,8 +111,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	// Model doesn't exist in local store, pull from remote
 	ref, err := name.ParseReference(reference)
 	if err != nil {
-		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
-		return fmt.Errorf("parsing reference: %w", err)
+		return NewReferenceError(reference, err)
 	}
 
 	// Create a buffered channel for progress updates
@@ -150,8 +150,15 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	// Pull the image with progress tracking
 	img, err := remote.Image(ref, remoteOpts...)
 	if err != nil {
+		errStr := err.Error()
+		if strings.Contains(errStr, "UNAUTHORIZED") {
+			return NewPullError(reference, "UNAUTHORIZED", "Authentication required for this model", err)
+		}
+		if strings.Contains(errStr, "MANIFEST_UNKNOWN") {
+			return NewPullError(reference, "MANIFEST_UNKNOWN", "Model not found", err)
+		}
 		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
-		return fmt.Errorf("pulling image: %w", err)
+		return NewPullError(reference, "UNKNOWN", err.Error(), err)
 	}
 
 	if err = c.store.Write(img, []string{reference}, progress); err != nil {

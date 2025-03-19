@@ -118,6 +118,101 @@ func TestClientPullModel(t *testing.T) {
 			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
 		}
 	})
+
+	t.Run("pull non-existent model", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Test with non-existent model
+		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
+		err = client.PullModel(context.Background(), nonExistentRef, nil)
+		if err == nil {
+			t.Fatal("Expected error for non-existent model, got nil")
+		}
+
+		// Verify it's a PullError
+		var pullErr *PullError
+		ok := errors.As(err, &pullErr)
+		if !ok {
+			t.Fatalf("Expected PullError, got %T", err)
+		}
+
+		// Verify error fields
+		if pullErr.Reference != nonExistentRef {
+			t.Errorf("Expected reference %q, got %q", nonExistentRef, pullErr.Reference)
+		}
+		if pullErr.Code != "MANIFEST_UNKNOWN" {
+			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
+		}
+		if pullErr.Message != "Model not found" {
+			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+		}
+		if pullErr.Err == nil {
+			t.Error("Expected underlying error to be non-nil")
+		}
+	})
+
+	t.Run("pull with non-existent tag", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Use the dummy.gguf file from assets directory
+		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+		// Push model with original tag
+		originalTag := registry + "/testmodel:v1.0.0"
+		if err := client.PushModel(context.Background(), modelFile, originalTag); err != nil {
+			t.Fatalf("Failed to push model: %v", err)
+		}
+
+		// Try to pull with a different tag
+		nonExistentTag := registry + "/testmodel:v2.0.0"
+		err = client.PullModel(context.Background(), nonExistentTag, nil)
+		if err == nil {
+			t.Fatal("Expected error for non-existent tag, got nil")
+		}
+
+		// Verify it's a PullError
+		var pullErr *PullError
+		ok := errors.As(err, &pullErr)
+		if !ok {
+			t.Fatalf("Expected PullError, got %T", err)
+		}
+
+		// Verify error fields
+		if pullErr.Reference != nonExistentTag {
+			t.Errorf("Expected reference %q, got %q", nonExistentTag, pullErr.Reference)
+		}
+		if pullErr.Code != "MANIFEST_UNKNOWN" {
+			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
+		}
+		if pullErr.Message != "Model not found" {
+			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+		}
+		if pullErr.Err == nil {
+			t.Error("Expected underlying error to be non-nil")
+		}
+	})
 }
 
 func TestClientGetModel(t *testing.T) {
@@ -358,5 +453,41 @@ func TestClientDefaultLogger(t *testing.T) {
 	// Verify that custom logger is used
 	if client.log != customLogger {
 		t.Error("Custom logger should be used when specified")
+	}
+}
+
+func TestNewReferenceError(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Test with invalid reference
+	invalidRef := "invalid:reference:format"
+	err = client.PullModel(context.Background(), invalidRef, nil)
+	if err == nil {
+		t.Fatal("Expected error for invalid reference, got nil")
+	}
+
+	// Verify it's a ReferenceError
+	refErr, ok := err.(*ReferenceError)
+	if !ok {
+		t.Fatalf("Expected ReferenceError, got %T", err)
+	}
+
+	// Verify error fields
+	if refErr.Reference != invalidRef {
+		t.Errorf("Expected reference %q, got %q", invalidRef, refErr.Reference)
+	}
+	if refErr.Err == nil {
+		t.Error("Expected underlying error to be non-nil")
 	}
 }
