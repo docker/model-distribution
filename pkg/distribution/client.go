@@ -82,9 +82,6 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
 	c.log.Infoln("Starting model pull:", reference)
 
-	// Clean up any existing incomplete files before starting
-	c.store.CleanupIncompleteFiles()
-
 	// Check if model exists in local store
 	mdl, err := c.store.Read(reference)
 	if err == nil {

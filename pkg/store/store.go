@@ -268,13 +268,21 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 	// Create a channel to signal when cleanup is complete
 	cleanupDone := make(chan struct{})
 
+	// Track all incomplete files for cleanup
+	incompleteFiles := NewIncompleteFilesStack()
+	cleanup := func() {
+		for _, file := range incompleteFiles.GetAll() {
+			os.Remove(file)
+		}
+		close(cleanupDone)
+	}
+
 	// Start a goroutine to monitor for context cancellation
 	go func() {
 		select {
 		case <-ctx.Done():
-			// Context was cancelled, clean up any incomplete files
-			s.CleanupIncompleteFiles()
-			close(cleanupDone)
+			// Context was cancelled, clean up incomplete files
+			cleanup()
 		case <-done:
 			// Normal completion, do nothing
 			close(cleanupDone)
@@ -286,6 +294,7 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 		close(done)
 		<-cleanupDone
 	}()
+
 	cf, err := mdl.RawConfigFile()
 	if err != nil {
 		return fmt.Errorf("get raw config file: %w", err)
@@ -306,20 +315,26 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 		return fmt.Errorf("opening config blob: %w", err)
 	}
 	defer f.Close()
+
+	// Add to incomplete files list
+	incompleteFiles.Push(configTempPath)
+
 	_, err = f.Write(cf)
 	if err != nil {
-		os.Remove(configTempPath) // Clean up on error
+		cleanup()
 		return fmt.Errorf("writing config blob: %w", err)
 	}
 
+	// Remove from incomplete files list after successful write
+	incompleteFiles.Pop()
+
 	// Rename config file to final path after successful write
 	if err := os.Rename(configTempPath, configPath); err != nil {
-		os.Remove(configTempPath) // Clean up on error
+		cleanup()
 		return fmt.Errorf("renaming config blob: %w", err)
 	}
 
 	// Gets SHA256 digest
-	//digest := manifest.Layers[0].Digest
 	sz, err := mdl.Size()
 	if err != nil {
 		return fmt.Errorf("getting model size: %w", err)
@@ -331,15 +346,11 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 	}
 
 	var blobDigest v1.Hash
-	var createdTempFiles []string // Track created temp files for cleanup on error
 
 	for _, layer := range layers {
 		d, err := layer.Digest()
 		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
+			cleanup()
 			return fmt.Errorf("getting layer digest: %w", err)
 		}
 		blobPath := filepath.Join(s.rootPath, "blobs", "sha256", d.Hex)
@@ -351,23 +362,17 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 		// Create the temporary file
 		f, err := os.Create(blobTempPath)
 		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
+			cleanup()
 			return fmt.Errorf("opening blob file: %w", err)
 		}
 
-		// Add to list of temp files for cleanup in case of error
-		createdTempFiles = append(createdTempFiles, blobTempPath)
+		// Add to incomplete files list
+		incompleteFiles.Push(blobTempPath)
 
 		defer f.Close()
 		lr, err := layer.Uncompressed()
 		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
+			cleanup()
 			return fmt.Errorf("opening layer: %w", err)
 		}
 		defer lr.Close()
@@ -383,10 +388,7 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 			r = lr
 		}
 		if _, err = io.Copy(f, r); err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
+			cleanup()
 			return fmt.Errorf("writing layer content: %w", err)
 		}
 
@@ -395,12 +397,12 @@ func (s *LocalStore) Write(ctx context.Context, mdl v1.Image, tags []string, pro
 
 		// Rename to final path after successful write
 		if err := os.Rename(blobTempPath, blobPath); err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
+			cleanup()
 			return fmt.Errorf("renaming blob file: %w", err)
 		}
+
+		// Remove from incomplete files list after successful write
+		incompleteFiles.Pop()
 
 		mt, err := layer.MediaType()
 		if err != nil {
@@ -497,20 +499,6 @@ func (s *LocalStore) Read(tag string) (*Model, error) {
 	}
 
 	return nil, fmt.Errorf("model with tag %s not found", tag)
-}
-
-// CleanupIncompleteFiles removes any .incomplete files in the store
-func (s *LocalStore) CleanupIncompleteFiles() {
-	// Walk the entire store directory and remove any .incomplete files
-	filepath.Walk(s.rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-		if filepath.Ext(path) == ".incomplete" {
-			os.Remove(path) // Ignore errors on cleanup
-		}
-		return nil
-	})
 }
 
 // ProgressReader wraps an io.Reader to track reading progress

@@ -5,13 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/docker/model-distribution/pkg/gguf"
+	"github.com/docker/model-distribution/pkg/store"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/store"
 )
 
 // TestStoreAPI tests the store API directly
