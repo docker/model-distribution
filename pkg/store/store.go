@@ -84,7 +84,7 @@ func (s *LocalStore) initialize() error {
 	modelsPath := filepath.Join(s.rootPath, "models.json")
 	if _, err := os.Stat(modelsPath); os.IsNotExist(err) {
 		models := Index{
-			Models: []types.ModelInfo{},
+			Models: []IndexEntry{},
 		}
 		modelsData, err := json.MarshalIndent(models, "", "  ")
 		if err != nil {
@@ -99,46 +99,29 @@ func (s *LocalStore) initialize() error {
 }
 
 // List lists all models in the store
-func (s *LocalStore) List() ([]types.ModelInfo, error) {
-	return s.readIndex()
+func (s *LocalStore) List() ([]IndexEntry, error) {
+	index, err := s.readIndex()
+	if err != nil {
+		return nil, fmt.Errorf("reading models index: %w", err)
+	}
+	return index.Models, nil
 }
 
 // Delete deletes a model by tag
-func (s *LocalStore) Delete(tag string) error {
-	models, err := s.List()
+func (s *LocalStore) Delete(ref string) error {
+	idx, err := s.readIndex()
 	if err != nil {
 		return fmt.Errorf("reading models file: %w", err)
 	}
-
-	// Find the model by tag
-	var modelIndex = -1
-	var tagIndex = -1
-	for i, model := range models {
-		for j, modelTag := range model.Tags {
-			if modelTag == tag {
-				modelIndex = i
-				tagIndex = j
-				break
-			}
-		}
-		if modelIndex != -1 {
-			break
-		}
-	}
-
-	if modelIndex == -1 {
+	model, i, ok := idx.Find(ref)
+	if !ok {
 		// Model not found, nothing to delete
 		return nil
 	}
-
-	// Get the model before removing it
-	model := &models[modelIndex]
-
-	// Remove the tag
-	model.Tags = append(model.Tags[:tagIndex], model.Tags[tagIndex+1:]...)
+	idx = idx.UnTag(ref)
 
 	// If no more tags, remove the model and check if its blobs can be deleted
-	if len(model.Tags) == 0 {
+	if len(idx.Models[i].Tags) == 0 {
 		// Remove manifest file
 		if digest, err := v1.NewHash(model.ID); err != nil {
 			fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
@@ -149,7 +132,7 @@ func (s *LocalStore) Delete(tag string) error {
 		}
 		// Before deleting blobs, check if they are referenced by other models
 		blobRefs := make(map[string]int)
-		for _, m := range models {
+		for _, m := range idx.Models {
 			if m.ID == model.ID {
 				continue // Skip the model being deleted
 			}
@@ -175,78 +158,38 @@ func (s *LocalStore) Delete(tag string) error {
 			}
 		}
 
-		// Remove the model from the list
-		models = append(models[:modelIndex], models[modelIndex+1:]...)
+		idx = idx.Remove(model.ID)
 	}
 
-	return s.writeIndex(Index{Models: models})
+	return s.writeIndex(idx)
 }
 
 // AddTags adds tags to an existing model
-func (s *LocalStore) AddTags(tag string, newTags []string) error {
-	models, err := s.List()
+func (s *LocalStore) AddTags(ref string, newTags []string) error {
+	index, err := s.readIndex()
 	if err != nil {
 		return fmt.Errorf("reading models file: %w", err)
 	}
-
-	// Find the model in the index
-	for i, m := range models {
-		if m.HasTag(tag) {
-			// Add new tags
-			existingTags := make(map[string]bool)
-			for _, t := range m.Tags {
-				existingTags[t] = true
-			}
-
-			for _, newTag := range newTags {
-				if !existingTags[newTag] {
-					models[i].Tags = append(models[i].Tags, newTag)
-					existingTags[newTag] = true
-				}
-			}
-			break
+	for _, t := range newTags {
+		index, err = index.Tag(ref, t)
+		if err != nil {
+			return fmt.Errorf("tagging model: %w", err)
 		}
 	}
 
-	return s.writeIndex(Index{Models: models})
+	return s.writeIndex(index)
 }
 
 // RemoveTags removes tags from models
 func (s *LocalStore) RemoveTags(tags []string) error {
-	models, err := s.List()
+	index, err := s.readIndex()
 	if err != nil {
-		return fmt.Errorf("reading models file: %w", err)
+		return fmt.Errorf("reading modelss index: %w", err)
 	}
-	// Create a map of tags to remove
-	tagsToRemove := make(map[string]bool)
 	for _, tag := range tags {
-		tagsToRemove[tag] = true
+		index = index.UnTag(tag)
 	}
-
-	// Remove tags from models
-	var modelsToRemove []int
-	for i, model := range models {
-		var newTags []string
-		for _, tag := range model.Tags {
-			if !tagsToRemove[tag] {
-				newTags = append(newTags, tag)
-			}
-		}
-		models[i].Tags = newTags
-
-		// If no more tags, mark model for removal
-		if len(models[i].Tags) == 0 {
-			modelsToRemove = append(modelsToRemove, i)
-		}
-	}
-
-	// Remove models with no tags (in reverse order to avoid index issues)
-	for i := len(modelsToRemove) - 1; i >= 0; i-- {
-		index := modelsToRemove[i]
-		models = append(models[:index], models[index+1:]...)
-	}
-
-	return s.writeIndex(Index{Models: models})
+	return s.writeIndex(index)
 }
 
 // Version returns the store version
@@ -280,8 +223,6 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 		return fmt.Errorf("writing config blob: %w", err)
 	}
 
-	// Gets SHA256 digest
-	//digest := manifest.Layers[0].Digest
 	sz, err := mdl.Size()
 	if err != nil {
 		return fmt.Errorf("getting model size: %w", err)
@@ -356,7 +297,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	}
 
 	// Check if the model already exists
-	var model *types.ModelInfo
+	var model *IndexEntry
 	for i, m := range models {
 		if m.ID == digest.String() {
 			model = &models[i]
@@ -366,7 +307,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 
 	if model == nil {
 		// Model doesn't exist, add it
-		models = append(models, types.ModelInfo{
+		models = append(models, IndexEntry{
 			ID:    digest.String(),
 			Tags:  tags,
 			Files: []string{blobDigest.String()},
@@ -390,8 +331,8 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	return s.writeIndex(Index{Models: models})
 }
 
-// Read reads a model from the store by tag
-func (s *LocalStore) Read(tag string) (*Model, error) {
+// Read reads a model from the store by reference (either tag or ID)
+func (s *LocalStore) Read(reference string) (*Model, error) {
 	models, err := s.List()
 	if err != nil {
 		return nil, fmt.Errorf("reading models file: %w", err)
@@ -399,26 +340,24 @@ func (s *LocalStore) Read(tag string) (*Model, error) {
 
 	// Find the model by tag
 	for i, model := range models {
-		for _, modelTag := range model.Tags {
-			if modelTag == tag {
-				hash, err := v1.NewHash(model.ID)
-				if err != nil {
-					return nil, fmt.Errorf("parsing hash: %w", err)
-				}
-				rawManifest, err := os.ReadFile(filepath.Join(s.rootPath, "manifests", hash.Algorithm, hash.Hex))
-				if err != nil {
-					return nil, fmt.Errorf("reading manifest file: %w", err)
-				}
-				return &Model{
-					rawManifest: rawManifest,
-					blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
-					tags:        models[i].Tags,
-				}, nil
+		if model.MatchesReference(reference) {
+			hash, err := v1.NewHash(model.ID)
+			if err != nil {
+				return nil, fmt.Errorf("parsing hash: %w", err)
 			}
+			rawManifest, err := os.ReadFile(filepath.Join(s.rootPath, "manifests", hash.Algorithm, hash.Hex))
+			if err != nil {
+				return nil, fmt.Errorf("reading manifest file: %w", err)
+			}
+			return &Model{
+				rawManifest: rawManifest,
+				blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
+				tags:        models[i].Tags,
+			}, nil
 		}
 	}
 
-	return nil, fmt.Errorf("model with tag %s not found", tag)
+	return nil, fmt.Errorf("model with tag %s not found", reference)
 }
 
 // ProgressReader wraps an io.Reader to track reading progress

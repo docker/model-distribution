@@ -41,19 +41,19 @@ func TestStoreAPI(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	t.Run("Read/Write", func(t *testing.T) {
-		mdl1, err := gguf.NewModel(modelPath)
-		if err != nil {
-			t.Fatalf("Create model failed: %v", err)
-		}
-		writeDigest, err := mdl1.Digest()
-		if err != nil {
-			t.Fatalf("Digest failed: %v", err)
-		}
-		if err := s.Write(mdl1, []string{"api-model:latest"}, nil); err != nil {
-			t.Fatalf("Write failed: %v", err)
-		}
+	model, err := gguf.NewModel(modelPath)
+	if err != nil {
+		t.Fatalf("Create model failed: %v", err)
+	}
+	digest, err := model.Digest()
+	if err != nil {
+		t.Fatalf("Digest failed: %v", err)
+	}
+	if err := s.Write(model, []string{"api-model:latest"}, nil); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
 
+	t.Run("ReadByTag", func(t *testing.T) {
 		mdl2, err := s.Read("api-model:latest")
 		if err != nil {
 			t.Fatalf("Read failed: %v", err)
@@ -62,8 +62,29 @@ func TestStoreAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Digest failed: %v", err)
 		}
-		if writeDigest != readDigest {
-			t.Fatalf("Digest mismatch %s != %s", writeDigest.Hex, readDigest.Hex)
+		if digest != readDigest {
+			t.Fatalf("Digest mismatch %s != %s", digest.Hex, readDigest.Hex)
+		}
+	})
+
+	t.Run("ReadByID", func(t *testing.T) {
+		id, err := model.ID()
+		if err != nil {
+			t.Fatalf("ID failed: %v", err)
+		}
+		mdl2, err := s.Read(id)
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		readDigest, err := mdl2.Digest()
+		if err != nil {
+			t.Fatalf("Digest failed: %v", err)
+		}
+		if digest != readDigest {
+			t.Fatalf("Digest mismatch %s != %s", digest.Hex, readDigest.Hex)
+		}
+		if !containsTag(mdl2.Tags(), "api-model:latest") {
+			t.Errorf("Expected tag api-model:latest, got %v", mdl2.Tags())
 		}
 	})
 
