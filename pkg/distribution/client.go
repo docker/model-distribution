@@ -119,52 +119,26 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	c.log.Infoln("Remote model digest:", remoteDigest.String())
 
 	// Check if model exists in local store
-	localModel, err := c.store.Read(reference)
+	localModel, err := c.store.Read(remoteDigest.String())
 	if err == nil {
 		c.log.Infoln("Model found in local store:", reference)
-
-		// Get the local model's digest
-		localDigest, err := localModel.Digest()
+		ggufPath, err := localModel.GGUFPath()
 		if err != nil {
-			c.log.Warnln("Failed to get local model digest:", err)
-		} else {
-			c.log.Infoln("Local model digest:", localDigest.String())
-
-			// Check if the GGUF file has an incomplete version
-			ggufPath, err := localModel.GGUFPath()
-			if err != nil {
-				return fmt.Errorf("getting gguf path: %w", err)
-			}
-
-			incompleteFiles := false
-			if _, err := os.Stat(ggufPath + ".incomplete"); err == nil {
-				c.log.Infoln("Found incomplete GGUF file for model:", reference)
-				incompleteFiles = true
-			}
-
-			// If no incomplete files and digests match, use the cached model
-			if !incompleteFiles && localDigest == remoteDigest {
-				c.log.Infoln("Local and remote digests match, using cached model")
-
-				// Get file size for progress reporting
-				fileInfo, err := os.Stat(ggufPath)
-				if err != nil {
-					return fmt.Errorf("getting file info: %w", err)
-				}
-
-				// Report progress for local model
-				if progressWriter != nil {
-					size := fileInfo.Size()
-					fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
-				}
-
-				return nil
-			}
-
-			if localDigest != remoteDigest {
-				c.log.Infoln("Local and remote digests don't match, pulling new version")
-			}
+			return fmt.Errorf("getting gguf path: %w", err)
 		}
+
+		// Get file size for progress reporting
+		fileInfo, err := os.Stat(ggufPath)
+		if err != nil {
+			return fmt.Errorf("getting file info: %w", err)
+		}
+
+		// Report progress for local model
+		if progressWriter != nil {
+			size := fileInfo.Size()
+			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
+		}
+		return nil
 	} else {
 		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
 	}
