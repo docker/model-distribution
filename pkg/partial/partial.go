@@ -94,7 +94,7 @@ func ManifestForLayers(i WithLayers) (*v1.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get config descriptor: %w", err)
 	}
-	cfgDsc.MediaType = types.MediaTypeModelConfig
+	cfgDsc.MediaType = types.MediaTypeModelConfigV01
 
 	ls, err := i.Layers()
 	if err != nil {

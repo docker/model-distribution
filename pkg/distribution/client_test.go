@@ -9,10 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
 	"github.com/docker/model-distribution/pkg/gguf"
+	"github.com/docker/model-distribution/pkg/mutate"
 )
 
 func TestClientPullModel(t *testing.T) {
@@ -50,9 +53,16 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
-	// Push model to registry
+	model, err := gguf.NewModel(modelFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
 	tag := registry + "/testmodel:v1.0.0"
-	if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		t.Fatalf("Failed to parse reference: %v", err)
+	}
+	if err := remote.Write(ref, model); err != nil {
 		t.Fatalf("Failed to push model: %v", err)
 	}
 
@@ -366,6 +376,22 @@ func TestClientPullModel(t *testing.T) {
 
 		if string(updatedPulledContent) != string(updatedContent) {
 			t.Errorf("Updated pulled model content doesn't match: got %q, want %q", updatedPulledContent, updatedContent)
+		}
+	})
+
+	t.Run("pull unsupported (newer) version", func(t *testing.T) {
+		newMdl := mutate.ConfigMediaType(model, "application/vnd.docker.ai.model.config.v0.2+json")
+		// Push model to local store
+		tag := registry + "/unsupported-test/model:v1.0.0"
+		ref, err := name.ParseReference(tag)
+		if err != nil {
+			t.Fatalf("Failed to parse reference: %v", err)
+		}
+		if err := remote.Write(ref, newMdl); err != nil {
+			t.Fatalf("Failed to push model: %v", err)
+		}
+		if err := client.PullModel(context.Background(), tag, nil); err == nil || !errors.Is(err, ErrUnsupportedMediaType) {
+			t.Fatalf("Expected artifact version error, got %v", err)
 		}
 	})
 }

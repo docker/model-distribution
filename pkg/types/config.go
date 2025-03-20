@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/v1"
@@ -8,12 +9,24 @@ import (
 )
 
 const (
-	MediaTypeModelConfig = types.MediaType("application/vnd.docker.ai.model.config.v1+json")
-	MediaTypeGGUF        = types.MediaType("application/vnd.docker.ai.model.file.v1+gguf")
-	MediaTypeLicense     = types.MediaType("application/vnd.docker.ai.license")
+	// modelConfigPrefix is the prefix for all versioned model config media types.
+	modelConfigPrefix = "application/vnd.docker.ai.model.config"
+
+	// MediaTypeModelConfigV01 is the media type for the model config json.
+	MediaTypeModelConfigV01 = types.MediaType("application/vnd.docker.ai.model.config.v0.1+json")
+
+	// MediaTypeGGUF indicates a file in GGUF version 3 format, containing a tensor model.
+	MediaTypeGGUF = types.MediaType("application/vnd.docker.ai.gguf.v3")
+
+	// MediaTypeLicense indicates a plain text file containing a license
+	MediaTypeLicense = types.MediaType("application/vnd.docker.ai.license")
 
 	FormatGGUF = Format("gguf")
 )
+
+func IsModelConfig(mt types.MediaType) bool {
+	return strings.HasPrefix(string(mt), string(MediaTypeModelConfigV01))
+}
 
 type Format string
 
