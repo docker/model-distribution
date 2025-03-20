@@ -83,53 +83,72 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
 	c.log.Infoln("Starting model pull:", reference)
 
-	// Check if model exists in local store
-	mdl, err := c.store.Read(reference)
-	if err == nil {
-		c.log.Infoln("Model found in local store:", reference)
-		// Model exists in local store, get its path
-		ggufPath, err := mdl.GGUFPath()
-		if err != nil {
-			return fmt.Errorf("getting gguf path: %w", err)
-		}
-
-		// Check if there are any incomplete files for this model
-		incompleteFiles := false
-
-		// Check if the GGUF file has an incomplete version
-		if _, err := os.Stat(ggufPath + ".incomplete"); err == nil {
-			c.log.Infoln("Found incomplete GGUF file for model:", reference)
-			incompleteFiles = true
-		}
-
-		// If no incomplete files, use the cached model
-		if !incompleteFiles {
-			// Get file size for progress reporting
-			fileInfo, err := os.Stat(ggufPath)
-			if err != nil {
-				return fmt.Errorf("getting file info: %w", err)
-			}
-
-			// Report progress for local model
-			if progressWriter != nil {
-				size := fileInfo.Size()
-				fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
-			}
-
-			return nil
-		}
-
-		// If we found incomplete files, we'll pull the model again
-		c.log.Infoln("Found incomplete files for model, will pull again:", reference)
-	} else {
-		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
-	}
-
-	// Model doesn't exist in local store, pull from remote
+	// Parse the reference
 	ref, err := name.ParseReference(reference)
 	if err != nil {
 		return NewReferenceError(reference, err)
 	}
+
+	// Configure remote options
+	remoteOpts := []remote.Option{
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(ctx),
+	}
+
+	// First, check the remote registry for the model's digest
+	c.log.Infoln("Checking remote registry for model:", reference)
+	remoteImg, err := remote.Image(ref, remoteOpts...)
+	if err != nil {
+		errStr := err.Error()
+		if strings.Contains(errStr, "UNAUTHORIZED") {
+			return NewPullError(reference, "UNAUTHORIZED", "Authentication required for this model", err)
+		}
+		if strings.Contains(errStr, "MANIFEST_UNKNOWN") {
+			return NewPullError(reference, "MANIFEST_UNKNOWN", "Model not found", err)
+		}
+		c.log.Errorln("Failed to check remote image:", err, "reference:", reference)
+		return NewPullError(reference, "UNKNOWN", err.Error(), err)
+	}
+
+	// Get the remote image digest
+	remoteDigest, err := remoteImg.Digest()
+	if err != nil {
+		c.log.Errorln("Failed to get remote image digest:", err)
+		return fmt.Errorf("getting remote image digest: %w", err)
+	}
+	c.log.Infoln("Remote model digest:", remoteDigest.String())
+
+	// Check if model exists in local store
+	localModel, err := c.store.Read(remoteDigest.String())
+	if err == nil {
+		c.log.Infoln("Model found in local store:", reference)
+		ggufPath, err := localModel.GGUFPath()
+		if err != nil {
+			return fmt.Errorf("getting gguf path: %w", err)
+		}
+
+		// Get file size for progress reporting
+		fileInfo, err := os.Stat(ggufPath)
+		if err != nil {
+			return fmt.Errorf("getting file info: %w", err)
+		}
+
+		// Report progress for local model
+		if progressWriter != nil {
+			size := fileInfo.Size()
+			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
+		}
+
+		// Ensure model has the correct tag
+		if err := c.store.AddTags(remoteDigest.String(), []string{reference}); err != nil {
+			return fmt.Errorf("tagging modle: %w", err)
+		}
+		return nil
+	} else {
+		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
+	}
+
+	// Model doesn't exist in local store or digests don't match, pull from remote
 
 	var wg sync.WaitGroup
 	var progress chan v1.Update
@@ -163,27 +182,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		}()
 	}
 
-	// Configure remote options with progress tracking
-	remoteOpts := []remote.Option{
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	}
-
-	// Pull the image with progress tracking
-	img, err := remote.Image(ref, remoteOpts...)
-	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "UNAUTHORIZED") {
-			return NewPullError(reference, "UNAUTHORIZED", "Authentication required for this model", err)
-		}
-		if strings.Contains(errStr, "MANIFEST_UNKNOWN") {
-			return NewPullError(reference, "MANIFEST_UNKNOWN", "Model not found", err)
-		}
-		c.log.Errorln("Failed to pull image:", err, "reference:", reference)
-		return NewPullError(reference, "UNKNOWN", err.Error(), err)
-	}
-
-	if err = c.store.Write(img, []string{reference}, progress); err != nil {
+	if err = c.store.Write(remoteImg, []string{reference}, progress); err != nil {
 		return fmt.Errorf("writing image to store: %w", err)
 	}
 
