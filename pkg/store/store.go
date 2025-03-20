@@ -202,9 +202,6 @@ func (s *LocalStore) Version() string {
 
 // Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
-	if progress != nil {
-		defer close(progress)
-	}
 	cf, err := mdl.RawConfigFile()
 	if err != nil {
 		return fmt.Errorf("get raw config file: %w", err)
