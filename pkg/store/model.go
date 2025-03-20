@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 
-	"github.com/docker/model-distribution/pkg/gguf"
 	mdpartial "github.com/docker/model-distribution/pkg/partial"
 	mdtypes "github.com/docker/model-distribution/pkg/types"
 )
@@ -30,7 +29,7 @@ func (m *Model) Layers() ([]v1.Layer, error) {
 	}
 	var layers []v1.Layer
 	for _, ld := range manifest.Layers {
-		layers = append(layers, &gguf.Layer{
+		layers = append(layers, &mdpartial.Layer{
 			Path:       filepath.Join(m.blobsDir, ld.Digest.Hex),
 			Descriptor: ld,
 		})
@@ -105,16 +104,7 @@ func (m *Model) LayerByDiffID(hash v1.Hash) (v1.Layer, error) {
 }
 
 func (m *Model) GGUFPath() (string, error) {
-	manifest, err := m.Manifest()
-	if err != nil {
-		return "", fmt.Errorf("get manifest: %w", err)
-	}
-	for _, l := range manifest.Layers {
-		if l.MediaType == mdtypes.MediaTypeGGUF {
-			return filepath.Join(m.blobsDir, l.Digest.Hex), nil
-		}
-	}
-	return "", errors.New("missing GGUF layer in manifest")
+	return mdpartial.GGUFPath(m)
 }
 
 func (m *Model) Tags() []string {

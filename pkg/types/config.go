@@ -10,6 +10,7 @@ import (
 const (
 	MediaTypeModelConfig = types.MediaType("application/vnd.docker.ai.model.config.v1+json")
 	MediaTypeGGUF        = types.MediaType("application/vnd.docker.ai.model.file.v1+gguf")
+	MediaTypeLicense     = types.MediaType("application/vnd.docker.ai.license")
 
 	FormatGGUF = Format("gguf")
 )

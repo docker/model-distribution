@@ -227,6 +227,15 @@ func (c *Client) ListModels() ([]types.Model, error) {
 
 	c.log.Infoln("Successfully listed models, count:", len(result))
 	return result, nil
+	//models, err := c.store.TestList()
+	//if err != nil {
+	//	return nil, err
+	//}
+	//result := make([]types.Model, len(models))
+	//for i := range models {
+	//	result[i] = models[i]
+	//}
+	//return result, nil
 }
 
 // GetModel returns a model by reference

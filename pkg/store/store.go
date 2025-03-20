@@ -105,6 +105,24 @@ func (s *LocalStore) List() ([]IndexEntry, error) {
 	return index.Models, nil
 }
 
+// List lists all models in the store
+func (s *LocalStore) TestList() ([]*Model, error) {
+	//// Read the models index
+	//modelsPath := filepath.Join(s.rootPath, "models.json")
+	//modelsData, err := os.ReadFile(modelsPath)
+	//if err != nil {
+	//	return nil, fmt.Errorf("reading models file: %w", err)
+	//}
+	//
+	//// Unmarshal the models index
+	//var models types.ModelIndex
+	//if err := json.Unmarshal(modelsData, &models); err != nil {
+	//	return nil, fmt.Errorf("unmarshaling models: %w", err)
+	//}
+
+	return nil, nil
+}
+
 // Delete deletes a model by tag
 func (s *LocalStore) Delete(ref string) error {
 	idx, err := s.readIndex()

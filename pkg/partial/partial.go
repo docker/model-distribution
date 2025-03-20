@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
+	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/pkg/errors"
 
 	"github.com/docker/model-distribution/pkg/types"
 )
@@ -56,4 +59,61 @@ func ID(i WithRawManifest) (string, error) {
 		return "", fmt.Errorf("get digest: %w", err)
 	}
 	return digest.String(), nil
+}
+
+type WithLayers interface {
+	WithRawConfigFile
+	Layers() ([]v1.Layer, error)
+}
+
+func GGUFPath(i WithLayers) (string, error) {
+	layers, err := i.Layers()
+	if err != nil {
+		return "", fmt.Errorf("get layers: %w", err)
+	}
+	for _, l := range layers {
+		mt, err := l.MediaType()
+		if err != nil || mt != types.MediaTypeGGUF {
+			continue
+		}
+		ggufLayer, ok := l.(*Layer)
+		if !ok {
+			return "", errors.New("gguf Layer is not available locally")
+		}
+		return ggufLayer.Path, nil
+	}
+	return "", errors.New("model does not contain a GGUF layer")
+}
+
+func ManifestForLayers(i WithLayers) (*v1.Manifest, error) {
+	cfgLayer, err := partial.ConfigLayer(i)
+	if err != nil {
+		return nil, fmt.Errorf("get raw config file: %w", err)
+	}
+	cfgDsc, err := partial.Descriptor(cfgLayer)
+	if err != nil {
+		return nil, fmt.Errorf("get config descriptor: %w", err)
+	}
+	cfgDsc.MediaType = types.MediaTypeModelConfig
+
+	ls, err := i.Layers()
+	if err != nil {
+		return nil, fmt.Errorf("get layers: %w", err)
+	}
+
+	var layers []v1.Descriptor
+	for _, l := range ls {
+		desc, err := partial.Descriptor(l)
+		if err != nil {
+			return nil, fmt.Errorf("get layer descriptor: %w", err)
+		}
+		layers = append(layers, *desc)
+	}
+
+	return &v1.Manifest{
+		SchemaVersion: 2,
+		MediaType:     ggcr.OCIManifestSchema1,
+		Config:        *cfgDsc,
+		Layers:        layers,
+	}, nil
 }

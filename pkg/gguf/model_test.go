@@ -15,7 +15,7 @@ func TestGGUF(t *testing.T) {
 			t.Fatalf("Failed to create model: %v", err)
 		}
 
-		t.Run("TestGGUFConfig", func(t *testing.T) {
+		t.Run("TestConfig", func(t *testing.T) {
 			cfg, err := mdl.Config()
 			if err != nil {
 				t.Fatalf("Failed to get config: %v", err)
@@ -44,6 +44,19 @@ func TestGGUF(t *testing.T) {
 			}
 			if desc.Created == nil {
 				t.Fatal("Expected created time to be set: got ni")
+			}
+		})
+
+		t.Run("TestManifest", func(t *testing.T) {
+			manifest, err := mdl.Manifest()
+			if err != nil {
+				t.Fatalf("Failed to get config: %v", err)
+			}
+			if len(manifest.Layers) != 1 {
+				t.Fatalf("Expected 1 layer, got %d", len(manifest.Layers))
+			}
+			if manifest.Layers[0].MediaType != types.MediaTypeGGUF {
+				t.Fatalf("Expected layer with media type %s, got %s", types.MediaTypeGGUF, manifest.Layers[0].MediaType)
 			}
 		})
 	})
