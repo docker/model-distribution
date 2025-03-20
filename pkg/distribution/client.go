@@ -134,13 +134,14 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	var wg sync.WaitGroup
 	var progress chan v1.Update
 	if progressWriter != nil {
-		// Create a buffered channel for progress updates
-		progress = make(chan v1.Update, 100)
-
 		// Start a goroutine to handle progress updates
 		// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
 		wg.Add(1)
 		defer wg.Wait()
+
+		// Create a buffered channel for progress updates
+		progress = make(chan v1.Update, 100)
+		defer close(progress)
 		go func() {
 			defer wg.Done()
 			var lastComplete int64
