@@ -138,6 +138,11 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 			size := fileInfo.Size()
 			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
 		}
+
+		// Ensure model has the correct tag
+		if err := c.store.AddTags(remoteDigest.String(), []string{reference}); err != nil {
+			return fmt.Errorf("tagging modle: %w", err)
+		}
 		return nil
 	} else {
 		c.log.Infoln("Model not found in local store, pulling from remote:", reference)
