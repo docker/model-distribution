@@ -136,7 +136,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	if progressWriter != nil {
 		// Create a buffered channel for progress updates
 		progress = make(chan v1.Update, 100)
-		defer close(progress)
 
 		// Start a goroutine to handle progress updates
 		// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
@@ -167,7 +166,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	remoteOpts := []remote.Option{
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithContext(ctx),
-		remote.WithProgress(progress),
 	}
 
 	// Pull the image with progress tracking
