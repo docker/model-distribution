@@ -179,22 +179,14 @@ func cmdPush(client *distribution.Client, args []string) int {
 	//licensePath = filepath.Join("assets", "license.txt")
 	// Add the license file if provided
 	if licensePath != nil {
-		fmt.Println("Adding license file:", licensePath)
+		fmt.Println("Adding license file:", *licensePath)
 		licenseLayer, err := partial.NewLayer(*licensePath, types.MediaTypeLicense)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding license layer: %v\n", err)
 			return 1
 		}
 		mdl = mutate.AppendLayers(mdl, licenseLayer)
 	}
-
-	layers, _ := mdl.Layers()
-	fmt.Printf("Layers: %v\n", layers)
-
-	rm, _ := mdl.RawManifest()
-	fmt.Printf("Manifest: %s\n", string(rm))
-
-	rcf, _ := mdl.RawConfigFile()
-	fmt.Printf("Config FILE: %v\n", string(rcf))
 
 	// Push the image
 	if err := remote.Write(ref, mdl,
