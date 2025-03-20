@@ -262,6 +262,109 @@ func TestClientPullModel(t *testing.T) {
 			t.Errorf("Pulled content doesn't match original content")
 		}
 	})
+
+	t.Run("pull updated model with same tag", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-update-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Use the dummy.gguf file from assets directory for first version
+		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
+
+		// Read model content for verification later
+		modelContent, err := os.ReadFile(modelFile)
+		if err != nil {
+			t.Fatalf("Failed to read test model file: %v", err)
+		}
+
+		// Push first version of model to registry
+		tag := registry + "/update-test:v1.0.0"
+		if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+			t.Fatalf("Failed to push first version of model: %v", err)
+		}
+
+		// Pull first version of model
+		if err := client.PullModel(context.Background(), tag, nil); err != nil {
+			t.Fatalf("Failed to pull first version of model: %v", err)
+		}
+
+		// Verify first version is in local store
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get first version of model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
+		}
+
+		// Verify first version content
+		pulledContent, err := os.ReadFile(modelPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled model: %v", err)
+		}
+
+		if string(pulledContent) != string(modelContent) {
+			t.Errorf("Pulled model content doesn't match original: got %q, want %q", pulledContent, modelContent)
+		}
+
+		// Create a modified version of the model
+		updatedModelFile := filepath.Join(tempDir, "updated-dummy.gguf")
+		updatedContent := append(modelContent, []byte("UPDATED CONTENT")...)
+		if err := os.WriteFile(updatedModelFile, updatedContent, 0644); err != nil {
+			t.Fatalf("Failed to create updated model file: %v", err)
+		}
+
+		// Push updated model with same tag
+		if err := client.PushModel(context.Background(), updatedModelFile, tag); err != nil {
+			t.Fatalf("Failed to push updated model: %v", err)
+		}
+
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Pull model again - should get the updated version
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+			t.Fatalf("Failed to pull updated model: %v", err)
+		}
+
+		// Verify progress output indicates a new download, not using cached model
+		progressOutput := progressBuffer.String()
+		if strings.Contains(progressOutput, "Using cached model") {
+			t.Errorf("Expected to pull updated model, but used cached model")
+		}
+
+		// Get the model again to verify it's the updated version
+		updatedModel, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get updated model: %v", err)
+		}
+
+		updatedModelPath, err := updatedModel.GGUFPath()
+		if err != nil {
+			t.Fatalf("Failed to get updated model path: %v", err)
+		}
+
+		// Verify updated content
+		updatedPulledContent, err := os.ReadFile(updatedModelPath)
+		if err != nil {
+			t.Fatalf("Failed to read updated pulled model: %v", err)
+		}
+
+		if string(updatedPulledContent) != string(updatedContent) {
+			t.Errorf("Updated pulled model content doesn't match: got %q, want %q", updatedPulledContent, updatedContent)
+		}
+	})
 }
 
 func TestClientGetModel(t *testing.T) {
