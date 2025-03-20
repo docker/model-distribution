@@ -382,7 +382,7 @@ func TestClientPullModel(t *testing.T) {
 	t.Run("pull unsupported (newer) version", func(t *testing.T) {
 		newMdl := mutate.ConfigMediaType(model, "application/vnd.docker.ai.model.config.v0.2+json")
 		// Push model to local store
-		tag := registry + "/incomplete-test/model:v1.0.0"
+		tag := registry + "/unsupported-test/model:v1.0.0"
 		ref, err := name.ParseReference(tag)
 		if err != nil {
 			t.Fatalf("Failed to parse reference: %v", err)

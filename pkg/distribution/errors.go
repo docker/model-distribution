@@ -81,23 +81,3 @@ func NewPullError(reference, code, message string, err error) error {
 		Err:       err,
 	}
 }
-
-// ArtifactTypeError occurs when the model config json schema is newer than supported by the client
-type ArtifactTypeError struct {
-	Reference string
-	MediaType string
-	error
-}
-
-// NewArtifactVersionError creates a new ArtifactTypeError
-func NewArtifactVersionError(reference, mediaType string) error {
-	return &ArtifactTypeError{
-		Reference: reference,
-		MediaType: mediaType,
-	}
-}
-
-func (e *ArtifactTypeError) Error() string {
-	return fmt.Sprintf("model at reference %q has unsupported config media type %q - please upgrade to support newer versions",
-		e.Reference, e.MediaType)
-}

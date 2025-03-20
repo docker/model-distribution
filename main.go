@@ -178,7 +178,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 
 	//licensePath = filepath.Join("assets", "license.txt")
 	// Add the license file if provided
-	if licensePath != nil {
+	if *licensePath != "" {
 		fmt.Println("Adding license file:", *licensePath)
 		licenseLayer, err := partial.NewLayer(*licensePath, types.MediaTypeLicense)
 		if err != nil {
