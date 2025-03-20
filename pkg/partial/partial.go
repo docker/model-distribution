@@ -12,12 +12,12 @@ import (
 	"github.com/docker/model-distribution/pkg/types"
 )
 
-type WithRawConfigFile interface {
+type WithCompatibleRawConfigFile interface {
 	// RawConfigFile returns the serialized bytes of this model's config file.
 	RawConfigFile() ([]byte, error)
 }
 
-func ConfigFile(i WithRawConfigFile) (*types.ConfigFile, error) {
+func ConfigFile(i WithCompatibleRawConfigFile) (*types.ConfigFile, error) {
 	raw, err := i.RawConfigFile()
 	if err != nil {
 		return nil, fmt.Errorf("get raw config file: %w", err)
@@ -30,7 +30,7 @@ func ConfigFile(i WithRawConfigFile) (*types.ConfigFile, error) {
 }
 
 // Config returns the types.Config for the model.
-func Config(i WithRawConfigFile) (types.Config, error) {
+func Config(i WithCompatibleRawConfigFile) (types.Config, error) {
 	cf, err := ConfigFile(i)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("config file: %w", err)
@@ -39,7 +39,7 @@ func Config(i WithRawConfigFile) (types.Config, error) {
 }
 
 // Descriptor returns the types.Descriptor for the model.
-func Descriptor(i WithRawConfigFile) (types.Descriptor, error) {
+func Descriptor(i WithCompatibleRawConfigFile) (types.Descriptor, error) {
 	cf, err := ConfigFile(i)
 	if err != nil {
 		return types.Descriptor{}, fmt.Errorf("config file: %w", err)
@@ -62,7 +62,7 @@ func ID(i WithRawManifest) (string, error) {
 }
 
 type WithLayers interface {
-	WithRawConfigFile
+	WithCompatibleRawConfigFile
 	Layers() ([]v1.Layer, error)
 }
 
@@ -94,7 +94,7 @@ func ManifestForLayers(i WithLayers) (*v1.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get config descriptor: %w", err)
 	}
-	cfgDsc.MediaType = types.MediaTypeModelConfig
+	cfgDsc.MediaType = types.MediaTypeModelConfigV01
 
 	ls, err := i.Layers()
 	if err != nil {

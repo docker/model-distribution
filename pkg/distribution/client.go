@@ -110,6 +110,11 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return NewPullError(reference, "UNKNOWN", err.Error(), err)
 	}
 
+	//Check for supported type
+	if err := checkCompat(remoteImg); err != nil {
+		return err
+	}
+
 	// Get the remote image digest
 	remoteDigest, err := remoteImg.Digest()
 	if err != nil {
@@ -296,4 +301,15 @@ func (c *Client) DeleteModel(reference string) error {
 func (c *Client) Tag(source string, target string) error {
 	c.log.Infoln("Tagging model, source:", source, "target:", target)
 	return c.store.AddTags(source, []string{target})
+}
+
+func checkCompat(image v1.Image) error {
+	manifest, err := image.Manifest()
+	if err != nil {
+		return err
+	}
+	if manifest.Config.MediaType != types.MediaTypeModelConfigV01 {
+		return fmt.Errorf("config type %q is unsupported: %w", manifest.Config.MediaType, ErrUnsupportedMediaType)
+	}
+	return nil
 }

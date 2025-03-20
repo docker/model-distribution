@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/v1/static"
+	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 
 	"github.com/docker/model-distribution/pkg/gguf"
 	"github.com/docker/model-distribution/pkg/mutate"
@@ -56,5 +57,29 @@ func TestAppendLayer(t *testing.T) {
 	}
 	if len(cfg.RootFS.DiffIDs) != 2 {
 		t.Fatalf("Expected 2 diff ids in rootfs, got %d", len(cfg.RootFS.DiffIDs))
+	}
+}
+
+func TestConfigMediaTypes(t *testing.T) {
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	manifest1, err := mdl1.Manifest()
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	if manifest1.Config.MediaType != types.MediaTypeModelConfigV01 {
+		t.Fatalf("Expected media type %s, got %s", types.MediaTypeModelConfigV01, manifest1.Config.MediaType)
+	}
+
+	newMediaType := ggcr.MediaType("application/vnd.example.other.type")
+	mdl2 := mutate.ConfigMediaType(mdl1, newMediaType)
+	manifest2, err := mdl2.Manifest()
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	if manifest2.Config.MediaType != newMediaType {
+		t.Fatalf("Expected media type %s, got %s", newMediaType, manifest2.Config.MediaType)
 	}
 }

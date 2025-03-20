@@ -3,12 +3,18 @@ package distribution
 import (
 	"errors"
 	"fmt"
+
+	"github.com/docker/model-distribution/pkg/types"
 )
 
 var (
-	ErrInvalidReference = errors.New("invalid model reference")
-	ErrModelNotFound    = errors.New("model not found")
-	ErrUnauthorized     = errors.New("unauthorized access to model")
+	ErrInvalidReference     = errors.New("invalid model reference")
+	ErrModelNotFound        = errors.New("model not found")
+	ErrUnauthorized         = errors.New("unauthorized access to model")
+	ErrUnsupportedMediaType = errors.New(fmt.Sprintf(
+		"client supports only models of type %q and older - try upgrading",
+		types.MediaTypeModelConfigV01,
+	))
 )
 
 // ReferenceError represents an error related to an invalid model reference
@@ -74,4 +80,24 @@ func NewPullError(reference, code, message string, err error) error {
 		Message:   message,
 		Err:       err,
 	}
+}
+
+// ArtifactTypeError occurs when the model config json schema is newer than supported by the client
+type ArtifactTypeError struct {
+	Reference string
+	MediaType string
+	error
+}
+
+// NewArtifactVersionError creates a new ArtifactTypeError
+func NewArtifactVersionError(reference, mediaType string) error {
+	return &ArtifactTypeError{
+		Reference: reference,
+		MediaType: mediaType,
+	}
+}
+
+func (e *ArtifactTypeError) Error() string {
+	return fmt.Sprintf("model at reference %q has unsupported config media type %q - please upgrade to support newer versions",
+		e.Reference, e.MediaType)
 }
