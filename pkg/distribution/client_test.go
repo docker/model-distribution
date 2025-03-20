@@ -133,9 +133,12 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to create client: %v", err)
 		}
 
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
 		// Test with non-existent model
 		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
-		err = client.PullModel(context.Background(), nonExistentRef, nil)
+		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 		if err == nil {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
