@@ -48,7 +48,7 @@ run-pull:
 
 run-push:
 	@echo "Pushing model ${SOURCE} to ${TAG}..."
-	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} push ${SOURCE} ${TAG}
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} push ${SOURCE} ${TAG} ${LICENSE:+--license ${LICENSE}}
 
 run-list:
 	@echo "Listing models..."
@@ -62,6 +62,14 @@ run-get-path:
 	@echo "Getting path for model ${TAG}..."
 	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} get-path ${TAG}
 
+run-rm:
+	@echo "Removing model ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} rm ${TAG}
+
+run-tag:
+	@echo "Tagging model ${SOURCE} as ${TAG}..."
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} tag ${SOURCE} ${TAG}
+
 help:
 	@echo "Available targets:"
 	@echo "  all              - Clean, build, and test"
@@ -69,8 +77,9 @@ help:
 	@echo "  test             - Run unit tests"
 	@echo "  clean            - Clean build artifacts"
 	@echo "  run-pull         - Pull a model (TAG=registry/model:tag)"
-	@echo "  run-push         - Push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag)"
+	@echo "  run-push         - Push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag LICENSE=path/to/license.txt)"
 	@echo "  run-list         - List all models"
 	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
 	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"
-
+	@echo "  run-rm           - Remove a model (TAG=registry/model:tag)"
+	@echo "  run-tag          - Tag a model (SOURCE=registry/model:tag TAG=registry/model:newtag)"
