@@ -16,7 +16,7 @@ usage() {
     echo "  --hf-model HF_NAME/HF_REPO    Hugging Face model name/repository (required)"
     echo "  --repository USER/REPOSITORY  Target repository (required)"
     echo "  --weights MODEL_WEIGHTS       Model weights tag (required)"
-    echo "  --license PATH                Path to license file (optional, default: ${DEFAULT_LICENSE_PATH})"
+    echo "  --license PATH                Path to license file (required)"
     echo "  --models-dir PATH             Path to store models (default: ${DEFAULT_MODELS_DIR})"
     echo "  --hf-token TOKEN              Hugging Face token (required)"
     echo "  --quantization TYPE           Quantization type to use (default: ${DEFAULT_QUANTIZATION})"
@@ -192,27 +192,27 @@ fi
 echo "Step 3: Pushing model(s) to the repository..."
 
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
-if [ -n "$LICENSE_FLAG" ]; then
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$LATEST"
-else
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$TARGET"
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$LATEST"
-fi
+"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"
+"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$LATEST"
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     # Create F16 tag by appending "-F16" to the weights
     F16_TARGET="${REPOSITORY}:${WEIGHTS}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
-    
-    if [ -n "$LICENSE_FLAG" ]; then
-        "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$F16_MODEL_FILE" "$F16_TARGET"
-    else
-        "${PROJECT_ROOT}/bin/model-distribution-tool" push "$F16_MODEL_FILE" "$F16_TARGET"
-    fi
-    
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$F16_MODEL_FILE" "$F16_TARGET"
     echo "F16 model successfully pushed to $F16_TARGET"
 fi
 
-echo "Quantized model successfully pushed to $QUANTIZED_TARGET"
+echo "=== Model successfully pushed ==="
+echo "Hugging Face Model: $HF_MODEL"
+echo "Repository: $REPOSITORY"
+echo "Weights: $WEIGHTS"
+echo "License Path: $LICENSE_PATH"
+echo "Models Directory: $MODELS_DIR"
+echo "Quantization: $QUANTIZATION"
+echo "Skip F16 Version: $SKIP_F16"
+echo "Full Target: $TARGET"
+echo "Latest Target: $LATEST"
+echo
+
