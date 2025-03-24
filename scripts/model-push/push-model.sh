@@ -184,8 +184,8 @@ fi
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
-    # Create F16 tag by appending "-f16" to the target tag
-    F16_TARGET="${TARGET%:*}:${TARGET##*:}-f16"
+    # Create F16 tag by appending "-F16" to the target tag
+    F16_TARGET="${TARGET%:*}:${TARGET##*:}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
     
     if [ -n "$LICENSE_FLAG" ]; then

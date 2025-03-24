@@ -84,13 +84,13 @@ The script performs the following steps:
 2. Verifies both the quantized model and F16 model files were created successfully
 3. Checks for the license file
 4. Pushes the quantized model to the specified repository
-5. Pushes the F16 model to the same repository with a "-f16" suffix in the tag (unless skipped)
+5. Pushes the F16 model to the same repository with a "-F16" suffix in the tag (unless skipped)
 
 ## Notes
 
 - The script creates the models directory if it doesn't exist
 - By default, it pushes both the quantized version and the F16 version of the model
-- The F16 version is pushed with a "-f16" suffix added to the tag
+- The F16 version is pushed with a "-F16" suffix added to the tag
 - If the license file is not found, the script will display a warning and proceed without it
 - You can skip pushing the F16 version with the `--skip-f16` flag
 - If you specify `--quantization F16`, only the F16 version will be pushed
