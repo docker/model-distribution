@@ -45,7 +45,7 @@ Basic usage with default quantization (Q4_K_M):
 ```bash
 ./push-model.sh \
   --hf-model meta-llama/Llama-2-7b-chat-hf \
-  --target myregistry.com/models/llama:v1.0 \
+  --target myregistry.com/models/llama:7B \
   --hf-token hf_xxx
 ```
 
@@ -53,7 +53,7 @@ Using a specific quantization type:
 ```bash
 ./push-model.sh \
   --hf-model meta-llama/Llama-2-7b-chat-hf \
-  --target myregistry.com/models/llama:v1.0 \
+  --target myregistry.com/models/llama:7B \
   --hf-token hf_xxx \
   --quantization Q8_0
 ```
@@ -62,7 +62,7 @@ Skip pushing the F16 version:
 ```bash
 ./push-model.sh \
   --hf-model meta-llama/Llama-2-7b-chat-hf \
-  --target myregistry.com/models/llama:v1.0 \
+  --target myregistry.com/models/llama:7B \
   --hf-token hf_xxx \
   --skip-f16
 ```
@@ -71,7 +71,7 @@ Push only the F16 version (no quantization):
 ```bash
 ./push-model.sh \
   --hf-model meta-llama/Llama-2-7b-chat-hf \
-  --target myregistry.com/models/llama:v1.0 \
+  --target myregistry.com/models/llama:7B \
   --hf-token hf_xxx \
   --quantization F16
 ```

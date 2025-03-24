@@ -177,9 +177,9 @@ echo "Step 3: Pushing model(s) to the repository..."
 # Push the quantized model
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
 if [ -n "$LICENSE_FLAG" ]; then
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"-"$QUANTIZATION"
 else
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$TARGET"-"$QUANTIZATION"
 fi
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
