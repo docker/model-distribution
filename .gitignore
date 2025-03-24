@@ -33,6 +33,7 @@ test/artifacts/
 # Project specific
 /bin/
 /tmp/
+/models/
 
 # OS specific
 .DS_Store
