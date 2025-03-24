@@ -93,6 +93,11 @@ if [ -z "$WEIGHTS" ]; then
     usage
 fi
 
+if [ -z "$LICENSE_PATH" ]; then
+    echo "Error: License path (--license) is required"
+    usage
+fi
+
 if [ -z "$HF_TOKEN" ]; then
     echo "Error: Hugging Face token (--hf-token) is required"
     usage
