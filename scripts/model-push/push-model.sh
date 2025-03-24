@@ -14,7 +14,8 @@ usage() {
     echo
     echo "Options:"
     echo "  --hf-model HF_NAME/HF_REPO    Hugging Face model name/repository (required)"
-    echo "  --target REPOSITORY/TAG       Target repository and tag (required)"
+    echo "  --repository USER/REPOSITORY  Target repository (required)"
+    echo "  --weights MODEL_WEIGHTS       Model weights tag (required)"
     echo "  --license PATH                Path to license file (optional, default: ${DEFAULT_LICENSE_PATH})"
     echo "  --models-dir PATH             Path to store models (default: ${DEFAULT_MODELS_DIR})"
     echo "  --hf-token TOKEN              Hugging Face token (required)"
@@ -27,7 +28,7 @@ usage() {
     echo "  Q4_K_S, Q4_K_M (default), Q5_K_S, Q5_K_M, Q6_K, F16, F32"
     echo
     echo "Example:"
-    echo "  $0 --hf-model meta-llama/Llama-2-7b-chat-hf --target myregistry.com/models/llama:v1.0 --hf-token hf_xxx"
+    echo "  $0 --hf-model meta-llama/Llama-2-7b-chat-hf --repository myregistry.com/models/llama --weights 7B --hf-token hf_xxx"
     exit 1
 }
 
@@ -38,8 +39,12 @@ while [[ $# -gt 0 ]]; do
             HF_MODEL="$2"
             shift 2
             ;;
-        --target)
-            TARGET="$2"
+        --repository)
+            REPOSITORY="$2"
+            shift 2
+            ;;
+        --weights)
+            WEIGHTS="$2"
             shift 2
             ;;
         --license)
@@ -78,8 +83,13 @@ if [ -z "$HF_MODEL" ]; then
     usage
 fi
 
-if [ -z "$TARGET" ]; then
-    echo "Error: Target repository/tag (--target) is required"
+if [ -z "$REPOSITORY" ]; then
+    echo "Error: Repository (--repository) is required"
+    usage
+fi
+
+if [ -z "$WEIGHTS" ]; then
+    echo "Error: Weights tag (--weights) is required"
     usage
 fi
 
@@ -110,13 +120,20 @@ if [ ! -f "${PROJECT_ROOT}/bin/model-distribution-tool" ]; then
     exit 1
 fi
 
+# Construct the full target reference
+TARGET="${REPOSITORY}:${WEIGHTS}-${QUANTIZATION}"
+LATEST="${REPOSITORY}:latest"
+
 echo "=== Model Push Script ==="
 echo "Hugging Face Model: $HF_MODEL"
-echo "Target Repository: $TARGET"
+echo "Repository: $REPOSITORY"
+echo "Weights: $WEIGHTS"
 echo "License Path: $LICENSE_PATH"
 echo "Models Directory: $MODELS_DIR"
 echo "Quantization: $QUANTIZATION"
 echo "Skip F16 Version: $SKIP_F16"
+echo "Full Target: $TARGET"
+echo "Latest Target: $LATEST"
 echo
 
 # Step 1: Run Docker container to convert the model from Hugging Face
@@ -174,18 +191,19 @@ fi
 # Step 3: Push the model(s) to the repository
 echo "Step 3: Pushing model(s) to the repository..."
 
-# Push the quantized model
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
 if [ -n "$LICENSE_FLAG" ]; then
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"-"$QUANTIZATION"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$LATEST"
 else
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$TARGET"-"$QUANTIZATION"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push "$QUANTIZED_MODEL_FILE" "$LATEST"
 fi
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
-    # Create F16 tag by appending "-F16" to the target tag
-    F16_TARGET="${TARGET%:*}:${TARGET##*:}-F16"
+    # Create F16 tag by appending "-F16" to the weights
+    F16_TARGET="${REPOSITORY}:${WEIGHTS}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
     
     if [ -n "$LICENSE_FLAG" ]; then
@@ -197,4 +215,4 @@ if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     echo "F16 model successfully pushed to $F16_TARGET"
 fi
 
-echo "Quantized model successfully pushed to $TARGET"
+echo "Quantized model successfully pushed to $QUANTIZED_TARGET"
