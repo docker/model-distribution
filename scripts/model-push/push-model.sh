@@ -186,8 +186,8 @@ fi
 echo "Step 2: Checking for license file..."
 LICENSE_FLAG=""
 if [ ! -f "$LICENSE_PATH" ]; then
-    echo "Warning: License file not found at $LICENSE_PATH"
-    echo "Proceeding without license file..."
+    echo "Error: License file not found at $LICENSE_PATH"
+    exit 1
 else
     echo "License file found: $LICENSE_PATH"
     LICENSE_FLAG="--license $LICENSE_PATH"

@@ -18,7 +18,7 @@ This script automates the process of converting models from Hugging Face and pus
 
 - `--hf-model HF_NAME/HF_REPO`: Hugging Face model name/repository (required)
 - `--repository USER/REPOSITORY`: Target repository (required)
-- `--weights TAG`: Model weights tag (required)
+- `--weights WEIGHTS`: Model weights tag (required)
 - `--license PATH`: Path to license file (optional, default: ./assets/license.txt)
 - `--models-dir PATH`: Path to store models (default: ./models)
 - `--hf-token TOKEN`: Hugging Face token (required)
@@ -48,7 +48,8 @@ Basic usage with default quantization (Q4_K_M):
   --hf-model meta-llama/Llama-2-7b-chat-hf \
   --repository myregistry.com/models/llama \
   --weights 7B \
-  --hf-token hf_xxx
+  --hf-token hf_xxx \
+  --license ./assets/license.txt
 ```
 
 Using a specific quantization type:
@@ -58,7 +59,8 @@ Using a specific quantization type:
   --repository myregistry.com/models/llama \
   --weights 7B \
   --hf-token hf_xxx \
-  --quantization Q8_0
+  --quantization Q8_0 \
+  --license ./assets/license.txt
 ```
 
 Skip pushing the F16 version:
@@ -68,7 +70,8 @@ Skip pushing the F16 version:
   --repository myregistry.com/models/llama \
   --weights 7B \
   --hf-token hf_xxx \
-  --skip-f16
+  --skip-f16 \
+  --license ./assets/license.txt
 ```
 
 Push only the F16 version (no quantization):
@@ -78,7 +81,8 @@ Push only the F16 version (no quantization):
   --repository myregistry.com/models/llama \
   --weights 7B \
   --hf-token hf_xxx \
-  --quantization F16
+  --quantization F16 \
+  --license ./assets/license.txt
 ```
 
 ## Process
