@@ -127,7 +127,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// First, check the remote registry for the model's digest
 	c.log.Infoln("Checking remote registry for model:", reference)
-	opts := append(c.remoteOptions, remote.WithContext(ctx))
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
 	remoteImg, err := remote.Image(ref, opts...)
 	if err != nil {
 		errStr := err.Error()
@@ -296,7 +296,7 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	}
 
 	// Push the image
-	opts := append(c.remoteOptions, remote.WithContext(ctx))
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
 	if err := remote.Write(ref, mdl, opts...); err != nil {
 		c.log.Errorln("Failed to push image:", err, "reference:", reference)
 		return fmt.Errorf("pushing image: %w", err)
