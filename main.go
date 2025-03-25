@@ -19,6 +19,18 @@ import (
 	"github.com/docker/model-distribution/pkg/types"
 )
 
+// stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 const (
 	defaultStorePath = "./model-store"
 	version          = "0.1.0"
@@ -103,14 +115,14 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Println("\nCommands:")
 	fmt.Println("  pull <reference>                Pull a model from a registry")
-	fmt.Println("  push <source> <reference>       Push a model to a registry")
+	fmt.Println("  push <source> <reference>       Push a model to a registry (use --licenses to add license files)")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
-	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0")
+	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
 }
@@ -136,7 +148,8 @@ func cmdPull(client *distribution.Client, args []string) int {
 
 func cmdPush(client *distribution.Client, args []string) int {
 	fs := flag.NewFlagSet("push", flag.ExitOnError)
-	licensePath := fs.String("license", "", "Path to the license file")
+	var licensePaths stringSliceFlag
+	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		return 1
@@ -145,7 +158,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 
 	if len(args) < 2 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--license <path-to-license-file>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--licenses <path-to-license-file1> --licenses <path-to-license-file2> ...]\n")
 		return 1
 	}
 
@@ -180,13 +193,12 @@ func cmdPush(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	//licensePath = filepath.Join("assets", "license.txt")
-	// Add the license file if provided
-	if *licensePath != "" {
-		fmt.Println("Adding license file:", *licensePath)
-		licenseLayer, err := partial.NewLayer(*licensePath, types.MediaTypeLicense)
+	// Add all license files as layers
+	for _, path := range licensePaths {
+		fmt.Println("Adding license file:", path)
+		licenseLayer, err := partial.NewLayer(path, types.MediaTypeLicense)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding license layer: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
 			return 1
 		}
 		mdl = mutate.AppendLayers(mdl, licenseLayer)
