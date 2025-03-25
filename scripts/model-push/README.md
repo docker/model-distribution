@@ -19,7 +19,7 @@ This script automates the process of converting models from Hugging Face and pus
 - `--hf-model HF_NAME/HF_REPO`: Hugging Face model name/repository (required)
 - `--repository USER/REPOSITORY`: Target repository (required)
 - `--weights WEIGHTS`: Model weights tag (required)
-- `--license PATH`: Path to license file (optional, default: ./assets/license.txt)
+- `--licenses PATH[,PATH,...]`: Paths to license files (comma-separated, optional, default: ./assets/license.txt)
 - `--models-dir PATH`: Path to store models (default: ./models)
 - `--hf-token TOKEN`: Hugging Face token (required)
 - `--quantization TYPE`: Quantization type to use (default: Q4_K_M)
@@ -49,7 +49,7 @@ Basic usage with default quantization (Q4_K_M):
   --repository myregistry.com/models/llama \
   --weights 7B \
   --hf-token hf_xxx \
-  --license ./assets/license.txt
+  --licenses ./assets/license.txt
 ```
 
 Using a specific quantization type:
@@ -60,7 +60,7 @@ Using a specific quantization type:
   --weights 7B \
   --hf-token hf_xxx \
   --quantization Q8_0 \
-  --license ./assets/license.txt
+  --licenses ./assets/license.txt
 ```
 
 Skip pushing the F16 version:
@@ -71,7 +71,7 @@ Skip pushing the F16 version:
   --weights 7B \
   --hf-token hf_xxx \
   --skip-f16 \
-  --license ./assets/license.txt
+  --licenses ./assets/license.txt
 ```
 
 Push only the F16 version (no quantization):
@@ -82,7 +82,17 @@ Push only the F16 version (no quantization):
   --weights 7B \
   --hf-token hf_xxx \
   --quantization F16 \
-  --license ./assets/license.txt
+  --licenses ./assets/license.txt
+```
+
+Using multiple license files:
+```bash
+./push-model.sh \
+  --hf-model meta-llama/Llama-2-7b-chat-hf \
+  --repository myregistry.com/models/llama \
+  --weights 7B \
+  --hf-token hf_xxx \
+  --licenses ./assets/license1.txt,./assets/license2.txt,./assets/license3.txt
 ```
 
 ## Process
@@ -100,7 +110,8 @@ The script performs the following steps:
 - The script creates the models directory if it doesn't exist
 - By default, it pushes both the quantized version and the F16 version of the model
 - The F16 version is pushed with a "-F16" suffix added to the tag
-- If the license file is not found, the script will display a warning and proceed without it
+- If any license file is not found, the script will display an error and exit
+- You can specify multiple license files by separating them with commas: `--licenses file1.txt,file2.txt`
 - You can skip pushing the F16 version with the `--skip-f16` flag
 - If you specify `--quantization F16`, only the F16 version will be pushed
 - The script will exit with an error if any critical step fails (Docker not installed, model conversion fails, etc.)

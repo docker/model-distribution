@@ -16,7 +16,7 @@ usage() {
     echo "  --hf-model HF_NAME/HF_REPO    Hugging Face model name/repository (required)"
     echo "  --repository USER/REPOSITORY  Target repository (required)"
     echo "  --weights MODEL_WEIGHTS       Model weights tag (required)"
-    echo "  --license PATH                Path to license file (required)"
+    echo "  --licenses PATH[,PATH,...]    Paths to license files (comma-separated, required)"
     echo "  --models-dir PATH             Path to store models (default: ${DEFAULT_MODELS_DIR})"
     echo "  --hf-token TOKEN              Hugging Face token (required)"
     echo "  --quantization TYPE           Quantization type to use (default: ${DEFAULT_QUANTIZATION})"
@@ -27,8 +27,9 @@ usage() {
     echo "  Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, Q8_1, Q2_K, Q3_K_S, Q3_K_M, Q3_K_L,"
     echo "  Q4_K_S, Q4_K_M (default), Q5_K_S, Q5_K_M, Q6_K, F16, F32"
     echo
-    echo "Example:"
-    echo "  $0 --hf-model meta-llama/Llama-2-7b-chat-hf --repository myregistry.com/models/llama --weights 7B --hf-token hf_xxx"
+    echo "Examples:"
+    echo "  $0 --hf-model meta-llama/Llama-2-7b-chat-hf --repository myregistry.com/models/llama --weights 7B --licenses ./assets/license.txt --hf-token hf_xxx"
+    echo "  $0 --hf-model meta-llama/Llama-2-7b-chat-hf --repository myregistry.com/models/llama --weights 7B --licenses ./assets/license1.txt,./assets/license2.txt --hf-token hf_xxx"
     exit 1
 }
 
@@ -47,8 +48,8 @@ while [[ $# -gt 0 ]]; do
             WEIGHTS="$2"
             shift 2
             ;;
-        --license)
-            LICENSE_PATH="$2"
+        --licenses)
+            LICENSE_PATHS="$2"
             shift 2
             ;;
         --models-dir)
@@ -93,8 +94,8 @@ if [ -z "$WEIGHTS" ]; then
     usage
 fi
 
-if [ -z "$LICENSE_PATH" ]; then
-    echo "Error: License path (--license) is required"
+if [ -z "$LICENSE_PATHS" ]; then
+    echo "Error: License paths (--licenses) are required"
     usage
 fi
 
@@ -104,7 +105,9 @@ if [ -z "$HF_TOKEN" ]; then
 fi
 
 # Set default values if not provided
-LICENSE_PATH="${LICENSE_PATH:-$DEFAULT_LICENSE_PATH}"
+if [ -z "$LICENSE_PATHS" ]; then
+    LICENSE_PATHS="$DEFAULT_LICENSE_PATH"
+fi
 MODELS_DIR="${MODELS_DIR:-$DEFAULT_MODELS_DIR}"
 QUANTIZATION="${QUANTIZATION:-$DEFAULT_QUANTIZATION}"
 SKIP_F16="${SKIP_F16:-false}"
@@ -133,7 +136,7 @@ echo "=== Model Push Script ==="
 echo "Hugging Face Model: $HF_MODEL"
 echo "Repository: $REPOSITORY"
 echo "Weights: $WEIGHTS"
-echo "License Path: $LICENSE_PATH"
+echo "License Paths: $LICENSE_PATHS"
 echo "Models Directory: $MODELS_DIR"
 echo "Quantization: $QUANTIZATION"
 echo "Skip F16 Version: $SKIP_F16"
@@ -182,30 +185,38 @@ if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     fi
 fi
 
-# Step 2: Check for license file
-echo "Step 2: Checking for license file..."
-LICENSE_FLAG=""
-if [ ! -f "$LICENSE_PATH" ]; then
-    echo "Error: License file not found at $LICENSE_PATH"
+# Step 2: Check for license files
+echo "Step 2: Checking for license files..."
+LICENSE_FLAGS=""
+IFS=',' read -ra LICENSE_FILES <<< "$LICENSE_PATHS"
+for LICENSE_FILE in "${LICENSE_FILES[@]}"; do
+    if [ ! -f "$LICENSE_FILE" ]; then
+        echo "Error: License file not found at $LICENSE_FILE"
+        exit 1
+    else
+        echo "License file found: $LICENSE_FILE"
+        LICENSE_FLAGS="$LICENSE_FLAGS --licenses $LICENSE_FILE"
+    fi
+done
+
+if [ -z "$LICENSE_FLAGS" ]; then
+    echo "Error: No valid license files provided"
     exit 1
-else
-    echo "License file found: $LICENSE_PATH"
-    LICENSE_FLAG="--license $LICENSE_PATH"
 fi
 
 # Step 3: Push the model(s) to the repository
 echo "Step 3: Pushing model(s) to the repository..."
 
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$TARGET"
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$QUANTIZED_MODEL_FILE" "$LATEST"
+"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
+"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     # Create F16 tag by appending "-F16" to the weights
     F16_TARGET="${REPOSITORY}:${WEIGHTS}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAG "$F16_MODEL_FILE" "$F16_TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$F16_MODEL_FILE" "$F16_TARGET"
     echo "F16 model successfully pushed to $F16_TARGET"
 fi
 
@@ -213,11 +224,10 @@ echo "=== Model successfully pushed ==="
 echo "Hugging Face Model: $HF_MODEL"
 echo "Repository: $REPOSITORY"
 echo "Weights: $WEIGHTS"
-echo "License Path: $LICENSE_PATH"
+echo "License Paths: $LICENSE_PATHS"
 echo "Models Directory: $MODELS_DIR"
 echo "Quantization: $QUANTIZATION"
 echo "Skip F16 Version: $SKIP_F16"
 echo "Full Target: $TARGET"
 echo "Latest Target: $LATEST"
 echo
-
