@@ -25,8 +25,11 @@ make build
 # Pull a model from a registry
 ./bin/model-distribution-tool pull registry.example.com/models/llama:v1.0
 
-# Push a model to a registry
-./bin/model-distribution-tool push --license license.txt ./model.gguf registry.example.com/models/llama:v1.0
+# Push a model to a registry without license files
+./bin/model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0
+
+# Push a model to a registry with license files
+./bin/model-distribution-tool push --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
 
 # List all models in the local store
 ./bin/model-distribution-tool list
