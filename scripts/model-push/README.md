@@ -19,7 +19,7 @@ This script automates the process of converting models from Hugging Face and pus
 - `--hf-model HF_NAME/HF_REPO`: Hugging Face model name/repository (required)
 - `--repository USER/REPOSITORY`: Target repository (required)
 - `--weights WEIGHTS`: Model weights tag (required)
-- `--licenses PATH[,PATH,...]`: Paths to license files (comma-separated, optional, default: ./assets/license.txt)
+- `--licenses PATH`: Paths to license files (optional, list, default: ./assets/license.txt)
 - `--models-dir PATH`: Path to store models (default: ./models)
 - `--hf-token TOKEN`: Hugging Face token (required)
 - `--quantization TYPE`: Quantization type to use (default: Q4_K_M)
