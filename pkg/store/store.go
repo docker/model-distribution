@@ -47,20 +47,8 @@ func New(opts Options) (*LocalStore, error) {
 // initialize creates the store directory structure if it doesn't exist
 func (s *LocalStore) initialize() error {
 	// Create root directory if it doesn't exist
-	if err := os.MkdirAll(s.rootPath, 0755); err != nil {
+	if err := os.MkdirAll(s.rootPath, 0777); err != nil {
 		return fmt.Errorf("creating root directory: %w", err)
-	}
-
-	// Create blobs directory
-	blobsDir := filepath.Join(s.rootPath, "blobs", "sha256")
-	if err := os.MkdirAll(blobsDir, 0755); err != nil {
-		return fmt.Errorf("creating blobs directory: %w", err)
-	}
-
-	// Create manifests directory
-	manifestsDir := filepath.Join(s.rootPath, "manifests", "sha256")
-	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
-		return fmt.Errorf("creating manifests directory: %w", err)
 	}
 
 	// Check if layout.json exists, create if not
@@ -73,7 +61,7 @@ func (s *LocalStore) initialize() error {
 		if err != nil {
 			return fmt.Errorf("marshaling layout: %w", err)
 		}
-		if err := os.WriteFile(layoutPath, layoutData, 0644); err != nil {
+		if err := writeFile(layoutPath, layoutData); err != nil {
 			return fmt.Errorf("writing layout file: %w", err)
 		}
 	}
@@ -88,7 +76,7 @@ func (s *LocalStore) initialize() error {
 		if err != nil {
 			return fmt.Errorf("marshaling models: %w", err)
 		}
-		if err := os.WriteFile(modelsPath, modelsData, 0644); err != nil {
+		if err := writeFile(modelsPath, modelsData); err != nil {
 			return fmt.Errorf("writing models file: %w", err)
 		}
 	}
@@ -202,136 +190,26 @@ func (s *LocalStore) Version() string {
 
 // Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
-	cf, err := mdl.RawConfigFile()
-	if err != nil {
-		return fmt.Errorf("get raw config file: %w", err)
-	}
-	name, err := mdl.ConfigName()
-	if err != nil {
-		return fmt.Errorf("getting config name: %w", err)
-	}
-	configPath := filepath.Join(s.rootPath, "blobs", "sha256", name.Hex)
-	configTempPath := configPath + ".incomplete"
-
-	// Clean up any existing incomplete config file
-	os.Remove(configTempPath)
-
-	// Create the temporary config file
-	f, err := os.Create(configTempPath)
-	if err != nil {
-		return fmt.Errorf("opening config blob: %w", err)
-	}
-	defer f.Close()
-	_, err = f.Write(cf)
-	if err != nil {
-		os.Remove(configTempPath) // Clean up on error
-		return fmt.Errorf("writing config blob: %w", err)
+	// Write the config JSON file
+	if err := s.writeConfigFile(mdl); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
 	}
 
-	// Rename config file to final path after successful write
-	if err := os.Rename(configTempPath, configPath); err != nil {
-		os.Remove(configTempPath) // Clean up on error
-		return fmt.Errorf("renaming config blob: %w", err)
-	}
-
-	// Gets SHA256 digest
-	// digest := manifest.Layers[0].Digest
-	sz, err := mdl.Size()
-	if err != nil {
-		return fmt.Errorf("getting model size: %w", err)
-	}
-
+	// Write the blobs
 	layers, err := mdl.Layers()
 	if err != nil {
 		return fmt.Errorf("getting layers: %w", err)
 	}
 
-	var createdTempFiles []string // Track created temp files for cleanup on error
-
 	for _, layer := range layers {
-		d, err := layer.Digest()
-		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
-			return fmt.Errorf("getting layer digest: %w", err)
-		}
-		blobPath := filepath.Join(s.rootPath, "blobs", "sha256", d.Hex)
-		blobTempPath := blobPath + ".incomplete"
-
-		// Clean up any existing incomplete file
-		os.Remove(blobTempPath)
-
-		// Create the temporary file
-		f, err := os.Create(blobTempPath)
-		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
-			return fmt.Errorf("opening blob file: %w", err)
-		}
-
-		// Add to list of temp files for cleanup in case of error
-		createdTempFiles = append(createdTempFiles, blobTempPath)
-
-		defer f.Close()
-		lr, err := layer.Uncompressed()
-		if err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
-			return fmt.Errorf("opening layer: %w", err)
-		}
-		defer lr.Close()
-
-		var r io.Reader
-		if progress != nil {
-			r = &ProgressReader{
-				Reader:       lr,
-				ProgressChan: progress,
-				Total:        sz,
-			}
-		} else {
-			r = lr
-		}
-		if _, err = io.Copy(f, r); err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
-			return fmt.Errorf("writing layer content: %w", err)
-		}
-
-		// Close the file before renaming
-		f.Close()
-
-		// Rename to final path after successful write
-		if err := os.Rename(blobTempPath, blobPath); err != nil {
-			// Clean up any temp files created so far
-			for _, tempFile := range createdTempFiles {
-				os.Remove(tempFile)
-			}
-			return fmt.Errorf("renaming blob file: %w", err)
+		if err := s.writeBlob(layer, progress); err != nil {
+			return fmt.Errorf("writing blob: %w", err)
 		}
 	}
 
-	rawManifest, err := mdl.RawManifest()
-	if err != nil {
-		return err
-	}
-	// Calculate manifest digest
-	digest, err := mdl.Digest()
-	if err != nil {
-		return fmt.Errorf("getting model digest: %w", err)
-	}
-
-	// Store the manifest
-	manifestPath := filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex)
-	if err := os.WriteFile(manifestPath, rawManifest, 0644); err != nil {
-		return fmt.Errorf("writing manifest file: %w", err)
+	// Write the manifest
+	if err := s.writeManifest(mdl); err != nil {
+		return fmt.Errorf("writing manifest: %w", err)
 	}
 
 	// Add the model to the index
@@ -349,7 +227,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	for _, tag := range tags {
 		updatedIdx, err := idx.Tag(entry.ID, tag)
 		if err != nil {
-			fmt.Printf("Warning: failed to tag model %s: %v\n", digest, err)
+			fmt.Printf("Warning: failed to tag model %q with tag %q: %v\n", entry.ID, tag, err)
 			continue
 		}
 		idx = updatedIdx
@@ -372,7 +250,7 @@ func (s *LocalStore) Read(reference string) (*Model, error) {
 			if err != nil {
 				return nil, fmt.Errorf("parsing hash: %w", err)
 			}
-			rawManifest, err := os.ReadFile(filepath.Join(s.rootPath, "manifests", hash.Algorithm, hash.Hex))
+			rawManifest, err := os.ReadFile(s.manifestPath(hash))
 			if err != nil {
 				return nil, fmt.Errorf("reading manifest file: %w", err)
 			}
