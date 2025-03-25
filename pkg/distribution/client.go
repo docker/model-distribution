@@ -111,7 +111,7 @@ func NewClient(opts ...Option) (*Client, error) {
 		log:   options.logger,
 		remoteOptions: []remote.Option{
 			remote.WithAuthFromKeychain(authn.DefaultKeychain),
-			remote.WithTransport(options.transport),
+			remote.WithTransport(remote.DefaultTransport),
 			remote.WithUserAgent(options.userAgent),
 		},
 	}, nil
