@@ -31,8 +31,6 @@ type Client struct {
 	store         *store.LocalStore
 	log           *logrus.Entry
 	remoteOptions []remote.Option
-	transport     http.RoundTripper
-	userAgent     string
 }
 
 // GetStorePath returns the root path where models are stored
@@ -52,28 +50,28 @@ type options struct {
 }
 
 // WithStoreRootPath sets the store root path
-func WithStoreRootPath(path string) func(*options) {
+func WithStoreRootPath(path string) Option {
 	return func(o *options) {
 		o.storeRootPath = path
 	}
 }
 
 // WithLogger sets the logger
-func WithLogger(logger *logrus.Entry) func(*options) {
+func WithLogger(logger *logrus.Entry) Option {
 	return func(o *options) {
 		o.logger = logger
 	}
 }
 
 // WithTransport sets the HTTP transport to use when pulling and pushing models.
-func WithTransport(transport http.RoundTripper) func(*options) {
+func WithTransport(transport http.RoundTripper) Option {
 	return func(o *options) {
 		o.transport = transport
 	}
 }
 
 // WithUserAgent sets the User-Agent header to use when pulling and pushing models.
-func WithUserAgent(ua string) func(*options) {
+func WithUserAgent(ua string) Option {
 	return func(o *options) {
 		o.userAgent = ua
 	}
@@ -129,7 +127,8 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// First, check the remote registry for the model's digest
 	c.log.Infoln("Checking remote registry for model:", reference)
-	remoteImg, err := remote.Image(ref, append(c.remoteOptions, remote.WithContext(ctx))...)
+	opts := append(c.remoteOptions, remote.WithContext(ctx))
+	remoteImg, err := remote.Image(ref, opts...)
 	if err != nil {
 		errStr := err.Error()
 		if strings.Contains(errStr, "UNAUTHORIZED") {
@@ -297,7 +296,8 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	}
 
 	// Push the image
-	if err := remote.Write(ref, mdl, append(c.remoteOptions, remote.WithContext(ctx))...); err != nil {
+	opts := append(c.remoteOptions, remote.WithContext(ctx))
+	if err := remote.Write(ref, mdl, opts...); err != nil {
 		c.log.Errorln("Failed to push image:", err, "reference:", reference)
 		return fmt.Errorf("pushing image: %w", err)
 	}
