@@ -55,7 +55,7 @@ if [[ "$FROM_HF" == "true" ]]; then
     else
         echo "Cloning Hugging Face repository: $HF_REPO into $TARGET_DIR..."
         git lfs install
-        git clone "https://user:$HUGGINGFACE_TOKEN@huggingface.co/$HF_REPO" "$TARGET_DIR"
+        git clone --depth=1 "https://user:$HUGGINGFACE_TOKEN@huggingface.co/$HF_REPO" "$TARGET_DIR"
     fi
 
     echo "Running conversion..."
