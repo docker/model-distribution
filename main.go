@@ -57,7 +57,11 @@ func main() {
 	}
 
 	// Create the client
-	client, err := distribution.NewClient(distribution.WithStoreRootPath(absStorePath))
+	client, err := distribution.NewClient(
+		distribution.WithStoreRootPath(absStorePath),
+		distribution.WithUserAgent("model-distribution-tool/"+version),
+	)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 		os.Exit(1)
@@ -191,6 +195,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 	// Push the image
 	if err := remote.Write(ref, mdl,
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithUserAgent("model-distribution-tool/"+version),
 		remote.WithContext(ctx),
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", ref.String(), err)

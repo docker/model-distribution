@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -21,10 +22,15 @@ import (
 	"github.com/docker/model-distribution/pkg/types"
 )
 
+const (
+	defaultUserAgent = "model-distribution"
+)
+
 // Client provides model distribution functionality
 type Client struct {
-	store *store.LocalStore
-	log   *logrus.Entry
+	store         *store.LocalStore
+	log           *logrus.Entry
+	remoteOptions []remote.Option
 }
 
 // GetStorePath returns the root path where models are stored
@@ -32,31 +38,56 @@ func (c *Client) GetStorePath() string {
 	return c.store.RootPath()
 }
 
-// ClientOptions represents options for creating a new Client
-type ClientOptions struct {
+// Option represents an option for creating a new Client
+type Option func(*options)
+
+// options holds the configuration for a new Client
+type options struct {
 	storeRootPath string
 	logger        *logrus.Entry
+	transport     http.RoundTripper
+	userAgent     string
 }
 
 // WithStoreRootPath sets the store root path
-func WithStoreRootPath(path string) func(*ClientOptions) {
-	return func(o *ClientOptions) {
+func WithStoreRootPath(path string) Option {
+	return func(o *options) {
 		o.storeRootPath = path
 	}
 }
 
 // WithLogger sets the logger
-func WithLogger(logger *logrus.Entry) func(*ClientOptions) {
-	return func(o *ClientOptions) {
+func WithLogger(logger *logrus.Entry) Option {
+	return func(o *options) {
 		o.logger = logger
 	}
 }
 
-// NewClient creates a new distribution client
-func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
-	options := &ClientOptions{
-		logger: logrus.NewEntry(logrus.StandardLogger()),
+// WithTransport sets the HTTP transport to use when pulling and pushing models.
+func WithTransport(transport http.RoundTripper) Option {
+	return func(o *options) {
+		o.transport = transport
 	}
+}
+
+// WithUserAgent sets the User-Agent header to use when pulling and pushing models.
+func WithUserAgent(ua string) Option {
+	return func(o *options) {
+		o.userAgent = ua
+	}
+}
+
+func defaultOptions() *options {
+	return &options{
+		logger:    logrus.NewEntry(logrus.StandardLogger()),
+		transport: http.DefaultTransport,
+		userAgent: defaultUserAgent,
+	}
+}
+
+// NewClient creates a new distribution client
+func NewClient(opts ...Option) (*Client, error) {
+	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -76,6 +107,11 @@ func NewClient(opts ...func(*ClientOptions)) (*Client, error) {
 	return &Client{
 		store: s,
 		log:   options.logger,
+		remoteOptions: []remote.Option{
+			remote.WithAuthFromKeychain(authn.DefaultKeychain),
+			remote.WithTransport(remote.DefaultTransport),
+			remote.WithUserAgent(options.userAgent),
+		},
 	}, nil
 }
 
@@ -89,15 +125,10 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return NewReferenceError(reference, err)
 	}
 
-	// Configure remote options
-	remoteOpts := []remote.Option{
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	}
-
 	// First, check the remote registry for the model's digest
 	c.log.Infoln("Checking remote registry for model:", reference)
-	remoteImg, err := remote.Image(ref, remoteOpts...)
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
+	remoteImg, err := remote.Image(ref, opts...)
 	if err != nil {
 		errStr := err.Error()
 		if strings.Contains(errStr, "UNAUTHORIZED") {
@@ -265,10 +296,8 @@ func (c *Client) PushModel(ctx context.Context, source, reference string) error 
 	}
 
 	// Push the image
-	if err := remote.Write(ref, mdl,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	); err != nil {
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
+	if err := remote.Write(ref, mdl, opts...); err != nil {
 		c.log.Errorln("Failed to push image:", err, "reference:", reference)
 		return fmt.Errorf("pushing image: %w", err)
 	}
