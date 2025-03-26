@@ -80,7 +80,7 @@ func WithUserAgent(ua string) Option {
 func defaultOptions() *options {
 	return &options{
 		logger:    logrus.NewEntry(logrus.StandardLogger()),
-		transport: http.DefaultTransport,
+		transport: remote.DefaultTransport,
 		userAgent: defaultUserAgent,
 	}
 }
@@ -109,7 +109,7 @@ func NewClient(opts ...Option) (*Client, error) {
 		log:   options.logger,
 		remoteOptions: []remote.Option{
 			remote.WithAuthFromKeychain(authn.DefaultKeychain),
-			remote.WithTransport(remote.DefaultTransport),
+			remote.WithTransport(options.transport),
 			remote.WithUserAgent(options.userAgent),
 		},
 	}, nil
