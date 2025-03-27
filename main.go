@@ -205,8 +205,14 @@ func cmdPush(client *distribution.Client, args []string) int {
 	}
 
 	// Push the image
+	authConfig := authn.AuthConfig{
+		Username: os.Getenv("DOCKER_USERNAME"),
+		Password: os.Getenv("DOCKER_PASSWORD"),
+	}
+
 	if err := remote.Write(ref, mdl,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithAuth(authn.FromConfig(authConfig)),
+		//remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithUserAgent("model-distribution-tool/"+version),
 		remote.WithContext(ctx),
 	); err != nil {

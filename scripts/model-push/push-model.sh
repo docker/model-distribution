@@ -116,17 +116,17 @@ SKIP_F16="${SKIP_F16:-false}"
 mkdir -p "$MODELS_DIR"
 
 # Check if Docker is installed
-if ! command -v docker &> /dev/null; then
-    echo "Error: Docker is not installed or not in PATH"
-    exit 1
-fi
+#if ! command -v docker &> /dev/null; then
+#    echo "Error: Docker is not installed or not in PATH"
+#    exit 1
+#fi
 
 # Check if model-distribution-tool exists
-if [ ! -f "${PROJECT_ROOT}/bin/model-distribution-tool" ]; then
-    echo "Error: model-distribution-tool not found at ${PROJECT_ROOT}/bin/model-distribution-tool"
-    echo "Please build the tool first with 'make build'"
-    exit 1
-fi
+#if [ ! -f "${PROJECT_ROOT}/bin/model-distribution-tool" ]; then
+#    echo "Error: model-distribution-tool not found at ${PROJECT_ROOT}/bin/model-distribution-tool"
+#    echo "Please build the tool first with 'make build'"
+#    exit 1
+#fi
 
 # Construct the full target reference
 TARGET="${REPOSITORY}:${WEIGHTS}-${QUANTIZATION}"
@@ -146,11 +146,13 @@ echo
 
 # Step 1: Run Docker container to convert the model from Hugging Face
 echo "Step 1: Converting model from Hugging Face..."
-docker run --rm \
-    -e HUGGINGFACE_TOKEN="$HF_TOKEN" \
-    -v "$MODELS_DIR:/models" \
-    ignaciolopezluna020/llama-converter:latest \
-    --from-hf "$HF_MODEL" --quantization "$QUANTIZATION"
+#docker run --rm \
+#    -e HUGGINGFACE_TOKEN="$HF_TOKEN" \
+#    -v "$MODELS_DIR:/models" \
+#    ignaciolopezluna020/llama-converter:latest \
+#    --from-hf "$HF_MODEL" --quantization "$QUANTIZATION"
+
+/entrypoint.sh --from-hf "$HF_MODEL" --quantization "$QUANTIZATION"
 
 # Get the model name from the HF_MODEL
 MODEL_NAME="$(echo "$HF_MODEL" | sed 's/.*\///')"
@@ -188,7 +190,7 @@ fi
 # Step 2: Check for license files
 echo "Step 2: Checking for license files..."
 LICENSE_FLAGS=""
-IFS=',' read -ra LICENSE_FILES <<< "$LICENSE_PATHS"
+IFS=',' read -ra LICENSE_FILES <<< "$MODEL_DIR/$LICENSE_PATHS"
 for LICENSE_FILE in "${LICENSE_FILES[@]}"; do
     if [ ! -f "$LICENSE_FILE" ]; then
         echo "Error: License file not found at $LICENSE_FILE"
@@ -208,15 +210,15 @@ fi
 echo "Step 3: Pushing model(s) to the repository..."
 
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
+model-distribution-tool push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
+model-distribution-tool push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     # Create F16 tag by appending "-F16" to the weights
     F16_TARGET="${REPOSITORY}:${WEIGHTS}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$F16_MODEL_FILE" "$F16_TARGET"
+    model-distribution-tool push $LICENSE_FLAGS "$F16_MODEL_FILE" "$F16_TARGET"
     echo "F16 model successfully pushed to $F16_TARGET"
 fi
 
