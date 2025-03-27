@@ -30,6 +30,11 @@ func (s *LocalStore) writeManifest(mdl v1.Image) error {
 	return writeFile(s.manifestPath(digest), rm)
 }
 
+// writeManifest writes the manifest to the store
+func (s *LocalStore) removeManifest(hash v1.Hash) error {
+	return os.Remove(s.manifestPath(hash))
+}
+
 // writeFile is a wrapper around os.WriteFile that creates any parent directories as needed.
 func writeFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {

@@ -28,7 +28,7 @@ type blob interface {
 	Uncompressed() (io.ReadCloser, error)
 }
 
-// createFile creates a file at the given path, creating any parent directories as needed.
+// writeBlob write the blob to the store, reporting progress to the given channel.
 func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	hash, err := layer.DiffID()
 	if err != nil {
@@ -61,6 +61,10 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 		return fmt.Errorf("rename blob file: %w", err)
 	}
 	return nil
+}
+
+func (s *LocalStore) removeBlob(hash v1.Hash) error {
+	return os.Remove(s.blobPath(hash))
 }
 
 func (s *LocalStore) hasBlob(hash v1.Hash) bool {

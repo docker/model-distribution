@@ -34,3 +34,15 @@ func (s *LocalStore) readLayout() (Layout, error) {
 
 	return layout, nil
 }
+
+// writeLayout write the layout file
+func (s *LocalStore) writeLayout(layout Layout) error {
+	layoutData, err := json.MarshalIndent(layout, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling layout: %w", err)
+	}
+	if err := writeFile(s.layoutPath(), layoutData); err != nil {
+		return fmt.Errorf("writing layout file: %w", err)
+	}
+	return nil
+}

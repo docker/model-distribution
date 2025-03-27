@@ -225,22 +225,6 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	return nil
 }
 
-// ProgressReader wraps an io.Reader to track reading progress
-type ProgressReader struct {
-	Reader       io.Reader
-	ProgressChan chan<- v1.Update
-	Total        int64
-}
-
-func (pr *ProgressReader) Read(p []byte) (int, error) {
-	n, err := pr.Reader.Read(p)
-	if n > 0 {
-		pr.Total += int64(n)
-		pr.ProgressChan <- v1.Update{Complete: pr.Total}
-	}
-	return n, err
-}
-
 // ListModels returns all available models
 func (c *Client) ListModels() ([]types.Model, error) {
 	c.log.Infoln("Listing available models")

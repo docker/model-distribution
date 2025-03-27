@@ -1,11 +1,9 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
@@ -46,38 +44,22 @@ func New(opts Options) (*LocalStore, error) {
 
 // initialize creates the store directory structure if it doesn't exist
 func (s *LocalStore) initialize() error {
-	// Create root directory if it doesn't exist
-	if err := os.MkdirAll(s.rootPath, 0777); err != nil {
-		return fmt.Errorf("creating root directory: %w", err)
-	}
-
 	// Check if layout.json exists, create if not
-	layoutPath := filepath.Join(s.rootPath, "layout.json")
-	if _, err := os.Stat(layoutPath); os.IsNotExist(err) {
+	if _, err := os.Stat(s.layoutPath()); os.IsNotExist(err) {
 		layout := Layout{
 			Version: CurrentVersion,
 		}
-		layoutData, err := json.MarshalIndent(layout, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshaling layout: %w", err)
-		}
-		if err := writeFile(layoutPath, layoutData); err != nil {
-			return fmt.Errorf("writing layout file: %w", err)
+		if err := s.writeLayout(layout); err != nil {
+			return fmt.Errorf("initializing layout file: %w", err)
 		}
 	}
 
 	// Check if models.json exists, create if not
-	modelsPath := filepath.Join(s.rootPath, "models.json")
-	if _, err := os.Stat(modelsPath); os.IsNotExist(err) {
-		models := Index{
+	if _, err := os.Stat(s.indexPath()); os.IsNotExist(err) {
+		if err := s.writeIndex(Index{
 			Models: []IndexEntry{},
-		}
-		modelsData, err := json.MarshalIndent(models, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshaling models: %w", err)
-		}
-		if err := writeFile(modelsPath, modelsData); err != nil {
-			return fmt.Errorf("writing models file: %w", err)
+		}); err != nil {
+			return fmt.Errorf("initializing index file: %w", err)
 		}
 	}
 
@@ -111,9 +93,9 @@ func (s *LocalStore) Delete(ref string) error {
 		// Remove manifest file
 		if digest, err := v1.NewHash(model.ID); err != nil {
 			fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
-		} else if err := os.Remove(filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex)); err != nil {
-			fmt.Printf("Warning: failed to remove manifest file %s: %v\n",
-				filepath.Join(s.rootPath, "manifests", digest.Algorithm, digest.Hex), err,
+		} else if err := s.removeManifest(digest); err != nil {
+			fmt.Printf("Warning: failed to remove manifest %q: %v\n",
+				digest, err,
 			)
 		}
 		// Before deleting blobs, check if they are referenced by other models
@@ -137,10 +119,9 @@ func (s *LocalStore) Delete(ref string) error {
 				fmt.Printf("Warning: failed to parse blob hash %s: %v\n", blobFile, err)
 				continue
 			}
-			blobPath := filepath.Join(s.rootPath, "blobs", hash.Algorithm, hash.Hex)
-			if err := os.Remove(blobPath); err != nil {
+			if err := s.removeBlob(hash); err != nil {
 				// Just log the error but don't fail the operation
-				fmt.Printf("Warning: failed to remove blob file %s: %v\n", blobPath, err)
+				fmt.Printf("Warning: failed to remove blob %q from store: %v\n", hash.String(), err)
 			}
 		}
 
@@ -244,21 +225,13 @@ func (s *LocalStore) Read(reference string) (*Model, error) {
 	}
 
 	// Find the model by tag
-	for i, model := range models {
+	for _, model := range models {
 		if model.MatchesReference(reference) {
 			hash, err := v1.NewHash(model.ID)
 			if err != nil {
 				return nil, fmt.Errorf("parsing hash: %w", err)
 			}
-			rawManifest, err := os.ReadFile(s.manifestPath(hash))
-			if err != nil {
-				return nil, fmt.Errorf("reading manifest file: %w", err)
-			}
-			return &Model{
-				rawManifest: rawManifest,
-				blobsDir:    filepath.Join(s.rootPath, "blobs", "sha256"),
-				tags:        models[i].Tags,
-			}, nil
+			return s.newModel(hash, model.Tags)
 		}
 	}
 
