@@ -190,8 +190,9 @@ fi
 # Step 2: Check for license files
 echo "Step 2: Checking for license files..."
 LICENSE_FLAGS=""
-IFS=',' read -ra LICENSE_FILES <<< "$MODEL_DIR/$LICENSE_PATHS"
-for LICENSE_FILE in "${LICENSE_FILES[@]}"; do
+IFS=',' read -ra LICENSE_PATH_ARRAY <<< "$LICENSE_PATHS"
+for LICENSE_PATH in "${LICENSE_PATH_ARRAY[@]}"; do
+    LICENSE_FILE="$MODEL_DIR/$LICENSE_PATH"
     if [ ! -f "$LICENSE_FILE" ]; then
         echo "Error: License file not found at $LICENSE_FILE"
         exit 1
