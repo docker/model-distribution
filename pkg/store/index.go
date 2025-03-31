@@ -100,7 +100,7 @@ func (s *LocalStore) writeIndex(index Index) error {
 	}
 
 	// Write the models index
-	if err := os.WriteFile(s.indexPath(), modelsData, 0644); err != nil {
+	if err := writeFile(s.indexPath(), modelsData); err != nil {
 		return fmt.Errorf("writing models file: %w", err)
 	}
 
