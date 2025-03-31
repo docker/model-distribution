@@ -17,7 +17,7 @@ func (s *LocalStore) manifestPath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, manifestsDir, hash.Algorithm, hash.Hex)
 }
 
-// writeManifest writes the manifest to the store
+// writeManifest writes the model's manifest to the store
 func (s *LocalStore) writeManifest(mdl v1.Image) error {
 	digest, err := mdl.Digest()
 	if err != nil {
@@ -30,7 +30,7 @@ func (s *LocalStore) writeManifest(mdl v1.Image) error {
 	return writeFile(s.manifestPath(digest), rm)
 }
 
-// writeManifest writes the manifest to the store
+// removeManifest removes the manifest file from the store
 func (s *LocalStore) removeManifest(hash v1.Hash) error {
 	return os.Remove(s.manifestPath(hash))
 }

@@ -13,12 +13,12 @@ const (
 	blobsDir = "blobs"
 )
 
-// blob returns the path to the blob for the given hash.
+// blobDir returns the path to the blobs directory
 func (s *LocalStore) blobsDir() string {
 	return filepath.Join(s.rootPath, blobsDir)
 }
 
-// blob returns the path to the blob for the given hash.
+// blobPath returns the path to the blob for the given hash.
 func (s *LocalStore) blobPath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, blobsDir, hash.Algorithm, hash.Hex)
 }
@@ -29,6 +29,7 @@ type blob interface {
 }
 
 // writeBlob write the blob to the store, reporting progress to the given channel.
+// If the blob is already in the store, it is a no-op.
 func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	hash, err := layer.DiffID()
 	if err != nil {
@@ -63,6 +64,7 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	return nil
 }
 
+// removeBlob removes the blob with the given hash from the store.
 func (s *LocalStore) removeBlob(hash v1.Hash) error {
 	return os.Remove(s.blobPath(hash))
 }
