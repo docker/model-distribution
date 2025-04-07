@@ -1,8 +1,10 @@
 package distribution
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -393,6 +395,113 @@ func TestClientPullModel(t *testing.T) {
 		if err := client.PullModel(context.Background(), tag, nil); err == nil || !errors.Is(err, ErrUnsupportedMediaType) {
 			t.Fatalf("Expected artifact version error, got %v", err)
 		}
+	})
+
+	t.Run("pull with JSON progress messages", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-json-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Pull model from registry with progress writer
+		if err := client.PullModel(context.Background(), tag, &progressBuffer); err != nil {
+			t.Fatalf("Failed to pull model: %v", err)
+		}
+
+		// Parse progress output as JSON
+		var messages []ProgressMessage
+		scanner := bufio.NewScanner(&progressBuffer)
+		for scanner.Scan() {
+			line := scanner.Text()
+			var msg ProgressMessage
+			if err := json.Unmarshal([]byte(line), &msg); err != nil {
+				t.Fatalf("Failed to parse JSON progress message: %v, line: %s", err, line)
+			}
+			messages = append(messages, msg)
+		}
+
+		if err := scanner.Err(); err != nil {
+			t.Fatalf("Error reading progress output: %v", err)
+		}
+
+		// Verify we got some messages
+		if len(messages) == 0 {
+			t.Fatal("No progress messages received")
+		}
+
+		// Check the last message is a success message
+		lastMsg := messages[len(messages)-1]
+		if lastMsg.Type != "success" {
+			t.Errorf("Expected last message to be success, got type: %s, message: %s", lastMsg.Type, lastMsg.Message)
+		}
+
+		// Verify model was pulled correctly
+		model, err := client.GetModel(tag)
+		if err != nil {
+			t.Fatalf("Failed to get model: %v", err)
+		}
+
+		modelPath, err := model.GGUFPath()
+		if err != nil {
+			t.Fatalf("Failed to get model path: %v", err)
+		}
+
+		// Verify model content
+		pulledContent, err := os.ReadFile(modelPath)
+		if err != nil {
+			t.Fatalf("Failed to read pulled model: %v", err)
+		}
+
+		if string(pulledContent) != string(modelContent) {
+			t.Errorf("Pulled model content doesn't match original")
+		}
+	})
+
+	t.Run("pull with error and JSON progress messages", func(t *testing.T) {
+		// Create temp directory for store
+		tempDir, err := os.MkdirTemp("", "model-distribution-json-error-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create client
+		client, err := NewClient(WithStoreRootPath(tempDir))
+		if err != nil {
+			t.Fatalf("Failed to create client: %v", err)
+		}
+
+		// Create a buffer to capture progress output
+		var progressBuffer bytes.Buffer
+
+		// Test with non-existent model
+		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
+		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
+
+		// Expect an error
+		if err == nil {
+			t.Fatal("Expected error for non-existent model, got nil")
+		}
+
+		// Verify it's a PullError
+		var pullErr *PullError
+		if !errors.As(err, &pullErr) {
+			t.Fatalf("Expected PullError, got %T", err)
+		}
+
+		// No JSON messages should be in the buffer for this error case
+		// since the error happens before we start streaming progress
 	})
 }
 

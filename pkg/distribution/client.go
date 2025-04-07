@@ -172,7 +172,10 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		// Report progress for local model
 		if progressWriter != nil {
 			size := fileInfo.Size()
-			fmt.Fprintf(progressWriter, "Using cached model: %.2f MB\n", float64(size)/1024/1024)
+			err := writeSuccess(progressWriter, fmt.Sprintf("Using cached model: %.2f MB", float64(size)/1024/1024))
+			if err != nil {
+				c.log.Warnf("Writing progress: %v", err)
+			}
 		}
 
 		// Ensure model has the correct tag
@@ -210,7 +213,9 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 				// Only update if enough time has passed or enough bytes downloaded
 				if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
-					fmt.Fprintf(progressWriter, "Downloaded: %.2f MB\n", float64(p.Complete)/1024/1024)
+					if err := writeProgress(progressWriter, p.Complete); err != nil {
+						c.log.Warnf("Failed to write progress: %v", err)
+					}
 					lastUpdate = now
 					lastComplete = p.Complete
 				}
@@ -219,7 +224,20 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	}
 
 	if err = c.store.Write(remoteImg, []string{reference}, progress); err != nil {
+		// Write error message to progress writer if available
+		if progressWriter != nil {
+			if writeErr := writeError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
+				c.log.Warnf("Failed to write error message: %v", writeErr)
+			}
+		}
 		return fmt.Errorf("writing image to store: %w", err)
+	}
+
+	// Write success message if progress writer is available
+	if progressWriter != nil {
+		if err := writeSuccess(progressWriter, "Model pulled successfully"); err != nil {
+			c.log.Warnf("Failed to write success message: %v", err)
+		}
 	}
 
 	return nil
