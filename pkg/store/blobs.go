@@ -58,6 +58,8 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	if _, err := io.Copy(f, r); err != nil {
 		return fmt.Errorf("copy blob %q to store: %w", hash.String(), err)
 	}
+
+	f.Close() // Rename will fail on Windows if the file is still open.
 	if err := os.Rename(incompletePath(path), path); err != nil {
 		return fmt.Errorf("rename blob file: %w", err)
 	}
