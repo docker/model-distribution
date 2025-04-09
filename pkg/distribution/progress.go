@@ -24,6 +24,9 @@ func writeProgressMessage(w io.Writer, msg ProgressMessage) error {
 
 // writeProgress writes a progress update message
 func writeProgress(w io.Writer, complete int64) error {
+	if complete == 0 {
+		return nil
+	}
 	return writeProgressMessage(w, ProgressMessage{
 		Type:    "progress",
 		Message: fmt.Sprintf("Downloaded: %.2f MB", float64(complete)/1024/1024),
