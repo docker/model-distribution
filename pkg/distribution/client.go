@@ -52,28 +52,36 @@ type options struct {
 // WithStoreRootPath sets the store root path
 func WithStoreRootPath(path string) Option {
 	return func(o *options) {
-		o.storeRootPath = path
+		if path != "" {
+			o.storeRootPath = path
+		}
 	}
 }
 
 // WithLogger sets the logger
 func WithLogger(logger *logrus.Entry) Option {
 	return func(o *options) {
-		o.logger = logger
+		if logger != nil {
+			o.logger = logger
+		}
 	}
 }
 
 // WithTransport sets the HTTP transport to use when pulling and pushing models.
 func WithTransport(transport http.RoundTripper) Option {
 	return func(o *options) {
-		o.transport = transport
+		if transport != nil {
+			o.transport = transport
+		}
 	}
 }
 
 // WithUserAgent sets the User-Agent header to use when pulling and pushing models.
 func WithUserAgent(ua string) Option {
 	return func(o *options) {
-		o.userAgent = ua
+		if ua != "" {
+			o.userAgent = ua
+		}
 	}
 }
 
