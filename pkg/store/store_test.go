@@ -3,6 +3,7 @@ package store_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -175,6 +176,14 @@ func TestStoreAPI(t *testing.T) {
 		_, err = s.Read("api-model:latest")
 		if err == nil {
 			t.Errorf("Expected error after deletion, got nil")
+		}
+	})
+
+	// Test Delete Non Existent Model
+	t.Run("Delete", func(t *testing.T) {
+		err := s.Delete("non-existent-model:latest")
+		if !errors.Is(err, store.ErrModelNotFound) {
+			t.Fatalf("Expected ErrModelNotFound, got %v", err)
 		}
 	})
 
