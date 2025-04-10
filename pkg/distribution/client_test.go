@@ -746,6 +746,92 @@ func TestClientDefaultLogger(t *testing.T) {
 	}
 }
 
+func TestWithFunctionsNilChecks(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Test WithStoreRootPath with empty string
+	t.Run("WithStoreRootPath empty string", func(t *testing.T) {
+		// Create options with a valid path first
+		opts := defaultOptions()
+		WithStoreRootPath(tempDir)(opts)
+
+		// Then try to override with empty string
+		WithStoreRootPath("")(opts)
+
+		// Verify the path wasn't changed to empty
+		if opts.storeRootPath != tempDir {
+			t.Errorf("WithStoreRootPath with empty string changed the path: got %q, want %q",
+				opts.storeRootPath, tempDir)
+		}
+	})
+
+	// Test WithLogger with nil
+	t.Run("WithLogger nil", func(t *testing.T) {
+		// Create options with default logger
+		opts := defaultOptions()
+		defaultLogger := opts.logger
+
+		// Try to override with nil
+		WithLogger(nil)(opts)
+
+		// Verify the logger wasn't changed to nil
+		if opts.logger == nil {
+			t.Error("WithLogger with nil changed logger to nil")
+		}
+
+		// Verify it's still the default logger
+		if opts.logger != defaultLogger {
+			t.Error("WithLogger with nil changed the logger")
+		}
+	})
+
+	// Test WithTransport with nil
+	t.Run("WithTransport nil", func(t *testing.T) {
+		// Create options with default transport
+		opts := defaultOptions()
+		defaultTransport := opts.transport
+
+		// Try to override with nil
+		WithTransport(nil)(opts)
+
+		// Verify the transport wasn't changed to nil
+		if opts.transport == nil {
+			t.Error("WithTransport with nil changed transport to nil")
+		}
+
+		// Verify it's still the default transport
+		if opts.transport != defaultTransport {
+			t.Error("WithTransport with nil changed the transport")
+		}
+	})
+
+	// Test WithUserAgent with empty string
+	t.Run("WithUserAgent empty string", func(t *testing.T) {
+		// Create options with default user agent
+		opts := defaultOptions()
+		defaultUA := opts.userAgent
+
+		// Try to override with empty string
+		WithUserAgent("")(opts)
+
+		// Verify the user agent wasn't changed to empty
+		if opts.userAgent == "" {
+			t.Error("WithUserAgent with empty string changed user agent to empty")
+		}
+
+		// Verify it's still the default user agent
+		if opts.userAgent != defaultUA {
+			t.Errorf("WithUserAgent with empty string changed the user agent: got %q, want %q",
+				opts.userAgent, defaultUA)
+		}
+	})
+}
+
 func TestNewReferenceError(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
