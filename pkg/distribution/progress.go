@@ -14,6 +14,9 @@ type ProgressMessage struct {
 
 // writeProgressMessage writes a JSON-formatted progress message to the writer
 func writeProgressMessage(w io.Writer, msg ProgressMessage) error {
+	if w == nil {
+		return nil
+	}
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err

@@ -170,12 +170,12 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		}
 
 		// Report progress for local model
-		if progressWriter != nil {
-			size := fileInfo.Size()
-			err := writeSuccess(progressWriter, fmt.Sprintf("Using cached model: %.2f MB", float64(size)/1024/1024))
-			if err != nil {
-				c.log.Warnf("Writing progress: %v", err)
-			}
+		size := fileInfo.Size()
+		err = writeSuccess(progressWriter, fmt.Sprintf("Using cached model: %.2f MB", float64(size)/1024/1024))
+		if err != nil {
+			c.log.Warnf("Writing progress: %v", err)
+			// If we fail to write progress, don't try again
+			progressWriter = nil
 		}
 
 		// Ensure model has the correct tag
@@ -191,53 +191,50 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	var wg sync.WaitGroup
 	var progress chan v1.Update
-	if progressWriter != nil {
-		// Start a goroutine to handle progress updates
-		// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
-		wg.Add(1)
-		defer wg.Wait()
+	// Start a goroutine to handle progress updates
+	// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
+	wg.Add(1)
+	defer wg.Wait()
 
-		// Create a buffered channel for progress updates
-		progress = make(chan v1.Update, 100)
-		defer close(progress)
-		go func() {
-			defer wg.Done()
-			var lastComplete int64
-			var lastUpdate time.Time
-			const updateInterval = 500 * time.Millisecond // Update every 500ms
-			const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
+	// Create a buffered channel for progress updates
+	progress = make(chan v1.Update, 100)
+	defer close(progress)
+	go func() {
+		defer wg.Done()
+		var lastComplete int64
+		var lastUpdate time.Time
+		const updateInterval = 500 * time.Millisecond // Update every 500ms
+		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
 
-			for p := range progress {
-				now := time.Now()
-				bytesDownloaded := p.Complete - lastComplete
-
-				// Only update if enough time has passed or enough bytes downloaded
-				if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
-					if err := writeProgress(progressWriter, p.Complete); err != nil {
-						c.log.Warnf("Failed to write progress: %v", err)
-					}
-					lastUpdate = now
-					lastComplete = p.Complete
+		for p := range progress {
+			now := time.Now()
+			bytesDownloaded := p.Complete - lastComplete
+			// Only update if enough time has passed or enough bytes downloaded
+			if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
+				if err := writeProgress(progressWriter, p.Complete); err != nil {
+					c.log.Warnf("Failed to write progress: %v", err)
+					// If we fail to write progress, don't try again
+					progressWriter = nil
 				}
+				lastUpdate = now
+				lastComplete = p.Complete
 			}
-		}()
-	}
+		}
+	}()
 
 	if err = c.store.Write(remoteImg, []string{reference}, progress); err != nil {
-		// Write error message to progress writer if available
-		if progressWriter != nil {
-			if writeErr := writeError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
-				c.log.Warnf("Failed to write error message: %v", writeErr)
-			}
+		if writeErr := writeError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
+			c.log.Warnf("Failed to write error message: %v", writeErr)
+			// If we fail to write error message, don't try again
+			progressWriter = nil
 		}
 		return fmt.Errorf("writing image to store: %w", err)
 	}
 
-	// Write success message if progress writer is available
-	if progressWriter != nil {
-		if err := writeSuccess(progressWriter, "Model pulled successfully"); err != nil {
-			c.log.Warnf("Failed to write success message: %v", err)
-		}
+	if err := writeSuccess(progressWriter, "Model pulled successfully"); err != nil {
+		c.log.Warnf("Failed to write success message: %v", err)
+		// If we fail to write success message, don't try again
+		progressWriter = nil
 	}
 
 	return nil
