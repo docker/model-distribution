@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/docker/model-distribution/internal/gguf"
 )
 
 func TestGARIntegration(t *testing.T) {
@@ -40,9 +42,18 @@ func TestGARIntegration(t *testing.T) {
 
 	// Test push to GAR
 	t.Run("Push", func(t *testing.T) {
-		err := client.PushModel(context.Background(), modelFile, garTag)
+		mdl, err := gguf.NewModel(testGGUFFile)
 		if err != nil {
-			t.Fatalf("Failed to push model to GAR: %v", err)
+			t.Fatalf("Failed to create model: %v", err)
+		}
+		if err := client.store.Write(mdl, []string{garTag}, nil); err != nil {
+			t.Fatalf("Failed to write model to store: %v", err)
+		}
+		if err := client.PushModel(context.Background(), garTag); err != nil {
+			t.Fatalf("Failed to push model to ECR: %v", err)
+		}
+		if err := client.DeleteModel(garTag); err != nil { // cleanup
+			t.Fatalf("Failed to delete model from store: %v", err)
 		}
 	})
 
