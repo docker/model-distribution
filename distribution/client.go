@@ -283,8 +283,8 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	return model, nil
 }
 
-// PushModel pushes a model to a registry
-func (c *Client) PushModel(ctx context.Context, source, reference string) error {
+// loadModel loads a gguf source file into the registry
+func (c *Client) loadModel(ctx context.Context, source, reference string) error {
 	c.log.Infoln("Starting model push, source:", source, "reference:", reference)
 
 	// Parse the reference
@@ -327,6 +327,34 @@ func (c *Client) DeleteModel(reference string) error {
 func (c *Client) Tag(source string, target string) error {
 	c.log.Infoln("Tagging model, source:", source, "target:", target)
 	return c.store.AddTags(source, []string{target})
+}
+
+// PushModel pushes a tagged model from the content store to the registry.
+func (c *Client) PushModel(ctx context.Context, tag string) (err error) {
+	// Parse the tag
+	ref, err := name.NewTag(tag)
+	if err != nil {
+		return fmt.Errorf("invalid tag %q: %w", tag, err)
+	}
+
+	// Get the model from the store
+	mdl, err := c.store.Read(tag)
+	if err != nil {
+		return fmt.Errorf("reading model: %w", err)
+	}
+
+	// Push the model
+	c.log.Infoln("Pushing model:", tag)
+	// todo: report progress
+
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
+	if err := remote.Write(ref, mdl, opts...); err != nil {
+		c.log.Errorln("Failed to push image:", err, "reference:", tag)
+		return fmt.Errorf("pushing image: %w", err)
+	}
+
+	c.log.Infoln("Successfully pushed model:", tag)
+	return nil
 }
 
 func checkCompat(image v1.Image) error {

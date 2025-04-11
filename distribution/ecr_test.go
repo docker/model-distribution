@@ -40,7 +40,7 @@ func TestECRIntegration(t *testing.T) {
 
 	// Test push to ECR
 	t.Run("Push", func(t *testing.T) {
-		err := client.PushModel(context.Background(), modelFile, ecrTag)
+		err := client.loadModel(context.Background(), modelFile, ecrTag)
 		if err != nil {
 			t.Fatalf("Failed to push model to ECR: %v", err)
 		}
