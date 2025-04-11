@@ -14,7 +14,7 @@ import (
 )
 
 func TestAppendLayer(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAppendLayer(t *testing.T) {
 }
 
 func TestConfigMediaTypes(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
