@@ -711,6 +711,26 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 }
 
+func TestClientDeleteNonexistentModel(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Delete the model
+	if err := client.DeleteModel("some/missing:model"); !errors.Is(err, ErrModelNotFound) {
+		t.Fatalf("Should return ErrModelNotFound got: %v", err)
+	}
+}
+
 func TestClientDefaultLogger(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")

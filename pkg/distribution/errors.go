@@ -3,13 +3,14 @@ package distribution
 import (
 	"errors"
 	"fmt"
+	"github.com/docker/model-distribution/pkg/store"
 
 	"github.com/docker/model-distribution/pkg/types"
 )
 
 var (
 	ErrInvalidReference     = errors.New("invalid model reference")
-	ErrModelNotFound        = errors.New("model not found")
+	ErrModelNotFound        = store.ErrModelNotFound
 	ErrUnauthorized         = errors.New("unauthorized access to model")
 	ErrUnsupportedMediaType = errors.New(fmt.Sprintf(
 		"client supports only models of type %q and older - try upgrading",

@@ -75,7 +75,7 @@ func (s *LocalStore) List() ([]IndexEntry, error) {
 	return index.Models, nil
 }
 
-// Delete deletes a model by tag
+// Delete deletes a model by reference
 func (s *LocalStore) Delete(ref string) error {
 	idx, err := s.readIndex()
 	if err != nil {
@@ -83,8 +83,7 @@ func (s *LocalStore) Delete(ref string) error {
 	}
 	model, i, ok := idx.Find(ref)
 	if !ok {
-		// Model not found, nothing to delete
-		return nil
+		return ErrModelNotFound
 	}
 	idx = idx.UnTag(ref)
 
