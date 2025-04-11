@@ -24,7 +24,7 @@ all: clean lint build test
 build:
 	@echo "Building ${BINARY_NAME}..."
 	@mkdir -p ${GOBIN}
-	@go build ${LDFLAGS} -o ${GOBIN}/${BINARY_NAME} .
+	@go build ${LDFLAGS} -o ${GOBIN}/${BINARY_NAME} github.com/docker/model-distribution/cmd/mdltool
 
 test:
 	@echo "Running unit tests..."

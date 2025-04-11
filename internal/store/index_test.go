@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"github.com/docker/model-distribution/pkg/store"
+	"github.com/docker/model-distribution/internal/store"
 )
 
 func TestMatchReference(t *testing.T) {

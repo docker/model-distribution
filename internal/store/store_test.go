@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
-	"github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/store"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/mutate"
+	"github.com/docker/model-distribution/internal/partial"
+	"github.com/docker/model-distribution/internal/store"
+	"github.com/docker/model-distribution/types"
 )
 
 // TestStoreAPI tests the store API directly

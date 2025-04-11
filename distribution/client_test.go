@@ -16,8 +16,12 @@ import (
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/mutate"
+)
+
+var (
+	testGGUFFile = filepath.Join("..", "assets", "dummy.gguf")
 )
 
 func TestClientPullModel(t *testing.T) {
@@ -46,16 +50,13 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Use the dummy.gguf file from assets directory
-	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-
 	// Read model content for verification later
-	modelContent, err := os.ReadFile(modelFile)
+	modelContent, err := os.ReadFile(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
-	model, err := gguf.NewModel(modelFile)
+	model, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -192,8 +193,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Use the dummy.gguf file from assets directory
-		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-		mdl, err := gguf.NewModel(modelFile)
+		mdl, err := gguf.NewModel(testGGUFFile)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}
@@ -205,7 +205,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to registry
-		if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+		if err := client.PushModel(context.Background(), testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -292,18 +292,15 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to create client: %v", err)
 		}
 
-		// Use the dummy.gguf file from assets directory for first version
-		modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-
 		// Read model content for verification later
-		modelContent, err := os.ReadFile(modelFile)
+		modelContent, err := os.ReadFile(testGGUFFile)
 		if err != nil {
 			t.Fatalf("Failed to read test model file: %v", err)
 		}
 
 		// Push first version of model to registry
 		tag := registry + "/update-test:v1.0.0"
-		if err := client.PushModel(context.Background(), modelFile, tag); err != nil {
+		if err := client.PushModel(context.Background(), testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to push first version of model: %v", err)
 		}
 
@@ -519,10 +516,8 @@ func TestClientGetModel(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Use the dummy.gguf file from assets directory
-	modelFile := filepath.Join("..", "..", "assets", "dummy.gguf")
-
-	model, err := gguf.NewModel(modelFile)
+	// Create model from test GGUF file
+	model, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -688,7 +683,7 @@ func TestClientDeleteModel(t *testing.T) {
 	}
 
 	// Use the dummy.gguf file from assets directory
-	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

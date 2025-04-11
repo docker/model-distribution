@@ -32,7 +32,7 @@ func TestECRIntegration(t *testing.T) {
 	}
 
 	// Read test model file
-	modelFile := "../../assets/dummy.gguf"
+	modelFile := "../assets/dummy.gguf"
 	modelContent, err := os.ReadFile(modelFile)
 	if err != nil {
 		t.Fatalf("Failed to read test model file: %v", err)

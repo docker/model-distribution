@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/types"
 )
 
 func TestGGUF(t *testing.T) {

@@ -10,16 +10,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/sirupsen/logrus"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/store"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/store"
+	"github.com/docker/model-distribution/types"
 )
 
 const (

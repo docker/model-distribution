@@ -9,7 +9,7 @@ import (
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/pkg/errors"
 
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/types"
 )
 
 type WithRawConfigFile interface {
