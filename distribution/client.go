@@ -144,6 +144,9 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		if strings.Contains(errStr, "MANIFEST_UNKNOWN") {
 			return NewPullError(reference, "MANIFEST_UNKNOWN", "Model not found", err)
 		}
+		if strings.Contains(errStr, "NAME_UNKNOWN") {
+			return NewPullError(reference, "NAME_UNKNOWN", "Repository not found", err)
+		}
 		c.log.Errorln("Failed to check remote image:", err, "reference:", reference)
 		return NewPullError(reference, "UNKNOWN", err.Error(), err)
 	}
