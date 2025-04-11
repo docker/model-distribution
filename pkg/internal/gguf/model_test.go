@@ -4,13 +4,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/pkg/internal/gguf"
+	"github.com/docker/model-distribution/pkg/internal/types"
 )
 
 func TestGGUF(t *testing.T) {
 	t.Run("TestGGUFModel", func(t *testing.T) {
-		mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+		mdl, err := gguf.NewModel(filepath.Join("..", "..", "..", "assets", "dummy.gguf"))
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}

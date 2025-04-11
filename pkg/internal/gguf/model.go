@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	mdpartial "github.com/docker/model-distribution/pkg/internal/partial"
+	"github.com/docker/model-distribution/pkg/internal/types"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
-
-	mdpartial "github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 var _ types.ModelArtifact = &Model{}

@@ -5,16 +5,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/docker/model-distribution/pkg/internal/gguf"
+	"github.com/docker/model-distribution/pkg/internal/mutate"
+	"github.com/docker/model-distribution/pkg/internal/partial"
+	"github.com/docker/model-distribution/pkg/internal/store"
+	"github.com/docker/model-distribution/pkg/internal/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
-	"github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/store"
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 // TestStoreAPI tests the store API directly

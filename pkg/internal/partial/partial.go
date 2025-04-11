@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/docker/model-distribution/pkg/internal/types"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/pkg/errors"
-
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 type WithRawConfigFile interface {

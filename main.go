@@ -8,15 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-
 	"github.com/docker/model-distribution/pkg/distribution"
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
-	"github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/types"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -178,39 +170,9 @@ func cmdPush(client *distribution.Client, args []string) int {
 		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
 	}
 
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
-		return 1
-	}
-
-	// Create image with layer
-	var mdl types.ModelArtifact
-	mdl, err = gguf.NewModel(source)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating model from gguf: %v\n", err)
-		return 1
-	}
-
-	// Add all license files as layers
-	for _, path := range licensePaths {
-		fmt.Println("Adding license file:", path)
-		licenseLayer, err := partial.NewLayer(path, types.MediaTypeLicense)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
-			return 1
-		}
-		mdl = mutate.AppendLayers(mdl, licenseLayer)
-	}
-
-	// Push the image
-	if err := remote.Write(ref, mdl,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithUserAgent("model-distribution-tool/"+version),
-		remote.WithContext(ctx),
-	); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", ref.String(), err)
+	// Push the model
+	if err := client.PushModel(ctx, source, reference); err != nil {
+		fmt.Fprintf(os.Stderr, "Error pushing model: %v\n", err)
 		return 1
 	}
 	return 0

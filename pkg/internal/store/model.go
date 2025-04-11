@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	mdpartial "github.com/docker/model-distribution/pkg/internal/partial"
+	mdtypes "github.com/docker/model-distribution/pkg/internal/types"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-
-	mdpartial "github.com/docker/model-distribution/pkg/partial"
-	mdtypes "github.com/docker/model-distribution/pkg/types"
 )
 
 var _ v1.Image = &Model{}

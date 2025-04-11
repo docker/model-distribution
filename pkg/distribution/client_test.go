@@ -11,13 +11,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/model-distribution/pkg/internal/gguf"
+	"github.com/docker/model-distribution/pkg/internal/mutate"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
-
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
 )
 
 func TestClientPullModel(t *testing.T) {
