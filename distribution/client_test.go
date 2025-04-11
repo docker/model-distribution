@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
-	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
@@ -29,16 +29,13 @@ var (
 
 func TestClientPullModel(t *testing.T) {
 	// Set up test registry
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	server := httptest.NewServer(registry.New())
+	defer server.Close()
+	registryURL, err := url.Parse(server.URL)
 	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
+		t.Fatalf("Failed to parse registry URL: %v", err)
 	}
-	defer registryContainer.Terminate(context.Background())
-
-	registry, err := registryContainer.HostAddress(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
-	}
+	registry := registryURL.Host
 
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -152,7 +149,7 @@ func TestClientPullModel(t *testing.T) {
 		// Create a buffer to capture progress output
 		var progressBuffer bytes.Buffer
 
-		// Test with non-existent model
+		// Test with non-existent repository
 		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 		if err == nil {
@@ -170,14 +167,17 @@ func TestClientPullModel(t *testing.T) {
 		if pullErr.Reference != nonExistentRef {
 			t.Errorf("Expected reference %q, got %q", nonExistentRef, pullErr.Reference)
 		}
-		if pullErr.Code != "MANIFEST_UNKNOWN" {
+		if pullErr.Code != "NAME_UNKNOWN" {
 			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
 		}
-		if pullErr.Message != "Model not found" {
-			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+		if pullErr.Message != "Repository not found" {
+			t.Errorf("Expected message '\"Repository not found', got %q", pullErr.Message)
 		}
 		if pullErr.Err == nil {
 			t.Error("Expected underlying error to be non-nil")
+		}
+		if !errors.Is(pullErr, ErrModelNotFound) {
+			t.Errorf("Expected underlying error to match ErrModelNotFound, got %v", pullErr.Err)
 		}
 	})
 
@@ -208,7 +208,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to registry
-		if err := client.loadModel(context.Background(), testGGUFFile, tag); err != nil {
+		if err := client.PushModel(context.Background(), tag); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -303,7 +303,7 @@ func TestClientPullModel(t *testing.T) {
 
 		// Push first version of model to registry
 		tag := registry + "/update-test:v1.0.0"
-		if err := client.loadModel(context.Background(), testGGUFFile, tag); err != nil {
+		if err := writeToRegistry(testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to push first version of model: %v", err)
 		}
 
@@ -341,7 +341,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push updated model with same tag
-		if err := client.loadModel(context.Background(), updatedModelFile, tag); err != nil {
+		if err := writeToRegistry(updatedModelFile, tag); err != nil {
 			t.Fatalf("Failed to push updated model: %v", err)
 		}
 
@@ -952,4 +952,27 @@ func TestPush(t *testing.T) {
 	if digest != digest2 {
 		t.Fatalf("Digests don't match: got %s, want %s", digest2, digest)
 	}
+}
+
+// writeToRegistry writes a GGUF model to a registry.
+func writeToRegistry(source, reference string) error {
+
+	// Parse the reference
+	ref, err := name.ParseReference(reference)
+	if err != nil {
+		return fmt.Errorf("parse ref: %w", err)
+	}
+
+	// Create image with layer
+	mdl, err := gguf.NewModel(source)
+	if err != nil {
+		return fmt.Errorf("new model: %w", err)
+	}
+
+	// Push the image
+	if err := remote.Write(ref, mdl); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
 }
