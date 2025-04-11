@@ -40,7 +40,7 @@ func TestGARIntegration(t *testing.T) {
 
 	// Test push to GAR
 	t.Run("Push", func(t *testing.T) {
-		err := client.PushModel(context.Background(), modelFile, garTag)
+		err := client.loadModel(context.Background(), modelFile, garTag)
 		if err != nil {
 			t.Fatalf("Failed to push model to GAR: %v", err)
 		}
