@@ -8,13 +8,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/static"
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/mutate"
+	"github.com/docker/model-distribution/types"
 )
 
 func TestAppendLayer(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAppendLayer(t *testing.T) {
 }
 
 func TestConfigMediaTypes(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

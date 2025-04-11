@@ -3,9 +3,9 @@ package distribution
 import (
 	"errors"
 	"fmt"
-	"github.com/docker/model-distribution/pkg/store"
 
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/internal/store"
+	"github.com/docker/model-distribution/types"
 )
 
 var (

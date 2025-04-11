@@ -10,8 +10,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 
-	mdpartial "github.com/docker/model-distribution/pkg/partial"
-	mdtypes "github.com/docker/model-distribution/pkg/types"
+	mdpartial "github.com/docker/model-distribution/internal/partial"
+	mdtypes "github.com/docker/model-distribution/types"
 )
 
 var _ v1.Image = &Model{}

@@ -16,8 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/mutate"
 )
 
 func TestClientPullModel(t *testing.T) {

@@ -12,11 +12,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
-	"github.com/docker/model-distribution/pkg/distribution"
-	"github.com/docker/model-distribution/pkg/gguf"
-	"github.com/docker/model-distribution/pkg/mutate"
-	"github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/types"
+	"github.com/docker/model-distribution/distribution"
+	"github.com/docker/model-distribution/internal/gguf"
+	"github.com/docker/model-distribution/internal/mutate"
+	"github.com/docker/model-distribution/internal/partial"
+	"github.com/docker/model-distribution/types"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values

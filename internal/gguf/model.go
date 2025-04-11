@@ -8,8 +8,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	ggcr "github.com/google/go-containerregistry/pkg/v1/types"
 
-	mdpartial "github.com/docker/model-distribution/pkg/partial"
-	"github.com/docker/model-distribution/pkg/types"
+	mdpartial "github.com/docker/model-distribution/internal/partial"
+	"github.com/docker/model-distribution/types"
 )
 
 var _ types.ModelArtifact = &Model{}
