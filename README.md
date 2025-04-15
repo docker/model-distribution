@@ -31,6 +31,9 @@ make build
 # Package a model with license files and push to a registry
 ./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
 
+# Push a model from the content store to the registry
+./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
+
 # List all models in the local store
 ./bin/model-distribution-tool list
 
@@ -101,6 +104,12 @@ if err != nil {
 
 // Tag a model
 err = client.Tag("registry.example.com/models/llama:v1.0", "registry.example.com/models/llama:latest")
+if err != nil {
+    // Handle error
+}
+
+// Push a model
+err = client.PushModel("registry.example.com/models/llama:v1.0")
 if err != nil {
     // Handle error
 }
