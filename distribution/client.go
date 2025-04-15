@@ -16,7 +16,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 
-	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/store"
 	"github.com/docker/model-distribution/types"
 )
@@ -284,35 +283,6 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	}
 
 	return model, nil
-}
-
-// loadModel loads a gguf source file into the registry
-func (c *Client) loadModel(ctx context.Context, source, reference string) error {
-	c.log.Infoln("Starting model push, source:", source, "reference:", reference)
-
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
-	if err != nil {
-		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
-		return fmt.Errorf("parsing reference: %w", err)
-	}
-
-	// Create image with layer
-	mdl, err := gguf.NewModel(source)
-	if err != nil {
-		c.log.Errorln("Failed to create image:", err)
-		return fmt.Errorf("creating image: %w", err)
-	}
-
-	// Push the image
-	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
-	if err := remote.Write(ref, mdl, opts...); err != nil {
-		c.log.Errorln("Failed to push image:", err, "reference:", reference)
-		return fmt.Errorf("pushing image: %w", err)
-	}
-
-	c.log.Infoln("Successfully pushed model:", reference)
-	return nil
 }
 
 // DeleteModel deletes a model
