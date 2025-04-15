@@ -88,8 +88,8 @@ func main() {
 	switch command {
 	case "pull":
 		exitCode = cmdPull(client, args)
-	case "push":
-		exitCode = cmdPush(client, args)
+	case "package":
+		exitCode = cmdPackage(client, args)
 	case "list":
 		exitCode = cmdList(client, args)
 	case "get":
@@ -115,14 +115,14 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Println("\nCommands:")
 	fmt.Println("  pull <reference>                Pull a model from a registry")
-	fmt.Println("  push <source> <reference>       Push a model to a registry (use --licenses to add license files)")
+	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and pushe to a registry (use --licenses to add license files)")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
-	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
+	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
 }
@@ -146,8 +146,8 @@ func cmdPull(client *distribution.Client, args []string) int {
 	return 0
 }
 
-func cmdPush(client *distribution.Client, args []string) int {
-	fs := flag.NewFlagSet("push", flag.ExitOnError)
+func cmdPackage(client *distribution.Client, args []string) int {
+	fs := flag.NewFlagSet("package", flag.ExitOnError)
 	var licensePaths stringSliceFlag
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	if err := fs.Parse(args); err != nil {
@@ -158,7 +158,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 
 	if len(args) < 2 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--licenses <path-to-license-file1> --licenses <path-to-license-file2> ...]\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package <source> <reference> [--licenses <path-to-license-file1> --licenses <path-to-license-file2> ...]\n")
 		return 1
 	}
 

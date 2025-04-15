@@ -24,7 +24,7 @@ func TestMainHelp(t *testing.T) {
 	}
 
 	// Check that the output contains the commands
-	commands := []string{"pull", "push", "list", "get", "get-path"}
+	commands := []string{"pull", "package", "list", "get", "get-path"}
 	for _, cmd := range commands {
 		if !strings.Contains(string(output), cmd) {
 			t.Errorf("Help output does not contain command: %s", cmd)
@@ -75,7 +75,7 @@ func TestMainPull(t *testing.T) {
 }
 
 // TestMainPush tests the push command
-func TestMainPush(t *testing.T) {
+func TestMainPackage(t *testing.T) {
 	// Create a temporary directory for the test
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -89,8 +89,8 @@ func TestMainPush(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Test the push command with invalid arguments
-	exitCode := cmdPush(client, []string{})
+	// Test the package command with invalid arguments
+	exitCode := cmdPackage(client, []string{})
 	if exitCode != 1 {
 		t.Errorf("Push command with invalid arguments should fail")
 	}
