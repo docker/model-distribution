@@ -234,7 +234,7 @@ func (s *LocalStore) Read(reference string) (*Model, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("model with tag %s not found", reference)
+	return nil, ErrModelNotFound
 }
 
 // ProgressReader wraps an io.Reader to track reading progress

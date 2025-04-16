@@ -46,9 +46,9 @@ run-pull:
 	@echo "Pulling model from ${TAG}..."
 	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} pull ${TAG}
 
-run-push:
+run-package:
 	@echo "Pushing model ${SOURCE} to ${TAG}..."
-	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} push ${SOURCE} ${TAG} ${LICENSE:+--license ${LICENSE}}
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} package ${SOURCE} ${TAG} ${LICENSE:+--license ${LICENSE}}
 
 run-list:
 	@echo "Listing models..."
@@ -77,7 +77,7 @@ help:
 	@echo "  test             - Run unit tests"
 	@echo "  clean            - Clean build artifacts"
 	@echo "  run-pull         - Pull a model (TAG=registry/model:tag)"
-	@echo "  run-push         - Push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag LICENSE=path/to/license.txt)"
+	@echo "  run-package      - Package and push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag LICENSE=path/to/license.txt)"
 	@echo "  run-list         - List all models"
 	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
 	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"

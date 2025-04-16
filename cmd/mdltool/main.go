@@ -88,6 +88,8 @@ func main() {
 	switch command {
 	case "pull":
 		exitCode = cmdPull(client, args)
+	case "package":
+		exitCode = cmdPackage(args)
 	case "push":
 		exitCode = cmdPush(client, args)
 	case "list":
@@ -115,14 +117,16 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Println("\nCommands:")
 	fmt.Println("  pull <reference>                Pull a model from a registry")
-	fmt.Println("  push <source> <reference>       Push a model to a registry (use --licenses to add license files)")
+	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and push it to a registry (use --licenses to add license files)")
+	fmt.Println("  push <tag>                      Push a model from the content store to the registry")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
-	fmt.Println("  model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
+	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
+	fmt.Println("  model-distribution-tool push registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
 }
@@ -146,7 +150,7 @@ func cmdPull(client *distribution.Client, args []string) int {
 	return 0
 }
 
-func cmdPush(client *distribution.Client, args []string) int {
+func cmdPackage(args []string) int {
 	fs := flag.NewFlagSet("push", flag.ExitOnError)
 	var licensePaths stringSliceFlag
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
@@ -213,6 +217,25 @@ func cmdPush(client *distribution.Client, args []string) int {
 		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", ref.String(), err)
 		return 1
 	}
+	return 0
+}
+
+func cmdPush(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing tag argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <tag>\n")
+		return 1
+	}
+
+	tag := args[0]
+	ctx := context.Background()
+
+	if err := client.PushModel(ctx, tag); err != nil {
+		fmt.Fprintf(os.Stderr, "Error pushing model: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Successfully pushed model: %s\n", tag)
 	return 0
 }
 

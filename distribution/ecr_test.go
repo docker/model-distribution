@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/docker/model-distribution/internal/gguf"
 )
 
 func TestECRIntegration(t *testing.T) {
@@ -38,11 +40,19 @@ func TestECRIntegration(t *testing.T) {
 		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
-	// Test push to ECR
 	t.Run("Push", func(t *testing.T) {
-		err := client.PushModel(context.Background(), modelFile, ecrTag)
+		mdl, err := gguf.NewModel(testGGUFFile)
 		if err != nil {
+			t.Fatalf("Failed to create model: %v", err)
+		}
+		if err := client.store.Write(mdl, []string{ecrTag}, nil); err != nil {
+			t.Fatalf("Failed to write model to store: %v", err)
+		}
+		if err := client.PushModel(context.Background(), ecrTag); err != nil {
 			t.Fatalf("Failed to push model to ECR: %v", err)
+		}
+		if err := client.DeleteModel(ecrTag); err != nil { // cleanup
+			t.Fatalf("Failed to delete model from store: %v", err)
 		}
 	})
 

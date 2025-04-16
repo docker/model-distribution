@@ -24,7 +24,7 @@ func TestMainHelp(t *testing.T) {
 	}
 
 	// Check that the output contains the commands
-	commands := []string{"pull", "push", "list", "get", "get-path"}
+	commands := []string{"pull", "package", "list", "get", "get-path"}
 	for _, cmd := range commands {
 		if !strings.Contains(string(output), cmd) {
 			t.Errorf("Help output does not contain command: %s", cmd)
@@ -74,8 +74,8 @@ func TestMainPull(t *testing.T) {
 	}
 }
 
-// TestMainPush tests the push command
-func TestMainPush(t *testing.T) {
+// TestMainPackage tests the package command
+func TestMainPackage(t *testing.T) {
 	// Create a temporary directory for the test
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -83,14 +83,8 @@ func TestMainPush(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a client for testing
-	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	// Test the push command with invalid arguments
-	exitCode := cmdPush(client, []string{})
+	// Test the package command with invalid arguments
+	exitCode := cmdPackage([]string{})
 	if exitCode != 1 {
 		t.Errorf("Push command with invalid arguments should fail")
 	}
@@ -159,5 +153,27 @@ func TestMainGetPath(t *testing.T) {
 	exitCode := cmdGetPath(client, []string{})
 	if exitCode != 1 {
 		t.Errorf("Get-path command with invalid arguments should fail")
+	}
+}
+
+// TestMainPush tests the push command
+func TestMainPush(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a client for testing
+	client, err := distribution.NewClient(distribution.WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Test the push command with invalid arguments
+	exitCode := cmdPush(client, []string{})
+	if exitCode != 1 {
+		t.Errorf("Push command with invalid arguments should fail")
 	}
 }

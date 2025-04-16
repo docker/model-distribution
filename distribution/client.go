@@ -16,7 +16,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 
-	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/store"
 	"github.com/docker/model-distribution/types"
 )
@@ -143,6 +142,9 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		}
 		if strings.Contains(errStr, "MANIFEST_UNKNOWN") {
 			return NewPullError(reference, "MANIFEST_UNKNOWN", "Model not found", err)
+		}
+		if strings.Contains(errStr, "NAME_UNKNOWN") {
+			return NewPullError(reference, "NAME_UNKNOWN", "Repository not found", err)
 		}
 		c.log.Errorln("Failed to check remote image:", err, "reference:", reference)
 		return NewPullError(reference, "UNKNOWN", err.Error(), err)
@@ -276,40 +278,11 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	c.log.Infoln("Getting model by reference:", reference)
 	model, err := c.store.Read(reference)
 	if err != nil {
-		c.log.Errorln("Model not found:", err, "reference:", reference)
-		return nil, ErrModelNotFound
+		c.log.Errorln("Failed to get model:", err, "reference:", reference)
+		return nil, fmt.Errorf("get model '%q': %w", reference, err)
 	}
 
 	return model, nil
-}
-
-// PushModel pushes a model to a registry
-func (c *Client) PushModel(ctx context.Context, source, reference string) error {
-	c.log.Infoln("Starting model push, source:", source, "reference:", reference)
-
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
-	if err != nil {
-		c.log.Errorln("Failed to parse reference:", err, "reference:", reference)
-		return fmt.Errorf("parsing reference: %w", err)
-	}
-
-	// Create image with layer
-	mdl, err := gguf.NewModel(source)
-	if err != nil {
-		c.log.Errorln("Failed to create image:", err)
-		return fmt.Errorf("creating image: %w", err)
-	}
-
-	// Push the image
-	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
-	if err := remote.Write(ref, mdl, opts...); err != nil {
-		c.log.Errorln("Failed to push image:", err, "reference:", reference)
-		return fmt.Errorf("pushing image: %w", err)
-	}
-
-	c.log.Infoln("Successfully pushed model:", reference)
-	return nil
 }
 
 // DeleteModel deletes a model
@@ -327,6 +300,34 @@ func (c *Client) DeleteModel(reference string) error {
 func (c *Client) Tag(source string, target string) error {
 	c.log.Infoln("Tagging model, source:", source, "target:", target)
 	return c.store.AddTags(source, []string{target})
+}
+
+// PushModel pushes a tagged model from the content store to the registry.
+func (c *Client) PushModel(ctx context.Context, tag string) (err error) {
+	// Parse the tag
+	ref, err := name.NewTag(tag)
+	if err != nil {
+		return fmt.Errorf("invalid tag %q: %w", tag, err)
+	}
+
+	// Get the model from the store
+	mdl, err := c.store.Read(tag)
+	if err != nil {
+		return fmt.Errorf("reading model: %w", err)
+	}
+
+	// Push the model
+	c.log.Infoln("Pushing model:", tag)
+	// todo: report progress
+
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
+	if err := remote.Write(ref, mdl, opts...); err != nil {
+		c.log.Errorln("Failed to push image:", err, "reference:", tag)
+		return fmt.Errorf("pushing image: %w", err)
+	}
+
+	c.log.Infoln("Successfully pushed model:", tag)
+	return nil
 }
 
 func checkCompat(image v1.Image) error {

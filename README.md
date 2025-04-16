@@ -4,7 +4,7 @@ A library and CLI tool for distributing models using container registries.
 
 ## Overview
 
-Model Distribution is a Go library and CLI tool that allows you to push, pull, and manage models using container registries. It provides a simple API and command-line interface for working with models in GGUF format.
+Model Distribution is a Go library and CLI tool that allows you to package, push, pull, and manage models using container registries. It provides a simple API and command-line interface for working with models in GGUF format.
 
 ## Features
 
@@ -25,11 +25,14 @@ make build
 # Pull a model from a registry
 ./bin/model-distribution-tool pull registry.example.com/models/llama:v1.0
 
-# Push a model to a registry without license files
-./bin/model-distribution-tool push ./model.gguf registry.example.com/models/llama:v1.0
+# Package a model and push to a registry
+./bin/model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0
 
-# Push a model to a registry with license files
-./bin/model-distribution-tool push --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
+# Package a model with license files and push to a registry
+./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
+
+# Push a model from the content store to the registry
+./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
 
 # List all models in the local store
 ./bin/model-distribution-tool list
@@ -101,6 +104,12 @@ if err != nil {
 
 // Tag a model
 err = client.Tag("registry.example.com/models/llama:v1.0", "registry.example.com/models/llama:latest")
+if err != nil {
+    // Handle error
+}
+
+// Push a model
+err = client.PushModel("registry.example.com/models/llama:v1.0")
 if err != nil {
     // Handle error
 }

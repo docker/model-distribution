@@ -208,15 +208,15 @@ fi
 echo "Step 3: Pushing model(s) to the repository..."
 
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
-"${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
+"${PROJECT_ROOT}/bin/model-distribution-tool" package $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
+"${PROJECT_ROOT}/bin/model-distribution-tool" package $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
     # Create F16 tag by appending "-F16" to the weights
     F16_TARGET="${REPOSITORY}:${WEIGHTS}-F16"
     echo "Pushing F16 model to $F16_TARGET..."
-    "${PROJECT_ROOT}/bin/model-distribution-tool" push $LICENSE_FLAGS "$F16_MODEL_FILE" "$F16_TARGET"
+    "${PROJECT_ROOT}/bin/model-distribution-tool" package $LICENSE_FLAGS "$F16_MODEL_FILE" "$F16_TARGET"
     echo "F16 model successfully pushed to $F16_TARGET"
 fi
 

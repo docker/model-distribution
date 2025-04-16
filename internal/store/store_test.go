@@ -89,6 +89,12 @@ func TestStoreAPI(t *testing.T) {
 
 	})
 
+	t.Run("ReadNotFound", func(t *testing.T) {
+		if _, err := s.Read("non-existent-model:latest"); !errors.Is(err, store.ErrModelNotFound) {
+			t.Fatalf("Expected ErrModelNotFound got: %v", err)
+		}
+	})
+
 	// Test List
 	t.Run("List", func(t *testing.T) {
 		models, err := s.List()

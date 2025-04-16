@@ -6,15 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
-	tc "github.com/testcontainers/testcontainers-go/modules/registry"
 
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
@@ -26,16 +29,13 @@ var (
 
 func TestClientPullModel(t *testing.T) {
 	// Set up test registry
-	registryContainer, err := tc.Run(context.Background(), "registry:2.8.3")
+	server := httptest.NewServer(registry.New())
+	defer server.Close()
+	registryURL, err := url.Parse(server.URL)
 	if err != nil {
-		t.Fatalf("Failed to start registry container: %v", err)
+		t.Fatalf("Failed to parse registry URL: %v", err)
 	}
-	defer registryContainer.Terminate(context.Background())
-
-	registry, err := registryContainer.HostAddress(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get registry address: %v", err)
-	}
+	registry := registryURL.Host
 
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -149,7 +149,7 @@ func TestClientPullModel(t *testing.T) {
 		// Create a buffer to capture progress output
 		var progressBuffer bytes.Buffer
 
-		// Test with non-existent model
+		// Test with non-existent repository
 		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 		if err == nil {
@@ -167,14 +167,17 @@ func TestClientPullModel(t *testing.T) {
 		if pullErr.Reference != nonExistentRef {
 			t.Errorf("Expected reference %q, got %q", nonExistentRef, pullErr.Reference)
 		}
-		if pullErr.Code != "MANIFEST_UNKNOWN" {
+		if pullErr.Code != "NAME_UNKNOWN" {
 			t.Errorf("Expected error code MANIFEST_UNKNOWN, got %q", pullErr.Code)
 		}
-		if pullErr.Message != "Model not found" {
-			t.Errorf("Expected message 'Model not found', got %q", pullErr.Message)
+		if pullErr.Message != "Repository not found" {
+			t.Errorf("Expected message '\"Repository not found', got %q", pullErr.Message)
 		}
 		if pullErr.Err == nil {
 			t.Error("Expected underlying error to be non-nil")
+		}
+		if !errors.Is(pullErr, ErrModelNotFound) {
+			t.Errorf("Expected underlying error to match ErrModelNotFound, got %v", pullErr.Err)
 		}
 	})
 
@@ -205,7 +208,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to registry
-		if err := client.PushModel(context.Background(), testGGUFFile, tag); err != nil {
+		if err := client.PushModel(context.Background(), tag); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -300,7 +303,7 @@ func TestClientPullModel(t *testing.T) {
 
 		// Push first version of model to registry
 		tag := registry + "/update-test:v1.0.0"
-		if err := client.PushModel(context.Background(), testGGUFFile, tag); err != nil {
+		if err := writeToRegistry(testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to push first version of model: %v", err)
 		}
 
@@ -338,7 +341,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push updated model with same tag
-		if err := client.PushModel(context.Background(), updatedModelFile, tag); err != nil {
+		if err := writeToRegistry(updatedModelFile, tag); err != nil {
 			t.Fatalf("Failed to push updated model: %v", err)
 		}
 
@@ -881,4 +884,114 @@ func TestNewReferenceError(t *testing.T) {
 	if refErr.Err == nil {
 		t.Error("Expected underlying error to be non-nil")
 	}
+}
+
+func TestPush(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create a test registry
+	server := httptest.NewServer(registry.New())
+	defer server.Close()
+
+	// Create a tag for the model
+	uri, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse registry URL: %v", err)
+	}
+	tag := uri.Host + "/incomplete-test/model:v1.0.0"
+
+	// Write a test model to the store with the given tag
+	mdl, err := gguf.NewModel(testGGUFFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	digest, err := mdl.ID()
+	if err != nil {
+		t.Fatalf("Failed to get digest of original model: %v", err)
+	}
+
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Push the model to the registry
+	if err := client.PushModel(context.Background(), tag); err != nil {
+		t.Fatalf("Failed to push model: %v", err)
+	}
+
+	// Delete local copy (so we can test pulling)
+	if err := client.DeleteModel(tag); err != nil {
+		t.Fatalf("Failed to delete model: %v", err)
+	}
+
+	// Test that model can be pulled successfully
+	if err := client.PullModel(context.Background(), tag, nil); err != nil {
+		t.Fatalf("Failed to pull model: %v", err)
+	}
+
+	// Test that model the pulled model is the same as the original (matching digests)
+	mdl2, err := client.GetModel(tag)
+	if err != nil {
+		t.Fatalf("Failed to get pulled model: %v", err)
+	}
+	digest2, err := mdl2.ID()
+	if err != nil {
+		t.Fatalf("Failed to get digest of the pulled model: %v", err)
+	}
+	if digest != digest2 {
+		t.Fatalf("Digests don't match: got %s, want %s", digest2, digest)
+	}
+}
+
+func TestClientPushModelNotFound(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	if err := client.PushModel(t.Context(), "non-existent-model:latest"); !errors.Is(err, ErrModelNotFound) {
+		t.Fatalf("Expected ErrModelNotFound got: %v", err)
+	}
+}
+
+// writeToRegistry writes a GGUF model to a registry.
+func writeToRegistry(source, reference string) error {
+
+	// Parse the reference
+	ref, err := name.ParseReference(reference)
+	if err != nil {
+		return fmt.Errorf("parse ref: %w", err)
+	}
+
+	// Create image with layer
+	mdl, err := gguf.NewModel(source)
+	if err != nil {
+		return fmt.Errorf("new model: %w", err)
+	}
+
+	// Push the image
+	if err := remote.Write(ref, mdl); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
 }
