@@ -954,6 +954,25 @@ func TestPush(t *testing.T) {
 	}
 }
 
+func TestClientPushModelNotFound(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	if err := client.PushModel(t.Context(), "non-existent-model:latest"); !errors.Is(err, ErrModelNotFound) {
+		t.Fatalf("Expected ErrModelNotFound got: %v", err)
+	}
+}
+
 // writeToRegistry writes a GGUF model to a registry.
 func writeToRegistry(source, reference string) error {
 

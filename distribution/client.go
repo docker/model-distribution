@@ -278,8 +278,8 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	c.log.Infoln("Getting model by reference:", reference)
 	model, err := c.store.Read(reference)
 	if err != nil {
-		c.log.Errorln("Model not found:", err, "reference:", reference)
-		return nil, ErrModelNotFound
+		c.log.Errorln("Failed to get model:", err, "reference:", reference)
+		return nil, fmt.Errorf("get model '%q': %w", reference, err)
 	}
 
 	return model, nil
