@@ -117,7 +117,7 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Println("\nCommands:")
 	fmt.Println("  pull <reference>                Pull a model from a registry")
-	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and pushe to a registry (use --licenses to add license files)")
+	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and push it to a registry (use --licenses to add license files)")
 	fmt.Println("  push <tag>                      Push a model from the content store to the registry")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
