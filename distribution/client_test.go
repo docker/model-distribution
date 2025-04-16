@@ -954,6 +954,84 @@ func TestPush(t *testing.T) {
 	}
 }
 
+func TestTag(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create a test model
+	model, err := gguf.NewModel(testGGUFFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	id, err := model.ID()
+	if err != nil {
+		t.Fatalf("Failed to get model ID: %v", err)
+	}
+
+	// Push the model to the store
+	if err := client.store.Write(model, []string{"some-repo:some-tag"}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	// Tag the model by ID
+	if err := client.Tag(id, "other-repo:tag1"); err != nil {
+		t.Fatalf("Failed to tag model %q: %v", id, err)
+	}
+
+	// Tag the model by tag
+	if err := client.Tag(id, "other-repo:tag2"); err != nil {
+		t.Fatalf("Failed to tag model %q: %v", id, err)
+	}
+
+	// Verify the model has all 3 tags
+	modelInfo, err := client.GetModel("some-repo:some-tag")
+	if err != nil {
+		t.Fatalf("Failed to get model: %v", err)
+	}
+
+	if len(modelInfo.Tags()) != 3 {
+		t.Fatalf("Expected 3 tags, got %d", len(modelInfo.Tags()))
+	}
+
+	// Verify the model can be accessed by new tags
+	if _, err := client.GetModel("other-repo:tag1"); err != nil {
+		t.Fatalf("Failed to get model by tag: %v", err)
+	}
+	if _, err := client.GetModel("other-repo:tag2"); err != nil {
+		t.Fatalf("Failed to get model by tag: %v", err)
+	}
+}
+
+func TestTagNotFound(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Tag the model by ID
+	if err := client.Tag("non-existent-model:latest", "other-repo:tag1"); !errors.Is(err, ErrModelNotFound) {
+		t.Fatalf("Expected ErrModelNotFound, got: %v", err)
+	}
+}
+
 func TestClientPushModelNotFound(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")

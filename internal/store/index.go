@@ -32,7 +32,7 @@ func (i Index) Tag(reference string, tag string) (Index, error) {
 		}
 	}
 	if !tagged {
-		return Index{}, fmt.Errorf("model not found")
+		return Index{}, ErrModelNotFound
 	}
 
 	return result, nil
