@@ -2,7 +2,6 @@ package store
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -41,21 +40,11 @@ func (s *LocalStore) newModel(digest v1.Hash, tags []string) (*Model, error) {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
-	var cf mdtypes.ConfigFile
-	if err := json.Unmarshal(rawConfigFile, &cf); err != nil {
-		return nil, fmt.Errorf("unmarshal : %w", err)
-	}
-	//
-	//cfg, err := mdpartial.Config(rawConfigFile)
-	//if err != nil {
-	//	return nil, fmt.Errorf("parse config file: %w", err)
-	//}
-
 	layers := make([]v1.Layer, len(manifest.Layers))
-	for i, diffID := range cf.RootFS.DiffIDs {
+	for i, ld := range manifest.Layers {
 		layers[i] = &mdpartial.Layer{
-			Path:       s.blobPath(diffID),
-			Descriptor: manifest.Layers[i],
+			Path:       s.blobPath(ld.Digest),
+			Descriptor: ld,
 		}
 	}
 

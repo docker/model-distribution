@@ -131,10 +131,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// First, check the remote registry for the model's digest
 	c.log.Infoln("Checking remote registry for model:", reference)
-	opts := append([]remote.Option{
-		remote.WithContext(ctx),
-		remote.WithProgress(nil),
-	}, c.remoteOptions...)
+	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
 	remoteImg, err := remote.Image(ref, opts...)
 	if err != nil {
 		errStr := err.Error()

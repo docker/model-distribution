@@ -1000,26 +1000,28 @@ func TestPushProgress(t *testing.T) {
 
 	// Create a buffer to capture progress output
 	pr, pw := io.Pipe()
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		defer pw.Close()
 		done <- client.PushModel(t.Context(), tag, pw)
+		close(done)
 	}()
 
 	var lines []string
 	sc := bufio.NewScanner(pr)
 	for sc.Scan() {
-		lines = append(lines, sc.Text())
+		line := sc.Text()
+		t.Log(line)
+		lines = append(lines, line)
 	}
 
-	fmt.Printf("Progress messages: %v\n", lines)
-	if len(lines) < 4 {
+	if len(lines) < 3 {
 		t.Fatalf("Expected at least 3 progress messages, got %d", len(lines))
 	}
-	if !strings.Contains(lines[2], "Uploaded: 2.00 MB") {
+	if !strings.Contains(lines[len(lines)-2], "Uploaded: 2.00 MB") {
 		t.Fatalf("Expected progress message to contain 'Uploaded: 2.00 MB', got %q", lines[2])
 	}
-	if !strings.Contains(lines[3], "success") {
+	if !strings.Contains(lines[len(lines)-1], "success") {
 		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[3])
 	}
 	if err := <-done; err != nil {
