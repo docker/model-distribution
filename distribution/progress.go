@@ -36,7 +36,7 @@ func pushMsg(update v1.Update) string {
 func newProgressReporter(w io.Writer, msgF progressF) *reporter {
 	return &reporter{
 		out:      w,
-		progress: make(chan v1.Update, 100),
+		progress: make(chan v1.Update),
 		done:     make(chan struct{}),
 		format:   msgF,
 	}
@@ -52,7 +52,7 @@ func (r *reporter) updates() chan<- v1.Update {
 		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
 
 		for p := range r.progress {
-			if r.err != nil {
+			if r.out == nil || r.err != nil {
 				continue // If we fail to write progress, don't try again
 			}
 			now := time.Now()
