@@ -49,7 +49,7 @@ func TestGARIntegration(t *testing.T) {
 		if err := client.store.Write(mdl, []string{garTag}, nil); err != nil {
 			t.Fatalf("Failed to write model to store: %v", err)
 		}
-		if err := client.PushModel(context.Background(), garTag); err != nil {
+		if err := client.PushModel(context.Background(), garTag, nil); err != nil {
 			t.Fatalf("Failed to push model to ECR: %v", err)
 		}
 		if err := client.DeleteModel(garTag); err != nil { // cleanup

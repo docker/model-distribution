@@ -230,7 +230,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 	tag := args[0]
 	ctx := context.Background()
 
-	if err := client.PushModel(ctx, tag); err != nil {
+	if err := client.PushModel(ctx, tag, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error pushing model: %v\n", err)
 		return 1
 	}
