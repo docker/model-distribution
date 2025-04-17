@@ -983,19 +983,13 @@ func TestPushProgress(t *testing.T) {
 
 	// Create random "model" of a given size
 	sz := int64(2 * 1024 * 1024) // 2 MB
-	f, err := os.CreateTemp("", "fake.gguf")
+	path, err := randomFile(sz)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(f.Name())
-	if _, err := io.Copy(f, io.LimitReader(rand.Reader, sz)); err != nil {
-		f.Close()
-		t.Fatalf("Failed to write random data: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("Failed to close temp file: %v", err)
-	}
-	mdl, err := gguf.NewModel(f.Name())
+	defer os.Remove(path)
+
+	mdl, err := gguf.NewModel(path)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -1006,12 +1000,10 @@ func TestPushProgress(t *testing.T) {
 
 	// Create a buffer to capture progress output
 	pr, pw := io.Pipe()
+	done := make(chan error)
 	go func() {
 		defer pw.Close()
-		// Push the model to the registry
-		if err := client.PushModel(context.Background(), tag, pw); err != nil {
-			t.Fatalf("Failed to push model: %v", err)
-		}
+		done <- client.PushModel(t.Context(), tag, pw)
 	}()
 
 	var lines []string
@@ -1029,6 +1021,9 @@ func TestPushProgress(t *testing.T) {
 	}
 	if !strings.Contains(lines[3], "success") {
 		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[3])
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Failed to push model: %v", err)
 	}
 }
 
@@ -1150,4 +1145,20 @@ func writeToRegistry(source, reference string) error {
 	}
 
 	return nil
+}
+
+func randomFile(size int64) (string, error) {
+	// Create a temporary "gguf" file
+	f, err := os.CreateTemp("", "test-*.gguf")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create temp file: %v", err))
+	}
+	defer f.Close()
+
+	// Fill with random data
+	if _, err := io.Copy(f, io.LimitReader(rand.Reader, size)); err != nil {
+		return "", fmt.Errorf("Failed to write random data: %v", err)
+	}
+
+	return f.Name(), nil
 }
