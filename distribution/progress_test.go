@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
 func TestProgressMessages(t *testing.T) {
 	t.Run("writeProgress", func(t *testing.T) {
 		var buf bytes.Buffer
-		err := writeProgress(&buf, 1024*1024)
+		err := writeProgress(&buf, pullMsg(v1.Update{
+			Complete: 1024 * 1024,
+		}))
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}

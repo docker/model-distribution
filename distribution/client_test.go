@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -208,7 +210,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to registry
-		if err := client.PushModel(context.Background(), tag); err != nil {
+		if err := client.PushModel(context.Background(), tag, nil); err != nil {
 			t.Fatalf("Failed to pull model: %v", err)
 		}
 
@@ -926,7 +928,7 @@ func TestPush(t *testing.T) {
 	}
 
 	// Push the model to the registry
-	if err := client.PushModel(context.Background(), tag); err != nil {
+	if err := client.PushModel(context.Background(), tag, nil); err != nil {
 		t.Fatalf("Failed to push model: %v", err)
 	}
 
@@ -951,6 +953,79 @@ func TestPush(t *testing.T) {
 	}
 	if digest != digest2 {
 		t.Fatalf("Digests don't match: got %s, want %s", digest2, digest)
+	}
+}
+
+func TestPushProgress(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create a test registry
+	server := httptest.NewServer(registry.New())
+	defer server.Close()
+
+	// Create a tag for the model
+	uri, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse registry URL: %v", err)
+	}
+	tag := uri.Host + "/some/model/repo:some-tag"
+
+	// Create random "model" of a given size
+	sz := int64(2 * 1024 * 1024) // 2 MB
+	path, err := randomFile(sz)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(path)
+
+	mdl, err := gguf.NewModel(path)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
+		t.Fatalf("Failed to write model to store: %v", err)
+	}
+
+	// Create a buffer to capture progress output
+	pr, pw := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		defer pw.Close()
+		done <- client.PushModel(t.Context(), tag, pw)
+		close(done)
+	}()
+
+	var lines []string
+	sc := bufio.NewScanner(pr)
+	for sc.Scan() {
+		line := sc.Text()
+		t.Log(line)
+		lines = append(lines, line)
+	}
+
+	if len(lines) < 3 {
+		t.Fatalf("Expected at least 3 progress messages, got %d", len(lines))
+	}
+	if !strings.Contains(lines[len(lines)-2], "Uploaded: 2.00 MB") {
+		t.Fatalf("Expected progress message to contain 'Uploaded: 2.00 MB', got %q", lines[2])
+	}
+	if !strings.Contains(lines[len(lines)-1], "success") {
+		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[3])
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Failed to push model: %v", err)
 	}
 }
 
@@ -1046,7 +1121,7 @@ func TestClientPushModelNotFound(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	if err := client.PushModel(t.Context(), "non-existent-model:latest"); !errors.Is(err, ErrModelNotFound) {
+	if err := client.PushModel(t.Context(), "non-existent-model:latest", nil); !errors.Is(err, ErrModelNotFound) {
 		t.Fatalf("Expected ErrModelNotFound got: %v", err)
 	}
 }
@@ -1072,4 +1147,20 @@ func writeToRegistry(source, reference string) error {
 	}
 
 	return nil
+}
+
+func randomFile(size int64) (string, error) {
+	// Create a temporary "gguf" file
+	f, err := os.CreateTemp("", "test-*.gguf")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create temp file: %v", err))
+	}
+	defer f.Close()
+
+	// Fill with random data
+	if _, err := io.Copy(f, io.LimitReader(rand.Reader, size)); err != nil {
+		return "", fmt.Errorf("Failed to write random data: %v", err)
+	}
+
+	return f.Name(), nil
 }

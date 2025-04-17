@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -198,40 +196,14 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// Model doesn't exist in local store or digests don't match, pull from remote
 
-	var wg sync.WaitGroup
-	var progress chan v1.Update
-	// Start a goroutine to handle progress updates
-	// Wait for the goroutine to finish or `progressWriter`'s underlying Writer may be closed
-	wg.Add(1)
-	defer wg.Wait()
-
-	// Create a buffered channel for progress updates
-	progress = make(chan v1.Update, 100)
-	defer close(progress)
-	go func() {
-		defer wg.Done()
-		var lastComplete int64
-		var lastUpdate time.Time
-		const updateInterval = 500 * time.Millisecond // Update every 500ms
-		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
-
-		for p := range progress {
-			now := time.Now()
-			bytesDownloaded := p.Complete - lastComplete
-			// Only update if enough time has passed or enough bytes downloaded
-			if now.Sub(lastUpdate) >= updateInterval || bytesDownloaded >= minBytesForUpdate {
-				if err := writeProgress(progressWriter, p.Complete); err != nil {
-					c.log.Warnf("Failed to write progress: %v", err)
-					// If we fail to write progress, don't try again
-					progressWriter = nil
-				}
-				lastUpdate = now
-				lastComplete = p.Complete
-			}
+	pr := newProgressReporter(progressWriter, pullMsg)
+	defer func() {
+		if err := pr.Wait(); err != nil {
+			c.log.Warnf("Failed to write progress: %v", err)
 		}
 	}()
 
-	if err = c.store.Write(remoteImg, []string{reference}, progress); err != nil {
+	if err = c.store.Write(remoteImg, []string{reference}, pr.updates()); err != nil {
 		if writeErr := writeError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
 			c.log.Warnf("Failed to write error message: %v", writeErr)
 			// If we fail to write error message, don't try again
@@ -303,7 +275,7 @@ func (c *Client) Tag(source string, target string) error {
 }
 
 // PushModel pushes a tagged model from the content store to the registry.
-func (c *Client) PushModel(ctx context.Context, tag string) (err error) {
+func (c *Client) PushModel(ctx context.Context, tag string, progressWriter io.Writer) (err error) {
 	// Parse the tag
 	ref, err := name.NewTag(tag)
 	if err != nil {
@@ -318,15 +290,32 @@ func (c *Client) PushModel(ctx context.Context, tag string) (err error) {
 
 	// Push the model
 	c.log.Infoln("Pushing model:", tag)
-	// todo: report progress
 
-	opts := append([]remote.Option{remote.WithContext(ctx)}, c.remoteOptions...)
+	pr := newProgressReporter(progressWriter, pushMsg)
+	defer func() {
+		if err := pr.Wait(); err != nil {
+			c.log.Warnf("Failed to write progress: %v", err)
+		}
+	}()
+
+	opts := append([]remote.Option{
+		remote.WithContext(ctx),
+		remote.WithProgress(pr.updates()),
+	}, c.remoteOptions...)
+
 	if err := remote.Write(ref, mdl, opts...); err != nil {
 		c.log.Errorln("Failed to push image:", err, "reference:", tag)
+		if writeErr := writeError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
+			c.log.Warnf("Failed to write error message: %v", writeErr)
+		}
 		return fmt.Errorf("pushing image: %w", err)
 	}
 
 	c.log.Infoln("Successfully pushed model:", tag)
+	if err := writeSuccess(progressWriter, "Model pushed successfully"); err != nil {
+		c.log.Warnf("Failed to write success message: %v", err)
+	}
+
 	return nil
 }
 

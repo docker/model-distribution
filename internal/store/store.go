@@ -170,6 +170,10 @@ func (s *LocalStore) Version() string {
 
 // Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
+	if progress != nil {
+		defer close(progress)
+	}
+
 	// Write the config JSON file
 	if err := s.writeConfigFile(mdl); err != nil {
 		return fmt.Errorf("writing config file: %w", err)

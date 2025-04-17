@@ -48,7 +48,7 @@ func TestECRIntegration(t *testing.T) {
 		if err := client.store.Write(mdl, []string{ecrTag}, nil); err != nil {
 			t.Fatalf("Failed to write model to store: %v", err)
 		}
-		if err := client.PushModel(context.Background(), ecrTag); err != nil {
+		if err := client.PushModel(context.Background(), ecrTag, nil); err != nil {
 			t.Fatalf("Failed to push model to ECR: %v", err)
 		}
 		if err := client.DeleteModel(ecrTag); err != nil { // cleanup
