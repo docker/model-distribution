@@ -53,16 +53,6 @@ func (s *LocalStore) initialize() error {
 			return fmt.Errorf("initializing layout file: %w", err)
 		}
 	}
-
-	// Check if models.json exists, create if not
-	if _, err := os.Stat(s.indexPath()); os.IsNotExist(err) {
-		if err := s.writeIndex(Index{
-			Models: []IndexEntry{},
-		}); err != nil {
-			return fmt.Errorf("initializing index file: %w", err)
-		}
-	}
-
 	return nil
 }
 
