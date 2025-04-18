@@ -105,6 +105,10 @@ func (s *LocalStore) writeIndex(index Index) error {
 		return fmt.Errorf("writing models file: %w", err)
 	}
 
+	if err := s.ensureLayout(); err != nil {
+		return fmt.Errorf("ensuring layout file exists: %w", err)
+	}
+
 	return nil
 }
 

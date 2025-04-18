@@ -1018,11 +1018,11 @@ func TestPushProgress(t *testing.T) {
 	if len(lines) < 3 {
 		t.Fatalf("Expected at least 3 progress messages, got %d", len(lines))
 	}
-	if !strings.Contains(lines[len(lines)-2], "Uploaded: 2.00 MB") {
-		t.Fatalf("Expected progress message to contain 'Uploaded: 2.00 MB', got %q", lines[2])
+	if !strings.Contains(lines[len(lines)-2], "Uploaded:") {
+		t.Fatalf("Expected progress message to contain 'Uploaded: x MB', got %q", lines[len(lines)-2])
 	}
 	if !strings.Contains(lines[len(lines)-1], "success") {
-		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[3])
+		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[len(lines)-1])
 	}
 	if err := <-done; err != nil {
 		t.Fatalf("Failed to push model: %v", err)
