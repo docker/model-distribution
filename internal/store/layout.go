@@ -35,6 +35,19 @@ func (s *LocalStore) readLayout() (Layout, error) {
 	return layout, nil
 }
 
+// ensureLayout ensure a layout file exists
+func (s *LocalStore) ensureLayout() error {
+	if _, err := os.Stat(s.layoutPath()); os.IsNotExist(err) {
+		layout := Layout{
+			Version: CurrentVersion,
+		}
+		if err := s.writeLayout(layout); err != nil {
+			return fmt.Errorf("initializing layout file: %w", err)
+		}
+	}
+	return nil
+}
+
 // writeLayout write the layout file
 func (s *LocalStore) writeLayout(layout Layout) error {
 	layoutData, err := json.MarshalIndent(layout, "", "  ")

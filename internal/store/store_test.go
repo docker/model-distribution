@@ -34,6 +34,11 @@ func TestStoreAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
+	// Everything must handle directory deletion
+	if err := os.RemoveAll(storePath); err != nil {
+		t.Fatalf("Failed to remove store directory: %v", err)
+	}
+
 	model := newTestModel(t)
 	layers, err := model.Layers()
 	if err != nil {

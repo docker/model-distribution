@@ -45,13 +45,8 @@ func New(opts Options) (*LocalStore, error) {
 // initialize creates the store directory structure if it doesn't exist
 func (s *LocalStore) initialize() error {
 	// Check if layout.json exists, create if not
-	if _, err := os.Stat(s.layoutPath()); os.IsNotExist(err) {
-		layout := Layout{
-			Version: CurrentVersion,
-		}
-		if err := s.writeLayout(layout); err != nil {
-			return fmt.Errorf("initializing layout file: %w", err)
-		}
+	if err := s.ensureLayout(); err != nil {
+		return err
 	}
 
 	// Check if models.json exists, create if not

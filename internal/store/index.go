@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,6 +105,10 @@ func (s *LocalStore) writeIndex(index Index) error {
 		return fmt.Errorf("writing models file: %w", err)
 	}
 
+	if err := s.ensureLayout(); err != nil {
+		return fmt.Errorf("ensuring layout file exists: %w", err)
+	}
+
 	return nil
 }
 
@@ -111,7 +116,9 @@ func (s *LocalStore) writeIndex(index Index) error {
 func (s *LocalStore) readIndex() (Index, error) {
 	// Read the models index
 	modelsData, err := os.ReadFile(s.indexPath())
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		return Index{}, nil
+	} else if err != nil {
 		return Index{}, fmt.Errorf("reading models file: %w", err)
 	}
 
