@@ -217,7 +217,7 @@ func TestStoreAPI(t *testing.T) {
 			t.Fatalf("Create model failed: %v", err)
 		}
 
-		if err := s.Write(mdl, []string{"blob-test:latest"}, nil); err != nil {
+		if err := s.Write(mdl, []string{"blob-test:latest", "blob-test:other"}, nil); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
 
@@ -254,87 +254,6 @@ func TestStoreAPI(t *testing.T) {
 		// Verify the manifest no longer exists on disk after deletion
 		if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
 			t.Errorf("Manifest file still exists after deletion: %s", blobPath)
-		}
-	})
-
-	// Test that blobs and model are not removed if there is a tag pointing to it
-	t.Run("BlobsPreservedWithRemainingTags", func(t *testing.T) {
-		// Create a new model with unique content
-		modelContent := []byte("unique content for multi-tag test")
-		modelPath := filepath.Join(tempDir, "multi-tag-test.gguf")
-		if err := os.WriteFile(modelPath, modelContent, 0644); err != nil {
-			t.Fatalf("Failed to create test model file: %v", err)
-		}
-
-		// Calculate the blob hash to find it later
-		hash := sha256.Sum256(modelContent)
-		blobHash := hex.EncodeToString(hash[:])
-		expectedBlobDigest := fmt.Sprintf("sha256:%s", blobHash)
-
-		// Add model to store with multiple tags
-		mdl, err := gguf.NewModel(modelPath)
-		if err != nil {
-			t.Fatalf("Create model failed: %v", err)
-		}
-
-		// Write the model with two tags
-		if err := s.Write(mdl, []string{"multi-tag:v1", "multi-tag:latest"}, nil); err != nil {
-			t.Fatalf("Write failed: %v", err)
-		}
-
-		// Get the blob path
-		blobPath := filepath.Join(storePath, "blobs", "sha256", blobHash)
-
-		// Verify the blob exists on disk
-		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-			t.Fatalf("Blob file doesn't exist: %s", blobPath)
-		}
-
-		// Delete one of the tags
-		if err := s.Delete("multi-tag:v1"); err != nil {
-			t.Fatalf("Delete failed: %v", err)
-		}
-
-		// Verify the blob still exists on disk after deleting one tag
-		if _, err := os.Stat(blobPath); os.IsNotExist(err) {
-			t.Errorf("Blob file was incorrectly removed: %s", blobPath)
-		}
-
-		// Verify the model is still in the index with the remaining tag
-		models, err := s.List()
-		if err != nil {
-			t.Fatalf("List failed: %v", err)
-		}
-
-		var foundModel bool
-		for _, model := range models {
-			if containsTag(model.Tags, "multi-tag:latest") {
-				foundModel = true
-				// Verify the blob is still associated with the model
-				if len(model.Files) != 2 || model.Files[0] != expectedBlobDigest {
-					t.Errorf("Expected blob %s, got %v", expectedBlobDigest, model.Files)
-				}
-				break
-			}
-		}
-
-		if !foundModel {
-			t.Errorf("Model with tag multi-tag:latest not found after deleting multi-tag:v1")
-		}
-
-		// Verify the model can still be read using the remaining tag
-		remainingModel, err := s.Read("multi-tag:latest")
-		if err != nil {
-			t.Fatalf("Read failed for remaining tag: %v", err)
-		}
-
-		if remainingModel == nil {
-			t.Fatalf("Model is nil despite having a remaining tag")
-		}
-
-		// Verify the remaining tag is present in the model
-		if !containsTag(remainingModel.Tags(), "multi-tag:latest") {
-			t.Errorf("Expected tag multi-tag:latest in model tags, got %v", remainingModel.Tags())
 		}
 	})
 

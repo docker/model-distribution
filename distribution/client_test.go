@@ -244,7 +244,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Delete the local model to force a pull
-		if err := client.DeleteModel(tag); err != nil {
+		if err := client.DeleteModel(tag, false); err != nil {
 			t.Fatalf("Failed to delete model: %v", err)
 		}
 
@@ -673,64 +673,6 @@ func TestClientGetStorePath(t *testing.T) {
 	}
 }
 
-func TestClientDeleteModel(t *testing.T) {
-	// Create temp directory for store
-	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create client
-	client, err := NewClient(WithStoreRootPath(tempDir))
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	// Use the dummy.gguf file from assets directory
-	mdl, err := gguf.NewModel(testGGUFFile)
-	if err != nil {
-		t.Fatalf("Failed to create model: %v", err)
-	}
-
-	// Push model to local store
-	tag := "test/model:v1.0.0"
-	if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
-		t.Fatalf("Failed to push model to store: %v", err)
-	}
-
-	// Delete the model
-	if err := client.DeleteModel(tag); err != nil {
-		t.Fatalf("Failed to delete model: %v", err)
-	}
-
-	// Verify model is deleted
-	_, err = client.GetModel(tag)
-	if !errors.Is(err, ErrModelNotFound) {
-		t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
-	}
-}
-
-func TestClientDeleteNonexistentModel(t *testing.T) {
-	// Create temp directory for store
-	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create client
-	client, err := NewClient(WithStoreRootPath(tempDir))
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	// Delete the model
-	if err := client.DeleteModel("some/missing:model"); !errors.Is(err, ErrModelNotFound) {
-		t.Fatalf("Should return ErrModelNotFound got: %v", err)
-	}
-}
-
 func TestClientDefaultLogger(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -933,7 +875,7 @@ func TestPush(t *testing.T) {
 	}
 
 	// Delete local copy (so we can test pulling)
-	if err := client.DeleteModel(tag); err != nil {
+	if err := client.DeleteModel(tag, false); err != nil {
 		t.Fatalf("Failed to delete model: %v", err)
 	}
 

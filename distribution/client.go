@@ -258,9 +258,39 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 }
 
 // DeleteModel deletes a model
-func (c *Client) DeleteModel(reference string) error {
-	c.log.Infoln("Deleting model:", reference)
-	if err := c.store.Delete(reference); err != nil {
+func (c *Client) DeleteModel(reference string, force bool) error {
+	mdl, err := c.store.Read(reference)
+	if err != nil {
+		return err
+	}
+	id, err := mdl.ID()
+	if err != nil {
+		return fmt.Errorf("getting model ID: %w", err)
+	}
+	isTag := id != reference
+
+	if isTag {
+		c.log.Infoln("Untagging model:", reference)
+		if err := c.store.RemoveTags([]string{reference}); err != nil {
+			c.log.Errorln("Failed to untag model:", err, "tag:", reference)
+			return fmt.Errorf("untagging model: %w", err)
+		}
+	}
+
+	if len(mdl.Tags()) > 1 {
+		if isTag {
+			return nil // we are done after untagging
+		} else if !force {
+			// if the reference is not a tag and there are multiple tags, return an error unless forced
+			return fmt.Errorf(
+				"unable to delete %q (must be forced) due to multiple tag references: %w",
+				reference, ErrConflict,
+			)
+		}
+	}
+
+	c.log.Infoln("Deleting model:", id)
+	if err := c.store.Delete(id); err != nil {
 		c.log.Errorln("Failed to delete model:", err, "tag:", reference)
 		return fmt.Errorf("deleting model: %w", err)
 	}

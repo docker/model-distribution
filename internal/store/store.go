@@ -76,51 +76,47 @@ func (s *LocalStore) Delete(ref string) error {
 	if err != nil {
 		return fmt.Errorf("reading models file: %w", err)
 	}
-	model, i, ok := idx.Find(ref)
+	model, _, ok := idx.Find(ref)
 	if !ok {
 		return ErrModelNotFound
 	}
-	idx = idx.UnTag(ref)
 
-	// If no more tags, remove the model and check if its blobs can be deleted
-	if len(idx.Models[i].Tags) == 0 {
-		// Remove manifest file
-		if digest, err := v1.NewHash(model.ID); err != nil {
-			fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
-		} else if err := s.removeManifest(digest); err != nil {
-			fmt.Printf("Warning: failed to remove manifest %q: %v\n",
-				digest, err,
-			)
-		}
-		// Before deleting blobs, check if they are referenced by other models
-		blobRefs := make(map[string]int)
-		for _, m := range idx.Models {
-			if m.ID == model.ID {
-				continue // Skip the model being deleted
-			}
-			for _, file := range m.Files {
-				blobRefs[file]++
-			}
-		}
-		// Only delete blobs that are not referenced by other models
-		for _, blobFile := range model.Files {
-			if blobRefs[blobFile] > 0 {
-				// Skip deletion if blob is referenced by other models
-				continue
-			}
-			hash, err := v1.NewHash(blobFile)
-			if err != nil {
-				fmt.Printf("Warning: failed to parse blob hash %s: %v\n", blobFile, err)
-				continue
-			}
-			if err := s.removeBlob(hash); err != nil {
-				// Just log the error but don't fail the operation
-				fmt.Printf("Warning: failed to remove blob %q from store: %v\n", hash.String(), err)
-			}
-		}
-
-		idx = idx.Remove(model.ID)
+	// Remove manifest file
+	if digest, err := v1.NewHash(model.ID); err != nil {
+		fmt.Printf("Warning: failed to parse manifest digest %s: %v\n", digest, err)
+	} else if err := s.removeManifest(digest); err != nil {
+		fmt.Printf("Warning: failed to remove manifest %q: %v\n",
+			digest, err,
+		)
 	}
+	// Before deleting blobs, check if they are referenced by other models
+	blobRefs := make(map[string]int)
+	for _, m := range idx.Models {
+		if m.ID == model.ID {
+			continue // Skip the model being deleted
+		}
+		for _, file := range m.Files {
+			blobRefs[file]++
+		}
+	}
+	// Only delete blobs that are not referenced by other models
+	for _, blobFile := range model.Files {
+		if blobRefs[blobFile] > 0 {
+			// Skip deletion if blob is referenced by other models
+			continue
+		}
+		hash, err := v1.NewHash(blobFile)
+		if err != nil {
+			fmt.Printf("Warning: failed to parse blob hash %s: %v\n", blobFile, err)
+			continue
+		}
+		if err := s.removeBlob(hash); err != nil {
+			// Just log the error but don't fail the operation
+			fmt.Printf("Warning: failed to remove blob %q from store: %v\n", hash.String(), err)
+		}
+	}
+
+	idx = idx.Remove(model.ID)
 
 	return s.writeIndex(idx)
 }

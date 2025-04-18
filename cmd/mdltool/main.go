@@ -338,15 +338,25 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 }
 
 func cmdRm(client *distribution.Client, args []string) int {
+	var force bool
+	fs := flag.NewFlagSet("rm", flag.ExitOnError)
+	fs.BoolVar(&force, "force", false, "Force remove the model")
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		return 1
+	}
+	args = fs.Args()
+
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool rm <reference>\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool rm [--force] <reference>\n")
 		return 1
 	}
 
 	reference := args[0]
 
-	if err := client.DeleteModel(reference); err != nil {
+	if err := client.DeleteModel(reference, force); err != nil {
 		fmt.Fprintf(os.Stderr, "Error removing model: %v\n", err)
 		return 1
 	}

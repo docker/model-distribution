@@ -43,8 +43,11 @@ make build
 # Get the local file path for a model
 ./bin/model-distribution-tool get-path registry.example.com/models/llama:v1.0
 
-# Remove a model from the local store
+# Remove a model from the local store (will untag w/o deleting if there are multiple tags)
 ./bin/model-distribution-tool rm registry.example.com/models/llama:v1.0
+
+# Force Removal of a model from the local store, even when there are multiple referring tags
+./bin/model-distribution-tool rm --force sha256:0b329b335467cccf7aa219e8f5e1bd65e59b6dfa81cfa42fba2f8881268fbf82
 
 # Tag a model with an additional reference
 ./bin/model-distribution-tool tag registry.example.com/models/llama:v1.0 registry.example.com/models/llama:latest
@@ -97,7 +100,7 @@ if err != nil {
 }
 
 // Delete a model
-err = client.DeleteModel("registry.example.com/models/llama:v1.0")
+err = client.DeleteModel("registry.example.com/models/llama:v1.0", false)
 if err != nil {
     // Handle error
 }
