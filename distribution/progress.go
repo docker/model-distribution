@@ -13,6 +13,8 @@ import (
 type ProgressMessage struct {
 	Type    string `json:"type"`    // "progress", "success", or "error"
 	Message string `json:"message"` // Human-readable message
+	Total   int64  `json:"total"`   // Total bytes to transfer
+	Pulled  int64  `json:"pulled"`  // Bytes transferred so far
 }
 
 type reporter struct {
@@ -60,7 +62,7 @@ func (r *reporter) updates() chan<- v1.Update {
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= updateInterval ||
 				bytesDownloaded >= minBytesForUpdate {
-				if err := writeProgress(r.out, r.format(p)); err != nil {
+				if err := writeProgress(r.out, r.format(p), p.Total, p.Complete); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
@@ -92,10 +94,12 @@ func writeProgressMessage(w io.Writer, msg ProgressMessage) error {
 }
 
 // writeProgress writes a progress update message
-func writeProgress(w io.Writer, msg string) error {
+func writeProgress(w io.Writer, msg string, total, pulled int64) error {
 	return writeProgressMessage(w, ProgressMessage{
 		Type:    "progress",
 		Message: msg,
+		Total:   total,
+		Pulled:  pulled,
 	})
 }
 
