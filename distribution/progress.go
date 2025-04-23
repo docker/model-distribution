@@ -13,6 +13,8 @@ import (
 type ProgressMessage struct {
 	Type    string `json:"type"`    // "progress", "success", or "error"
 	Message string `json:"message"` // Human-readable message
+	Total   uint64 `json:"total"`   // Total bytes to transfer
+	Pulled  uint64 `json:"pulled"`  // Bytes transferred so far
 }
 
 type reporter struct {
@@ -42,6 +44,14 @@ func newProgressReporter(w io.Writer, msgF progressF) *reporter {
 	}
 }
 
+// safeUint64 converts an int64 to uint64, ensuring the value is non-negative
+func safeUint64(n int64) uint64 {
+	if n < 0 {
+		return 0
+	}
+	return uint64(n)
+}
+
 // updates returns a channel for receiving progress updates. It is the responsibility of the caller to close
 // the channel when they are done sending updates. Should only be called once per reporter instance.
 func (r *reporter) updates() chan<- v1.Update {
@@ -60,7 +70,7 @@ func (r *reporter) updates() chan<- v1.Update {
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= updateInterval ||
 				bytesDownloaded >= minBytesForUpdate {
-				if err := writeProgress(r.out, r.format(p)); err != nil {
+				if err := writeProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete)); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
@@ -92,10 +102,12 @@ func writeProgressMessage(w io.Writer, msg ProgressMessage) error {
 }
 
 // writeProgress writes a progress update message
-func writeProgress(w io.Writer, msg string) error {
+func writeProgress(w io.Writer, msg string, total, pulled uint64) error {
 	return writeProgressMessage(w, ProgressMessage{
 		Type:    "progress",
 		Message: msg,
+		Total:   total,
+		Pulled:  pulled,
 	})
 }
 
