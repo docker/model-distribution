@@ -15,7 +15,7 @@ func TestProgressMessages(t *testing.T) {
 			Total:    2 * 1024 * 1024,
 			Complete: 1024 * 1024,
 		}
-		err := writeProgress(&buf, pullMsg(update), update.Total, update.Complete)
+		err := writeProgress(&buf, pullMsg(update), uint64(update.Total), uint64(update.Complete))
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}
@@ -31,10 +31,10 @@ func TestProgressMessages(t *testing.T) {
 		if msg.Message != "Downloaded: 1.00 MB" {
 			t.Errorf("Expected message 'Downloaded: 1.00 MB', got '%s'", msg.Message)
 		}
-		if msg.Total != 2*1024*1024 {
+		if msg.Total != uint64(2*1024*1024) {
 			t.Errorf("Expected total 2MB, got %d", msg.Total)
 		}
-		if msg.Pulled != 1024*1024 {
+		if msg.Pulled != uint64(1024*1024) {
 			t.Errorf("Expected pulled 1MB, got %d", msg.Pulled)
 		}
 	})
