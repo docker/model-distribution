@@ -130,7 +130,6 @@ fi
 
 # Construct the full target reference
 TARGET="${REPOSITORY}:${WEIGHTS}-${QUANTIZATION}"
-LATEST="${REPOSITORY}:latest"
 
 echo "=== Model Push Script ==="
 echo "Hugging Face Model: $HF_MODEL"
@@ -141,7 +140,6 @@ echo "Models Directory: $MODELS_DIR"
 echo "Quantization: $QUANTIZATION"
 echo "Skip F16 Version: $SKIP_F16"
 echo "Full Target: $TARGET"
-echo "Latest Target: $LATEST"
 echo
 
 # Step 1: Run Docker container to convert the model from Hugging Face
@@ -209,7 +207,6 @@ echo "Step 3: Pushing model(s) to the repository..."
 
 echo "Pushing quantized model ($QUANTIZATION) to $TARGET..."
 "${PROJECT_ROOT}/bin/model-distribution-tool" package $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$TARGET"
-"${PROJECT_ROOT}/bin/model-distribution-tool" package $LICENSE_FLAGS "$QUANTIZED_MODEL_FILE" "$LATEST"
 
 # Push the F16 model if not skipped and not already pushed (when QUANTIZATION=F16)
 if [ "$SKIP_F16" != "true" ] && [ "$QUANTIZATION" != "F16" ]; then
@@ -229,5 +226,4 @@ echo "Models Directory: $MODELS_DIR"
 echo "Quantization: $QUANTIZATION"
 echo "Skip F16 Version: $SKIP_F16"
 echo "Full Target: $TARGET"
-echo "Latest Target: $LATEST"
 echo
