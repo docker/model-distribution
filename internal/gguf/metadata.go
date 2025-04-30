@@ -7,7 +7,7 @@ import (
 	parser "github.com/gpustack/gguf-parser-go"
 )
 
-const maxArraySize = 10
+const maxArraySize = 50
 
 // extractGGUFMetadata converts the GGUF header metadata into a string map.
 func extractGGUFMetadata(header *parser.GGUFHeader) map[string]string {
