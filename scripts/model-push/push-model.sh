@@ -144,10 +144,11 @@ echo
 
 # Step 1: Run Docker container to convert the model from Hugging Face
 echo "Step 1: Converting model from Hugging Face..."
+docker build -t docker/llama-converter:latest llama-converter
 docker run --rm \
     -e HUGGINGFACE_TOKEN="$HF_TOKEN" \
     -v "$MODELS_DIR:/models" \
-    ignaciolopezluna020/llama-converter:latest \
+    docker/llama-converter:latest \
     --from-hf "$HF_MODEL" --quantization "$QUANTIZATION"
 
 # Get the model name from the HF_MODEL

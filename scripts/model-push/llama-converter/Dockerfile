@@ -1,4 +1,4 @@
-FROM ignaciolopezluna020/llama.cpp:cpu
+FROM ghcr.io/ggml-org/llama.cpp:full-b5227
 
 # Install git-lfs to handle Hugging Face repositories
 RUN apt-get update && apt-get install -y git-lfs && \
