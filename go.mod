@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/google/go-containerregistry v0.20.3
-	github.com/gpustack/gguf-parser-go v0.14.1
+	github.com/gpustack/gguf-parser-go v0.17.2
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 )
