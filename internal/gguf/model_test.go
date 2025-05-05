@@ -35,6 +35,38 @@ func TestGGUF(t *testing.T) {
 			if cfg.Size != "864 B" {
 				t.Fatalf("Unexpected quantization: got %s expected %s", cfg.Quantization, "Unknown")
 			}
+
+			// Test GGUF metadata
+			if cfg.GGUF == nil {
+				t.Fatal("Expected GGUF metadata to be present")
+			}
+			// Verify all expected metadata fields from the example https://github.com/ggml-org/llama.cpp/blob/44cd8d91ff2c9e4a0f2e3151f8d6f04c928e2571/examples/gguf/gguf.cpp#L24
+			expectedParams := map[string]string{
+				"some.parameter.uint8":   "18",                   // 0x12
+				"some.parameter.int8":    "-19",                  // -0x13
+				"some.parameter.uint16":  "4660",                 // 0x1234
+				"some.parameter.int16":   "-4661",                // -0x1235
+				"some.parameter.uint32":  "305419896",            // 0x12345678
+				"some.parameter.int32":   "-305419897",           // -0x12345679
+				"some.parameter.float32": "0.123457",             // 0.123456789f
+				"some.parameter.uint64":  "1311768467463790320",  // 0x123456789abcdef0
+				"some.parameter.int64":   "-1311768467463790321", // -0x123456789abcdef1
+				"some.parameter.float64": "0.123457",             // 0.1234567890123456789
+				"some.parameter.bool":    "true",
+				"some.parameter.string":  "hello world",
+				"some.parameter.arr.i16": "1, 2, 3, 4",
+			}
+
+			for key, expectedValue := range expectedParams {
+				actualValue, ok := cfg.GGUF[key]
+				if !ok {
+					t.Errorf("Expected key '%s' in GGUF metadata", key)
+					continue
+				}
+				if actualValue != expectedValue {
+					t.Errorf("For key '%s': expected value '%s', got '%s'", key, expectedValue, actualValue)
+				}
+			}
 		})
 
 		t.Run("TestDescriptor", func(t *testing.T) {
