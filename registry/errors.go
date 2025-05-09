@@ -4,13 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/docker/model-distribution/internal/store"
 	"github.com/docker/model-distribution/types"
 )
 
 var (
 	ErrInvalidReference     = errors.New("invalid model reference")
-	ErrModelNotFound        = store.ErrModelNotFound
+	ErrModelNotFound        = errors.New("model not found")
 	ErrUnauthorized         = errors.New("unauthorized access to model")
 	ErrUnsupportedMediaType = errors.New(fmt.Sprintf(
 		"client supports only models of type %q and older - try upgrading",
@@ -37,8 +36,8 @@ func (e *ReferenceError) Is(target error) bool {
 	return target == ErrInvalidReference
 }
 
-// RegistryError represents an error returned by an OCI registry
-type RegistryError struct {
+// Error represents an error returned by an OCI registry
+type Error struct {
 	Reference string
 	// Code should be one of error codes defined in the distribution spec
 	// (see https://github.com/opencontainers/distribution-spec/blob/583e014d15418d839d67f68152bc2c83821770e0/spec.md#error-codes)
@@ -47,16 +46,16 @@ type RegistryError struct {
 	Err     error
 }
 
-func (e RegistryError) Error() string {
+func (e Error) Error() string {
 	return fmt.Sprintf("failed to pull model %q: %s - %s", e.Reference, e.Code, e.Message)
 }
 
-func (e RegistryError) Unwrap() error {
+func (e Error) Unwrap() error {
 	return e.Err
 }
 
-// Is implements error matching for RegistryError
-func (e RegistryError) Is(target error) bool {
+// Is implements error matching for Error
+func (e Error) Is(target error) bool {
 	switch target {
 	case ErrModelNotFound:
 		return e.Code == "MANIFEST_UNKNOWN" || e.Code == "NAME_UNKNOWN"
@@ -75,9 +74,9 @@ func NewReferenceError(reference string, err error) error {
 	}
 }
 
-// NewRegistryError creates a new RegistryError
+// NewRegistryError creates a new Error
 func NewRegistryError(reference, code, message string, err error) error {
-	return &RegistryError{
+	return &Error{
 		Reference: reference,
 		Code:      code,
 		Message:   message,

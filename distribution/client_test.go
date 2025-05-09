@@ -39,7 +39,7 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse registry URL: %v", err)
 	}
-	registryHost := registryURL.Host
+	registry := registryURL.Host
 
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -64,7 +64,7 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
-	tag := registryHost + "/testmodel:v1.0.0"
+	tag := registry + "/testmodel:v1.0.0"
 	ref, err := name.ParseReference(tag)
 	if err != nil {
 		t.Fatalf("Failed to parse reference: %v", err)
@@ -154,14 +154,14 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Test with non-existent repository
-		nonExistentRef := registryHost + "/nonexistent/model:v1.0.0"
+		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 		if err == nil {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
 
-		// Verify it's a RegistryError
-		var pullErr *mdregistry.RegistryError
+		// Verify it's a registry.Error
+		var pullErr *mdregistry.Error
 		ok := errors.As(err, &pullErr)
 		if !ok {
 			t.Fatalf("Expected PullError, got %T", err)
@@ -180,7 +180,7 @@ func TestClientPullModel(t *testing.T) {
 		if pullErr.Err == nil {
 			t.Error("Expected underlying error to be non-nil")
 		}
-		if !errors.Is(pullErr, ErrModelNotFound) {
+		if !errors.Is(pullErr, mdregistry.ErrModelNotFound) {
 			t.Errorf("Expected underlying error to match ErrModelNotFound, got %v", pullErr.Err)
 		}
 	})
@@ -206,7 +206,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to local store
-		tag := registryHost + "/incomplete-test/model:v1.0.0"
+		tag := registry + "/incomplete-test/model:v1.0.0"
 		if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
 			t.Fatalf("Failed to push model to store: %v", err)
 		}
@@ -306,7 +306,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push first version of model to registry
-		tag := registryHost + "/update-test:v1.0.0"
+		tag := registry + "/update-test:v1.0.0"
 		if err := writeToRegistry(testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to push first version of model: %v", err)
 		}
@@ -388,7 +388,7 @@ func TestClientPullModel(t *testing.T) {
 	t.Run("pull unsupported (newer) version", func(t *testing.T) {
 		newMdl := mutate.ConfigMediaType(model, "application/vnd.docker.ai.model.config.v0.2+json")
 		// Push model to local store
-		tag := registryHost + "/unsupported-test/model:v1.0.0"
+		tag := registry + "/unsupported-test/model:v1.0.0"
 		ref, err := name.ParseReference(tag)
 		if err != nil {
 			t.Fatalf("Failed to parse reference: %v", err)
@@ -490,7 +490,7 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Test with non-existent model
-		nonExistentRef := registryHost + "/nonexistent/model:v1.0.0"
+		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 
 		// Expect an error
@@ -500,7 +500,7 @@ func TestClientPullModel(t *testing.T) {
 
 		// Verify it matches registry.ErrModelNotFound
 		if !errors.Is(err, mdregistry.ErrModelNotFound) {
-			t.Fatalf("Expected PullError, got %T", err)
+			t.Fatalf("Expected registry.ErrModelNotFound, got %T", err)
 		}
 
 		// No JSON messages should be in the buffer for this error case
