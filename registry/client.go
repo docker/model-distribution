@@ -58,7 +58,7 @@ func NewClient(opts ...ClientOption) *Client {
 	return client
 }
 
-func (c *Client) Read(ctx context.Context, reference string) (types.ModelArtifact, error) {
+func (c *Client) Model(ctx context.Context, reference string) (types.ModelArtifact, error) {
 	// Parse the reference
 	ref, err := name.ParseReference(reference)
 	if err != nil {

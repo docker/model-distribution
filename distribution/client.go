@@ -7,12 +7,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/docker/model-distribution/registry"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/sirupsen/logrus"
 
 	"github.com/docker/model-distribution/internal/progress"
 	"github.com/docker/model-distribution/internal/store"
+	"github.com/docker/model-distribution/registry"
 	"github.com/docker/model-distribution/types"
 )
 
@@ -116,7 +115,7 @@ func NewClient(opts ...Option) (*Client, error) {
 func (c *Client) PullModel(ctx context.Context, reference string, progressWriter io.Writer) error {
 	c.log.Infoln("Starting model pull:", reference)
 
-	remoteModel, err := c.registry.Read(ctx, reference)
+	remoteModel, err := c.registry.Model(ctx, reference)
 	if err != nil {
 		return fmt.Errorf("reading model from registry: %w", err)
 	}
@@ -309,7 +308,7 @@ func (c *Client) PushModel(ctx context.Context, tag string, progressWriter io.Wr
 	return nil
 }
 
-func checkCompat(image v1.Image) error {
+func checkCompat(image types.ModelArtifact) error {
 	manifest, err := image.Manifest()
 	if err != nil {
 		return err
