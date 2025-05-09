@@ -1,8 +1,6 @@
 package registry
 
 import (
-	"fmt"
-
 	"github.com/docker/model-distribution/internal/partial"
 	"github.com/docker/model-distribution/types"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -18,16 +16,8 @@ func (a *artifact) ID() (string, error) {
 	return partial.ID(a)
 }
 
-func (a *artifact) GGUFPath() (string, error) {
-	return "", fmt.Errorf("not downloaded")
-}
-
 func (a *artifact) Config() (types.Config, error) {
 	return partial.Config(a)
-}
-
-func (a *artifact) Tags() []string {
-	return nil
 }
 
 func (a *artifact) Descriptor() (types.Descriptor, error) {
