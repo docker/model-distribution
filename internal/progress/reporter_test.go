@@ -1,4 +1,4 @@
-package distribution
+package progress
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ func TestProgressMessages(t *testing.T) {
 			Total:    2 * 1024 * 1024,
 			Complete: 1024 * 1024,
 		}
-		err := writeProgress(&buf, pullMsg(update), uint64(update.Total), uint64(update.Complete))
+		err := writeProgress(&buf, PullMsg(update), uint64(update.Total), uint64(update.Complete))
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}
@@ -41,7 +41,7 @@ func TestProgressMessages(t *testing.T) {
 
 	t.Run("writeSuccess", func(t *testing.T) {
 		var buf bytes.Buffer
-		err := writeSuccess(&buf, "Model pulled successfully")
+		err := WriteSuccess(&buf, "Model pulled successfully")
 		if err != nil {
 			t.Fatalf("Failed to write success message: %v", err)
 		}
@@ -61,7 +61,7 @@ func TestProgressMessages(t *testing.T) {
 
 	t.Run("writeError", func(t *testing.T) {
 		var buf bytes.Buffer
-		err := writeError(&buf, "Error: something went wrong")
+		err := WriteError(&buf, "Error: something went wrong")
 		if err != nil {
 			t.Fatalf("Failed to write error message: %v", err)
 		}

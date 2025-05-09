@@ -97,11 +97,3 @@ func (m *Model) Config() (types.Config, error) {
 func (m *Model) Descriptor() (types.Descriptor, error) {
 	return mdpartial.Descriptor(m)
 }
-
-func (m *Model) GGUFPath() (string, error) {
-	return mdpartial.GGUFPath(m)
-}
-
-func (m *Model) Tags() []string {
-	return []string{}
-}

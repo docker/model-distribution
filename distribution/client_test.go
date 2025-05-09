@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/model-distribution/internal/progress"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
+	mdregistry "github.com/docker/model-distribution/registry"
 )
 
 var (
@@ -158,8 +160,8 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
 
-		// Verify it's a PullError
-		var pullErr *PullError
+		// Verify it's a registry.Error
+		var pullErr *mdregistry.Error
 		ok := errors.As(err, &pullErr)
 		if !ok {
 			t.Fatalf("Expected PullError, got %T", err)
@@ -178,7 +180,7 @@ func TestClientPullModel(t *testing.T) {
 		if pullErr.Err == nil {
 			t.Error("Expected underlying error to be non-nil")
 		}
-		if !errors.Is(pullErr, ErrModelNotFound) {
+		if !errors.Is(pullErr, mdregistry.ErrModelNotFound) {
 			t.Errorf("Expected underlying error to match ErrModelNotFound, got %v", pullErr.Err)
 		}
 	})
@@ -422,11 +424,11 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Parse progress output as JSON
-		var messages []ProgressMessage
+		var messages []progress.ProgressMessage
 		scanner := bufio.NewScanner(&progressBuffer)
 		for scanner.Scan() {
 			line := scanner.Text()
-			var msg ProgressMessage
+			var msg progress.ProgressMessage
 			if err := json.Unmarshal([]byte(line), &msg); err != nil {
 				t.Fatalf("Failed to parse JSON progress message: %v, line: %s", err, line)
 			}
@@ -496,10 +498,9 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
 
-		// Verify it's a PullError
-		var pullErr *PullError
-		if !errors.As(err, &pullErr) {
-			t.Fatalf("Expected PullError, got %T", err)
+		// Verify it matches registry.ErrModelNotFound
+		if !errors.Is(err, mdregistry.ErrModelNotFound) {
+			t.Fatalf("Expected registry.ErrModelNotFound, got %T", err)
 		}
 
 		// No JSON messages should be in the buffer for this error case
@@ -815,18 +816,8 @@ func TestNewReferenceError(t *testing.T) {
 		t.Fatal("Expected error for invalid reference, got nil")
 	}
 
-	// Verify it's a ReferenceError
-	refErr, ok := err.(*ReferenceError)
-	if !ok {
-		t.Fatalf("Expected ReferenceError, got %T", err)
-	}
-
-	// Verify error fields
-	if refErr.Reference != invalidRef {
-		t.Errorf("Expected reference %q, got %q", invalidRef, refErr.Reference)
-	}
-	if refErr.Err == nil {
-		t.Error("Expected underlying error to be non-nil")
+	if !errors.Is(err, ErrInvalidReference) {
+		t.Fatalf("Expected error to match sentinel invalid reference error, got %v", err)
 	}
 }
 
