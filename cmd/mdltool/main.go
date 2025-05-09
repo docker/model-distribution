@@ -8,15 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-
+	"github.com/docker/model-distribution/builder"
 	"github.com/docker/model-distribution/distribution"
-	"github.com/docker/model-distribution/internal/gguf"
-	"github.com/docker/model-distribution/internal/mutate"
-	"github.com/docker/model-distribution/internal/partial"
-	"github.com/docker/model-distribution/types"
+	"github.com/docker/model-distribution/registry"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -183,15 +177,16 @@ func cmdPackage(args []string) int {
 	}
 
 	// Parse the reference
-	ref, err := name.ParseReference(reference)
+	target, err := registry.NewClient(
+		registry.WithUserAgent("model-distribution-tool/" + version),
+	).NewTarget(reference)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
 		return 1
 	}
 
 	// Create image with layer
-	var mdl types.ModelArtifact
-	mdl, err = gguf.NewModel(source)
+	builder, err := builder.FromGGUF(source)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating model from gguf: %v\n", err)
 		return 1
@@ -200,21 +195,16 @@ func cmdPackage(args []string) int {
 	// Add all license files as layers
 	for _, path := range licensePaths {
 		fmt.Println("Adding license file:", path)
-		licenseLayer, err := partial.NewLayer(path, types.MediaTypeLicense)
+		builder, err = builder.WithLicense(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
 			return 1
 		}
-		mdl = mutate.AppendLayers(mdl, licenseLayer)
 	}
 
 	// Push the image
-	if err := remote.Write(ref, mdl,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithUserAgent("model-distribution-tool/"+version),
-		remote.WithContext(ctx),
-	); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", ref.String(), err)
+	if err := builder.Build(ctx, target, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", reference, err)
 		return 1
 	}
 	return 0

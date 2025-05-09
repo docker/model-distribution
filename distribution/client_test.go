@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/model-distribution/internal/progress"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
+	mdregistry "github.com/docker/model-distribution/registry"
 )
 
 var (
@@ -37,7 +39,7 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse registry URL: %v", err)
 	}
-	registry := registryURL.Host
+	registryHost := registryURL.Host
 
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
@@ -62,7 +64,7 @@ func TestClientPullModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
-	tag := registry + "/testmodel:v1.0.0"
+	tag := registryHost + "/testmodel:v1.0.0"
 	ref, err := name.ParseReference(tag)
 	if err != nil {
 		t.Fatalf("Failed to parse reference: %v", err)
@@ -152,14 +154,14 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Test with non-existent repository
-		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
+		nonExistentRef := registryHost + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 		if err == nil {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
 
-		// Verify it's a PullError
-		var pullErr *PullError
+		// Verify it's a RegistryError
+		var pullErr *mdregistry.RegistryError
 		ok := errors.As(err, &pullErr)
 		if !ok {
 			t.Fatalf("Expected PullError, got %T", err)
@@ -204,7 +206,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push model to local store
-		tag := registry + "/incomplete-test/model:v1.0.0"
+		tag := registryHost + "/incomplete-test/model:v1.0.0"
 		if err := client.store.Write(mdl, []string{tag}, nil); err != nil {
 			t.Fatalf("Failed to push model to store: %v", err)
 		}
@@ -304,7 +306,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Push first version of model to registry
-		tag := registry + "/update-test:v1.0.0"
+		tag := registryHost + "/update-test:v1.0.0"
 		if err := writeToRegistry(testGGUFFile, tag); err != nil {
 			t.Fatalf("Failed to push first version of model: %v", err)
 		}
@@ -386,7 +388,7 @@ func TestClientPullModel(t *testing.T) {
 	t.Run("pull unsupported (newer) version", func(t *testing.T) {
 		newMdl := mutate.ConfigMediaType(model, "application/vnd.docker.ai.model.config.v0.2+json")
 		// Push model to local store
-		tag := registry + "/unsupported-test/model:v1.0.0"
+		tag := registryHost + "/unsupported-test/model:v1.0.0"
 		ref, err := name.ParseReference(tag)
 		if err != nil {
 			t.Fatalf("Failed to parse reference: %v", err)
@@ -422,11 +424,11 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Parse progress output as JSON
-		var messages []ProgressMessage
+		var messages []progress.ProgressMessage
 		scanner := bufio.NewScanner(&progressBuffer)
 		for scanner.Scan() {
 			line := scanner.Text()
-			var msg ProgressMessage
+			var msg progress.ProgressMessage
 			if err := json.Unmarshal([]byte(line), &msg); err != nil {
 				t.Fatalf("Failed to parse JSON progress message: %v, line: %s", err, line)
 			}
@@ -488,7 +490,7 @@ func TestClientPullModel(t *testing.T) {
 		var progressBuffer bytes.Buffer
 
 		// Test with non-existent model
-		nonExistentRef := registry + "/nonexistent/model:v1.0.0"
+		nonExistentRef := registryHost + "/nonexistent/model:v1.0.0"
 		err = client.PullModel(context.Background(), nonExistentRef, &progressBuffer)
 
 		// Expect an error
@@ -496,9 +498,8 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatal("Expected error for non-existent model, got nil")
 		}
 
-		// Verify it's a PullError
-		var pullErr *PullError
-		if !errors.As(err, &pullErr) {
+		// Verify it matches registry.ErrModelNotFound
+		if !errors.Is(err, mdregistry.ErrModelNotFound) {
 			t.Fatalf("Expected PullError, got %T", err)
 		}
 
@@ -815,18 +816,8 @@ func TestNewReferenceError(t *testing.T) {
 		t.Fatal("Expected error for invalid reference, got nil")
 	}
 
-	// Verify it's a ReferenceError
-	refErr, ok := err.(*ReferenceError)
-	if !ok {
-		t.Fatalf("Expected ReferenceError, got %T", err)
-	}
-
-	// Verify error fields
-	if refErr.Reference != invalidRef {
-		t.Errorf("Expected reference %q, got %q", invalidRef, refErr.Reference)
-	}
-	if refErr.Err == nil {
-		t.Error("Expected underlying error to be non-nil")
+	if !errors.Is(err, ErrInvalidReference) {
+		t.Fatalf("Expected error to match sentinel invalid reference error, got %v", err)
 	}
 }
 
