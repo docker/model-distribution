@@ -26,16 +26,8 @@ func (m *model) ID() (string, error) {
 	return partial.ID(m)
 }
 
-func (m *model) GGUFPath() (string, error) {
-	return partial.GGUFPath(m)
-}
-
 func (m *model) Config() (types.Config, error) {
 	return partial.Config(m)
-}
-
-func (m *model) Tags() []string {
-	return m.base.Tags()
 }
 
 func (m *model) MediaType() (ggcr.MediaType, error) {
