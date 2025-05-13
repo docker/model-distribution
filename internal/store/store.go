@@ -241,9 +241,14 @@ type ProgressReader struct {
 
 func (pr *ProgressReader) Read(p []byte) (int, error) {
 	n, err := pr.Reader.Read(p)
-	if n > 0 {
-		pr.Total += int64(n)
+	pr.Total += int64(n)
+	if err == io.EOF {
 		pr.ProgressChan <- v1.Update{Complete: pr.Total}
+	} else if n > 0 {
+		select {
+		case pr.ProgressChan <- v1.Update{Complete: pr.Total}:
+		default:
+		}
 	}
 	return n, err
 }

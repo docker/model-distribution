@@ -38,7 +38,7 @@ func PushMsg(update v1.Update) string {
 func NewProgressReporter(w io.Writer, msgF progressF) *Reporter {
 	return &Reporter{
 		out:      w,
-		progress: make(chan v1.Update),
+		progress: make(chan v1.Update, 1),
 		done:     make(chan struct{}),
 		format:   msgF,
 	}
