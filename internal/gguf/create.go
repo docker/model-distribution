@@ -12,7 +12,7 @@ import (
 	"github.com/docker/model-distribution/types"
 )
 
-func NewModel(path string, capabilities *types.Capabilities) (*Model, error) {
+func NewModel(path string) (*Model, error) {
 	layer, err := partial.NewLayer(path, types.MediaTypeGGUF)
 	if err != nil {
 		return nil, fmt.Errorf("create gguf layer: %w", err)
@@ -25,7 +25,7 @@ func NewModel(path string, capabilities *types.Capabilities) (*Model, error) {
 	created := time.Now()
 	return &Model{
 		configFile: types.ConfigFile{
-			Config: configFromFile(path, capabilities),
+			Config: configFromFile(path),
 			Descriptor: types.Descriptor{
 				Created: &created,
 			},
@@ -40,20 +40,19 @@ func NewModel(path string, capabilities *types.Capabilities) (*Model, error) {
 	}, nil
 }
 
-func configFromFile(path string, capabilities *types.Capabilities) types.Config {
+func configFromFile(path string) types.Config {
 	gguf, err := parser.ParseGGUFFile(path)
 	if err != nil {
 		return types.Config{} // continue without metadata
 	}
 
-	if capabilities == nil {
-		capabilities = &types.Capabilities{
-			IO: types.IOTypes{
-				Input:  []string{types.IOTypeText},
-				Output: []string{types.IOTypeText},
-			},
-			ToolUsage: false,
-		}
+	// default capabilities
+	capabilities := &types.Capabilities{
+		IO: types.IOTypes{
+			Input:  []string{types.IOTypeText},
+			Output: []string{types.IOTypeText},
+		},
+		ToolUsage: false,
 	}
 
 	return types.Config{

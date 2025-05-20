@@ -17,8 +17,8 @@ type Builder struct {
 }
 
 // FromGGUF returns a *Builder that builds a model artifacts from a GGUF file
-func FromGGUF(path string, capabilities *types.Capabilities) (*Builder, error) {
-	mdl, err := gguf.NewModel(path, capabilities)
+func FromGGUF(path string) (*Builder, error) {
+	mdl, err := gguf.NewModel(path)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +41,26 @@ func (b *Builder) WithLicense(path string) (*Builder, error) {
 // Target represents a build target
 type Target interface {
 	Write(context.Context, types.ModelArtifact, io.Writer) error
+}
+
+// WithCapabilities sets the capabilities for the model
+func (b *Builder) WithCapabilities(capabilities *types.Capabilities) (*Builder, error) {
+	if capabilities == nil {
+		return nil, fmt.Errorf("capabilities cannot be nil")
+	}
+
+	// Get the current config
+	config, err := b.model.Config()
+	if err != nil {
+		return nil, fmt.Errorf("getting model config: %w", err)
+	}
+
+	// Update the config with the new capabilities
+	config.Capabilities = capabilities
+
+	return &Builder{
+		model: mutate.WithConfig(b.model, config),
+	}, nil
 }
 
 // Build finalizes the artifact and writes it to the given target, reporting progress to the given writer

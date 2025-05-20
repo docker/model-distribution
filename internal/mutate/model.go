@@ -16,6 +16,7 @@ type model struct {
 	base            types.ModelArtifact
 	appended        []v1.Layer
 	configMediaType ggcr.MediaType
+	config          *types.Config
 }
 
 func (m *model) Descriptor() (types.Descriptor, error) {
@@ -27,6 +28,9 @@ func (m *model) ID() (string, error) {
 }
 
 func (m *model) Config() (types.Config, error) {
+	if m.config != nil {
+		return *m.config, nil
+	}
 	return partial.Config(m)
 }
 
@@ -116,6 +120,11 @@ func (m *model) RawConfigFile() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if m.config != nil {
+		cf.Config = *m.config
+	}
+
+	// Add diffIDs for appended layers
 	for _, l := range m.appended {
 		diffID, err := l.DiffID()
 		if err != nil {
@@ -127,5 +136,5 @@ func (m *model) RawConfigFile() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return raw, err
+	return raw, nil
 }

@@ -20,3 +20,12 @@ func ConfigMediaType(mdl types.ModelArtifact, mt ggcr.MediaType) types.ModelArti
 		configMediaType: mt,
 	}
 }
+
+// WithConfig returns a new model with the updated config
+func WithConfig(mdl types.ModelArtifact, config types.Config) types.ModelArtifact {
+	// Create a new model with the updated config
+	return &model{
+		base:   mdl,
+		config: &config,
+	}
+}

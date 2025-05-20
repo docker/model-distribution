@@ -60,7 +60,7 @@ func TestClientPullModel(t *testing.T) {
 		t.Fatalf("Failed to read test model file: %v", err)
 	}
 
-	model, err := gguf.NewModel(testGGUFFile, nil)
+	model, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Use the dummy.gguf file from assets directory
-		mdl, err := gguf.NewModel(testGGUFFile, nil)
+		mdl, err := gguf.NewModel(testGGUFFile)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}
@@ -523,7 +523,7 @@ func TestClientGetModel(t *testing.T) {
 	}
 
 	// Create model from test GGUF file
-	model, err := gguf.NewModel(testGGUFFile, nil)
+	model, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -588,7 +588,7 @@ func TestClientListModels(t *testing.T) {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
 
-	mdl, err := gguf.NewModel(modelFile, nil)
+	mdl, err := gguf.NewModel(modelFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestClientListModels(t *testing.T) {
 	if err := os.WriteFile(modelFile2, modelContent2, 0644); err != nil {
 		t.Fatalf("Failed to write test model file: %v", err)
 	}
-	mdl2, err := gguf.NewModel(modelFile2, nil)
+	mdl2, err := gguf.NewModel(modelFile2)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -847,7 +847,7 @@ func TestPush(t *testing.T) {
 	tag := uri.Host + "/incomplete-test/model:v1.0.0"
 
 	// Write a test model to the store with the given tag
-	mdl, err := gguf.NewModel(testGGUFFile, nil)
+	mdl, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -922,7 +922,7 @@ func TestPushProgress(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	mdl, err := gguf.NewModel(path, nil)
+	mdl, err := gguf.NewModel(path)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -977,7 +977,7 @@ func TestTag(t *testing.T) {
 	}
 
 	// Create a test model
-	model, err := gguf.NewModel(testGGUFFile, nil)
+	model, err := gguf.NewModel(testGGUFFile)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -1069,7 +1069,7 @@ func writeToRegistry(source, reference string) error {
 	}
 
 	// Create image with layer
-	mdl, err := gguf.NewModel(source, nil)
+	mdl, err := gguf.NewModel(source)
 	if err != nil {
 		return fmt.Errorf("new model: %w", err)
 	}

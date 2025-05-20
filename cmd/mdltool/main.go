@@ -195,17 +195,6 @@ func cmdPackage(args []string) int {
 		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
 	}
 
-	// Parse input/output types
-	inputTypes := strings.Split(inputTypesStr, ",")
-	outputTypes := strings.Split(outputTypesStr, ",")
-
-	// Create capabilities with validation
-	capabilities, err := types.NewCapabilities(inputTypes, outputTypes, toolUsage)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating capabilities: %v\n", err)
-		return 1
-	}
-
 	// Parse the reference
 	target, err := registry.NewClient(
 		registry.WithUserAgent("model-distribution-tool/" + version),
@@ -216,7 +205,7 @@ func cmdPackage(args []string) int {
 	}
 
 	// Create image with layer
-	builder, err := builder.FromGGUF(source, capabilities)
+	builder, err := builder.FromGGUF(source)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating model from gguf: %v\n", err)
 		return 1
@@ -230,6 +219,24 @@ func cmdPackage(args []string) int {
 			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
 			return 1
 		}
+	}
+
+	// Parse input/output types
+	inputTypes := strings.Split(inputTypesStr, ",")
+	outputTypes := strings.Split(outputTypesStr, ",")
+
+	// Create capabilities with validation
+	capabilities, err := types.NewCapabilities(inputTypes, outputTypes, toolUsage)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating capabilities: %v\n", err)
+		return 1
+	}
+
+	// Add capabilities
+	builder, err = builder.WithCapabilities(capabilities)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting capabilities: %v\n", err)
+		return 1
 	}
 
 	// Push the image

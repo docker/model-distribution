@@ -41,7 +41,7 @@ func TestECRIntegration(t *testing.T) {
 	}
 
 	t.Run("Push", func(t *testing.T) {
-		mdl, err := gguf.NewModel(testGGUFFile, nil)
+		mdl, err := gguf.NewModel(testGGUFFile)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}

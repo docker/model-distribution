@@ -10,7 +10,7 @@ import (
 
 func TestGGUF(t *testing.T) {
 	t.Run("TestGGUFModel", func(t *testing.T) {
-		mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"), nil)
+		mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}
@@ -95,7 +95,7 @@ func TestGGUF(t *testing.T) {
 }
 
 func TestDefaultCapabilities(t *testing.T) {
-	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"), nil)
+	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
