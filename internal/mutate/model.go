@@ -124,7 +124,6 @@ func (m *model) RawConfigFile() ([]byte, error) {
 		cf.Config = *m.config
 	}
 
-	// Add diffIDs for appended layers
 	for _, l := range m.appended {
 		diffID, err := l.DiffID()
 		if err != nil {
