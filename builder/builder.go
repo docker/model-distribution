@@ -17,8 +17,8 @@ type Builder struct {
 }
 
 // FromGGUF returns a *Builder that builds a model artifacts from a GGUF file
-func FromGGUF(path string) (*Builder, error) {
-	mdl, err := gguf.NewModel(path)
+func FromGGUF(path string, capabilities *types.Capabilities) (*Builder, error) {
+	mdl, err := gguf.NewModel(path, capabilities)
 	if err != nil {
 		return nil, err
 	}

@@ -27,7 +27,7 @@ func (m *model) ID() (string, error) {
 }
 
 func (m *model) Config() (types.Config, error) {
-	return partial.Config(m)
+	return partial.Config(m.base)
 }
 
 func (m *model) MediaType() (ggcr.MediaType, error) {

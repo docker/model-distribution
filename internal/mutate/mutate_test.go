@@ -14,7 +14,13 @@ import (
 )
 
 func TestAppendLayer(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"), &types.Capabilities{
+		IO: types.IOTypes{
+			Input:  []string{types.IOTypeText},
+			Output: []string{types.IOTypeText},
+		},
+		ToolUsage: false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -30,9 +36,7 @@ func TestAppendLayer(t *testing.T) {
 	mdl2 := mutate.AppendLayers(mdl1,
 		static.NewLayer([]byte("some layer content"), "application/vnd.example.some.media.type"),
 	)
-	if err != nil {
-		t.Fatalf("Failed to create layer: %v", err)
-	}
+
 	if mdl2 == nil {
 		t.Fatal("Expected non-nil model")
 	}
@@ -61,7 +65,13 @@ func TestAppendLayer(t *testing.T) {
 }
 
 func TestConfigMediaTypes(t *testing.T) {
-	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"), &types.Capabilities{
+		IO: types.IOTypes{
+			Input:  []string{types.IOTypeText},
+			Output: []string{types.IOTypeText},
+		},
+		ToolUsage: false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

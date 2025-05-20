@@ -15,6 +15,10 @@ GOBIN=$(GOBASE)/bin
 SOURCE?=
 TAG?=
 STORE_PATH?=./model-store
+LICENSE?=
+INPUT_TYPES?=text
+OUTPUT_TYPES?=text
+TOOL_USAGE?=false
 
 # Use linker flags to provide version/build information
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
@@ -48,7 +52,11 @@ run-pull:
 
 run-package:
 	@echo "Pushing model ${SOURCE} to ${TAG}..."
-	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} package ${SOURCE} ${TAG} ${LICENSE:+--license ${LICENSE}}
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} package ${SOURCE} ${TAG} \
+		${LICENSE:+--licenses ${LICENSE}} \
+		--input ${INPUT_TYPES} \
+		--output ${OUTPUT_TYPES} \
+		${TOOL_USAGE:+--tool-usage}
 
 run-list:
 	@echo "Listing models..."
@@ -77,7 +85,9 @@ help:
 	@echo "  test             - Run unit tests"
 	@echo "  clean            - Clean build artifacts"
 	@echo "  run-pull         - Pull a model (TAG=registry/model:tag)"
-	@echo "  run-package      - Package and push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag LICENSE=path/to/license.txt)"
+	@echo "  run-package      - Package and push a model (SOURCE=path/to/model.gguf TAG=registry/model:tag)"
+	@echo "                    Optional: LICENSE=path/to/license.txt"
+	@echo "                    Optional: INPUT_TYPES=text,image OUTPUT_TYPES=text,audio TOOL_USAGE=true"
 	@echo "  run-list         - List all models"
 	@echo "  run-get          - Get model info (TAG=registry/model:tag)"
 	@echo "  run-get-path     - Get model path (TAG=registry/model:tag)"
