@@ -212,7 +212,7 @@ func TestStoreAPI(t *testing.T) {
 		blobHash := hex.EncodeToString(hash[:])
 
 		// Add model to store with a unique tag
-		mdl, err := gguf.NewModel(modelPath)
+		mdl, err := gguf.NewModel(modelPath, nil)
 		if err != nil {
 			t.Fatalf("Create model failed: %v", err)
 		}
@@ -272,7 +272,7 @@ func TestStoreAPI(t *testing.T) {
 		expectedBlobDigest := fmt.Sprintf("sha256:%s", blobHash)
 
 		// Create first model with the shared content
-		model1, err := gguf.NewModel(sharedModelPath)
+		model1, err := gguf.NewModel(sharedModelPath, nil)
 		if err != nil {
 			t.Fatalf("Create first model failed: %v", err)
 		}
@@ -283,7 +283,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Create second model with the same shared content
-		model2, err := gguf.NewModel(sharedModelPath)
+		model2, err := gguf.NewModel(sharedModelPath, nil)
 		if err != nil {
 			t.Fatalf("Create second model failed: %v", err)
 		}
@@ -426,7 +426,7 @@ func TestIncompleteFileHandling(t *testing.T) {
 	}
 
 	// Create a model
-	mdl, err := gguf.NewModel(modelPath)
+	mdl, err := gguf.NewModel(modelPath, nil)
 	if err != nil {
 		t.Fatalf("Create model failed: %v", err)
 	}
@@ -469,7 +469,7 @@ func newTestModel(t *testing.T) types.ModelArtifact {
 	var mdl types.ModelArtifact
 	var err error
 
-	mdl, err = gguf.NewModel(filepath.Join("testdata", "dummy.gguf"))
+	mdl, err = gguf.NewModel(filepath.Join("testdata", "dummy.gguf"), nil)
 	if err != nil {
 		t.Fatalf("failed to create model from gguf file: %v", err)
 	}

@@ -23,7 +23,7 @@ func TestDeleteModel(t *testing.T) {
 	}
 
 	// Use the dummy.gguf file from assets directory
-	mdl, err := gguf.NewModel(testGGUFFile)
+	mdl, err := gguf.NewModel(testGGUFFile, nil)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
