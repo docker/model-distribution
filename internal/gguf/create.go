@@ -46,6 +46,16 @@ func configFromFile(path string, capabilities *types.Capabilities) types.Config 
 		return types.Config{} // continue without metadata
 	}
 
+	if capabilities == nil {
+		capabilities = &types.Capabilities{
+			IO: types.IOTypes{
+				Input:  []string{types.IOTypeText},
+				Output: []string{types.IOTypeText},
+			},
+			ToolUsage: false,
+		}
+	}
+
 	return types.Config{
 		Format:       types.FormatGGUF,
 		Parameters:   strings.TrimSpace(gguf.Metadata().Parameters.String()),

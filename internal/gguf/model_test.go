@@ -93,3 +93,33 @@ func TestGGUF(t *testing.T) {
 		})
 	})
 }
+
+func TestDefaultCapabilities(t *testing.T) {
+	mdl, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"), nil)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	config, err := mdl.Config()
+	if err != nil {
+		t.Fatalf("Failed to get config: %v", err)
+	}
+
+	// Verify default capabilities are set
+	if config.Capabilities == nil {
+		t.Fatal("Expected default capabilities to be set")
+	}
+
+	// Verify default input/output types
+	if len(config.Capabilities.IO.Input) != 1 || config.Capabilities.IO.Input[0] != types.IOTypeText {
+		t.Errorf("Expected default input type to be text, got %v", config.Capabilities.IO.Input)
+	}
+	if len(config.Capabilities.IO.Output) != 1 || config.Capabilities.IO.Output[0] != types.IOTypeText {
+		t.Errorf("Expected default output type to be text, got %v", config.Capabilities.IO.Output)
+	}
+
+	// Verify tool usage is false by default
+	if config.Capabilities.ToolUsage {
+		t.Error("Expected tool usage to be false by default")
+	}
+}
