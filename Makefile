@@ -52,11 +52,12 @@ run-pull:
 
 run-package:
 	@echo "Pushing model ${SOURCE} to ${TAG}..."
-	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} package ${SOURCE} ${TAG} \
+	@${GOBIN}/${BINARY_NAME} --store-path ${STORE_PATH} package \
 		${LICENSE:+--licenses ${LICENSE}} \
 		--input ${INPUT_TYPES} \
 		--output ${OUTPUT_TYPES} \
-		${TOOL_USAGE:+--tool-usage}
+		${TOOL_USAGE:+--tool-usage} \
+		${SOURCE} ${TAG}
 
 run-list:
 	@echo "Listing models..."

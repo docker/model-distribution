@@ -31,6 +31,34 @@ make build
 # Package a model with license files and push to a registry
 ./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
 
+# Package a model with specific capabilities
+# Example 1: Text-only model
+./bin/model-distribution-tool package \
+    --input text \
+    --output text \
+    ./model.gguf registry.example.com/models/llama:v1.0
+
+# Example 2: Multimodal model that can handle text and images
+./bin/model-distribution-tool package \
+    --input text,image \
+    --output text \
+    ./model.gguf registry.example.com/models/multimodal:v1.0
+
+# Example 3: Model with tool usage capability
+./bin/model-distribution-tool package \
+    --input text \
+    --output text \
+    --tool-usage \
+    ./model.gguf registry.example.com/models/assistant:v1.0
+
+# Example 4: Complete example with all options
+./bin/model-distribution-tool package \
+    --licenses license.txt \
+    --input text,image \
+    --output text,audio \
+    --tool-usage \
+    ./model.gguf registry.example.com/models/multimodal:v1.0
+
 # Push a model from the content store to the registry
 ./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
 
@@ -65,6 +93,7 @@ For more information about the CLI tool, run:
 import (
     "context"
     "github.com/docker/model-distribution/pkg/distribution"
+    "github.com/docker/model-distribution/types"
 )
 
 // Create a new client
@@ -117,3 +146,13 @@ if err != nil {
     // Handle error
 }
 ```
+
+### Model Capabilities
+
+The tool supports specifying model capabilities through the following options:
+
+- `--input`: Comma-separated list of input types the model can handle
+  - Valid types: `text`, `embedding`, `image`, `audio`, `video`
+- `--output`: Comma-separated list of output types the model can produce
+  - Valid types: `text`, `embedding`, `image`, `audio`, `video`
+- `--tool-usage`: Flag indicating if the model can use tools
