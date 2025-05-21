@@ -43,7 +43,7 @@ if [[ "$VALID" == "false" ]]; then
 fi
 
 if [[ "$FROM_HF" == "true" ]]; then
-    TARGET_DIR="/app/models/$(basename $HF_REPO)"
+    TARGET_DIR="/models/$(basename $HF_REPO)"
 
     if [[ -z "$HUGGINGFACE_TOKEN" ]]; then
         echo "Error: Hugging Face token is missing. Set HUGGINGFACE_TOKEN environment variable."
