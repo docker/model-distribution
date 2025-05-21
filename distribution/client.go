@@ -36,6 +36,8 @@ type options struct {
 	logger        *logrus.Entry
 	transport     http.RoundTripper
 	userAgent     string
+	username      string
+	password      string
 }
 
 // WithStoreRootPath sets the store root path
@@ -74,6 +76,16 @@ func WithUserAgent(ua string) Option {
 	}
 }
 
+// WithRegistryAuth sets the registry authentication credentials
+func WithRegistryAuth(username, password string) Option {
+	return func(o *options) {
+		if username != "" && password != "" {
+			o.username = username
+			o.password = password
+		}
+	}
+}
+
 func defaultOptions() *options {
 	return &options{
 		logger:    logrus.NewEntry(logrus.StandardLogger()),
@@ -100,14 +112,22 @@ func NewClient(opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("initializing store: %w", err)
 	}
 
+	// Create registry client options
+	registryOpts := []registry.ClientOption{
+		registry.WithTransport(options.transport),
+		registry.WithUserAgent(options.userAgent),
+	}
+
+	// Add auth if credentials are provided
+	if options.username != "" && options.password != "" {
+		registryOpts = append(registryOpts, registry.WithAuthConfig(options.username, options.password))
+	}
+
 	options.logger.Infoln("Successfully initialized store")
 	return &Client{
-		store: s,
-		log:   options.logger,
-		registry: registry.NewClient(
-			registry.WithTransport(options.transport),
-			registry.WithUserAgent(options.userAgent),
-		),
+		store:    s,
+		log:      options.logger,
+		registry: registry.NewClient(registryOpts...),
 	}, nil
 }
 
