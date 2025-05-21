@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
@@ -40,6 +41,25 @@ func New(opts Options) (*LocalStore, error) {
 	}
 
 	return store, nil
+}
+
+// Reset clears all contents of the store directory and reinitializes the store.
+// It removes all files and subdirectories within the store's root path, but preserves the root directory itself.
+// This allows the method to work correctly when the store directory is a mounted volume (e.g., in Docker CE).
+func (s *LocalStore) Reset() error {
+	entries, err := os.ReadDir(s.rootPath)
+	if err != nil {
+		return fmt.Errorf("reading store directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		entryPath := filepath.Join(s.rootPath, entry.Name())
+		if err := os.RemoveAll(entryPath); err != nil {
+			return fmt.Errorf("removing %s: %w", entryPath, err)
+		}
+	}
+
+	return s.initialize()
 }
 
 // initialize creates the store directory structure if it doesn't exist
