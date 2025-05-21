@@ -2,6 +2,7 @@
 
 ARG GO_VERSION=1.24.2
 ARG GIT_VERSION=v2.47.2
+ARG UBUNTU_VERSION=24.04
 
 FROM golang:${GO_VERSION}-bookworm AS builder
 
@@ -51,21 +52,27 @@ COPY --from=ggufier /model/model.gguf /model/model.gguf
 
 RUN ./llama-quantize /model/model.gguf $QUANTIZATION
 
-FROM ubuntu:24.04 AS packager
+FROM ubuntu:${UBUNTU_VERSION} AS packager
 
 ARG HUB_REPOSITORY
 ARG QUANTIZATION
 ARG WEIGHTS
+ARG LICENSE
+
+# Install curl for downloading the license file
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Create licenses directory and download the license file
+RUN mkdir -p /licenses && \
+    curl -L "$LICENSE" -o /licenses/LICENSE
 
 COPY --from=quantizier /model/ggml-model-$QUANTIZATION.gguf /model/model.gguf
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
-
-# Install CA certificates for SSL verification
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Login to Docker Hub using build secrets
 RUN --mount=type=secret,id=docker_username,env=DOCKER_USERNAME \
     --mount=type=secret,id=docker_password,env=DOCKER_PASSWORD \
     model-distribution-tool package \
+    --licenses /licenses/LICENSE \
     /model/model.gguf \
     $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION

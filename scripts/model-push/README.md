@@ -29,6 +29,8 @@ docker build \
   --build-arg QUANTIZATION=F16 \
   --build-arg WEIGHTS=135M \
   --build-arg HUB_REPOSITORY=ignaciolopezluna020/smollm2 \
+  --build-arg LICENSE="https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md" \
+. 
 ```
 
 The build arguments can be customized:
