@@ -1,7 +1,6 @@
 name: Package Model
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       hf_repository:
