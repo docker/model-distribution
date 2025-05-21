@@ -68,4 +68,4 @@ RUN --mount=type=secret,id=docker_username,env=DOCKER_USERNAME \
     --mount=type=secret,id=docker_password,env=DOCKER_PASSWORD \
     model-distribution-tool package \
     /model/model.gguf \
-    $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION \
+    $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION

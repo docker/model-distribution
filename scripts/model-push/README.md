@@ -27,7 +27,8 @@ docker build \
   --secret id=docker_password,env=DOCKER_PASSWORD \
   --build-arg HUGGINGFACE_REPOSITORY="HuggingFaceTB/SmolLM2-135M-Instruct" \
   --build-arg QUANTIZATION=F16 \
-  .
+  --build-arg WEIGHTS=135M \
+  --build-arg HUB_REPOSITORY=ignaciolopezluna020/smollm2 \
 ```
 
 The build arguments can be customized:
