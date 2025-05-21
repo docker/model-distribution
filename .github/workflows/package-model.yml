@@ -19,10 +19,10 @@ on:
         type: string
         default: '135M'
       registry_repository:
-        description: 'OCI Registry repository (e.g., username/models)'
+        description: 'OCI Registry repository'
         required: true
         type: string
-        default: 'ignaciolopezluna020/smollm2:ci'
+        default: 'smollm2'
       input_types:
         description: 'Comma-separated input types (e.g., text,embedding,image)'
         required: true
@@ -69,7 +69,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ignaciolopezluna020/${{ inputs.registry_repository }}:${{ inputs.weights }}-${{ inputs.quantization }}
+          tags: ${{ secrets.DOCKER_USER }}/${{ inputs.registry_repository }}:${{ inputs.weights }}-${{ inputs.quantization }}
           build-args: |          
             HUGGINGFACE_REPOSITORY=${{ inputs.hf_repository }}
             QUANTIZATION=${{ inputs.quantization }}
