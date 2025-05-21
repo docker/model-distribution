@@ -8,6 +8,32 @@ This script automates the process of converting models from Hugging Face and pus
 - Hugging Face account and API token
 - model-distribution-tool built (run `make build` in the project root)
 
+## Building the Docker Image
+
+To build the Docker image, you'll need to set the following environment variables:
+
+```bash
+export HUGGINGFACE_TOKEN="your_huggingface_token"
+export DOCKER_USERNAME="your_docker_username"
+export DOCKER_PASSWORD="your_docker_password"
+```
+
+Then run the Docker build command:
+
+```bash
+docker build \
+  --secret id=HUGGINGFACE_TOKEN,env=HUGGINGFACE_TOKEN \
+  --secret id=docker_username,env=DOCKER_USERNAME \
+  --secret id=docker_password,env=DOCKER_PASSWORD \
+  --build-arg HUGGINGFACE_REPOSITORY="HuggingFaceTB/SmolLM2-135M-Instruct" \
+  --build-arg QUANTIZATION=F16 \
+  .
+```
+
+The build arguments can be customized:
+- `HUGGINGFACE_REPOSITORY`: The Hugging Face model repository to use
+- `QUANTIZATION`: The quantization type to apply (see Quantization Types section below)
+
 ## Usage
 
 ```bash

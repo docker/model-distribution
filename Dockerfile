@@ -1,50 +1,71 @@
-FROM golang AS builder
+# syntax=docker/dockerfile:1
 
-# Copy go.mod and go.sum first to leverage Docker cache
-COPY go.mod go.sum ./
+ARG GO_VERSION=1.24.2
+ARG GIT_VERSION=v2.47.2
 
-# Download dependencies (this layer will be cached if dependencies don't change)
-RUN go mod download
+FROM golang:${GO_VERSION}-bookworm AS builder
+
+# Install git for go mod download if needed
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy go mod/sum first for better caching
+COPY --link go.mod go.sum ./
+
+# Download dependencies (with cache mounts)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy the rest of the source code
-COPY . .
+COPY --link . .
 
 # Build the application
 RUN make build
 
-FROM ignaciolopezluna020/llama.cpp:cpu AS push
+FROM alpine/git:${GIT_VERSION} AS cloner
 
-ARG HF_MODEL
-ARG REPOSITORY
-ARG WEIGHTS
-ARG LICENCES_PATH
+ARG HUGGINGFACE_REPOSITORY
+
+WORKDIR /app
+
+RUN git lfs install
+
+RUN --mount=type=secret,id=HUGGINGFACE_TOKEN,env=HUGGINGFACE_TOKEN \
+    git clone --depth=1 "https://user:$HUGGINGFACE_TOKEN@huggingface.co/$HUGGINGFACE_REPOSITORY" "model"
+
+FROM ignaciolopezluna020/llama-converter:latest AS ggufier
+
+# Copy the cloned model from the cloner stage
+COPY --from=cloner /app/model /model
+
+RUN ./convert_hf_to_gguf.py --outfile /model/model.gguf /model
+
+FROM ignaciolopezluna020/llama-converter:latest AS quantizier
+
 ARG QUANTIZATION
-ARG SKIP_F16="false"
 
-# Install git-lfs to handle Hugging Face repositories
-RUN apt-get update && apt-get install -y git-lfs && \
-    git lfs install
+# Copy the model in GGUF format from the ggufier stage
+COPY --from=ggufier /model/model.gguf /model/model.gguf
 
-# Copy the modified entrypoint script
-COPY scripts/model-push/entrypoint.sh /entrypoint.sh
-COPY scripts/model-push/push-model.sh /push-model.sh
-RUN chmod +x /entrypoint.sh
-RUN chmod +x /push-model.sh
-COPY --from=builder /go/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
+RUN ./llama-quantize /model/model.gguf $QUANTIZATION
 
-RUN --mount=type=secret,id=hf-token,env=HUGGINGFACE_TOKEN \
-    --mount=type=secret,id=docker-user,env=DOCKER_USERNAME \
-    --mount=type=secret,id=docker-password,env=DOCKER_PASSWORD \
-    /push-model.sh \
-    --hf-model $HF_MODEL \
-    --hf-token $HUGGINGFACE_TOKEN \
-    --repository $REPOSITORY \
-    --weights $WEIGHTS \
-    --models-dir /app/models \
-    --licenses $LICENCES_PATH \
-    --quantization $QUANTIZATION
+FROM ubuntu:24.04 AS packager
 
-# Allow passing Hugging Face API Token as an environment variable
-#ENV HUGGINGFACE_TOKEN=""
+ARG HUB_REPOSITORY
+ARG QUANTIZATION
+ARG WEIGHTS
 
-#ENTRYPOINT ["/entrypoint.sh"]
+COPY --from=quantizier /model/ggml-model-$QUANTIZATION.gguf /model/model.gguf
+COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
+
+# Install CA certificates for SSL verification
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Login to Docker Hub using build secrets
+RUN --mount=type=secret,id=docker_username,env=DOCKER_USERNAME \
+    --mount=type=secret,id=docker_password,env=DOCKER_PASSWORD \
+    model-distribution-tool package \
+    /model/model.gguf \
+    $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION \
