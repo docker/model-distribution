@@ -48,7 +48,7 @@ FROM ignaciolopezluna020/llama-converter:latest AS quantizier
 ARG QUANTIZATION
 
 # Copy the model in GGUF format from the ggufier stage
-COPY --from=ggufier /model/model.gguf /model/model.gguf
+COPY --link --from=ggufier /model/model.gguf /model/model.gguf
 
 RUN ./llama-quantize /model/model.gguf $QUANTIZATION
 
@@ -66,12 +66,12 @@ RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib
 RUN mkdir -p /licenses && \
     curl -L "$LICENSE" -o /licenses/LICENSE
 
-COPY --from=quantizier /model/ggml-model-$QUANTIZATION.gguf /model/model.gguf
+COPY --link --from=quantizier /model/ggml-model-$QUANTIZATION.gguf /model/model.gguf
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
 
 # Login to Docker Hub using build secrets
-RUN --mount=type=secret,id=docker_username,env=DOCKER_USERNAME \
-    --mount=type=secret,id=docker_password,env=DOCKER_PASSWORD \
+RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
+    --mount=type=secret,id=DOCKER_PASSWORD,env=DOCKER_PASSWORD \
     model-distribution-tool package \
     --licenses /licenses/LICENSE \
     /model/model.gguf \
