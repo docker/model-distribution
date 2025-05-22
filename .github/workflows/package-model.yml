@@ -44,6 +44,9 @@ on:
         type: string
         default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
 
+permissions:
+  contents: read
+
 jobs:
   package:
     runs-on: ubuntu-latest
