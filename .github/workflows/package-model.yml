@@ -66,12 +66,12 @@ jobs:
           driver: cloud
           endpoint: "${{ secrets.DOCKER_USER_STAGING }}/default"
           install: true
-          platforms: 'linux/arm64'
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: 'linux/arm64'
           push: true
           tags: ${{ secrets.DOCKER_USER_STAGING }}/${{ inputs.registry_repository }}:${{ inputs.weights }}-${{ inputs.quantization }}
           build-args: |          
