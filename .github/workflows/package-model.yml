@@ -66,6 +66,7 @@ jobs:
           driver: cloud
           endpoint: "${{ secrets.DOCKER_USER_STAGING }}/default"
           install: true
+          platforms: 'linux/arm64'
 
       - name: Build and push
         uses: docker/build-push-action@v6
