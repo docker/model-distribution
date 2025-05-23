@@ -424,11 +424,11 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Parse progress output as JSON
-		var messages []progress.ProgressMessage
+		var messages []progress.Message
 		scanner := bufio.NewScanner(&progressBuffer)
 		for scanner.Scan() {
 			line := scanner.Text()
-			var msg progress.ProgressMessage
+			var msg progress.Message
 			if err := json.Unmarshal([]byte(line), &msg); err != nil {
 				t.Fatalf("Failed to parse JSON progress message: %v, line: %s", err, line)
 			}

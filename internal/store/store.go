@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/docker/model-distribution/internal/progress"
 	"io"
 	"os"
 	"path/filepath"
@@ -180,10 +181,7 @@ func (s *LocalStore) Version() string {
 }
 
 // Write writes a model to the store
-func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Update) error {
-	if progress != nil {
-		defer close(progress)
-	}
+func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
 
 	// Write the config JSON file
 	if err := s.writeConfigFile(mdl); err != nil {
@@ -197,8 +195,18 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, progress chan<- v1.Updat
 	}
 
 	for _, layer := range layers {
-		if err := s.writeBlob(layer, progress); err != nil {
+		var pr *progress.Reporter
+		var progressChan chan<- v1.Update
+		if w != nil {
+			pr = progress.NewProgressReporter(w, progress.PullMsg, layer)
+			progressChan = pr.Updates()
+		}
+		if err := s.writeBlob(layer, progressChan); err != nil {
+			close(progressChan)
 			return fmt.Errorf("writing blob: %w", err)
+		}
+		if pr != nil {
+			close(progressChan)
 		}
 	}
 

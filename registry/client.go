@@ -109,7 +109,7 @@ func (c *Client) NewTarget(tag string) (*Target, error) {
 }
 
 func (t *Target) Write(ctx context.Context, model types.ModelArtifact, progressWriter io.Writer) error {
-	pr := progress.NewProgressReporter(progressWriter, progress.PushMsg)
+	pr := progress.NewProgressReporter(progressWriter, progress.PushMsg, nil)
 	defer pr.Wait()
 
 	if err := remote.Write(t.reference, model,
