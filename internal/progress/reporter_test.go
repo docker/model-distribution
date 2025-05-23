@@ -8,19 +8,19 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
-func TestProgressMessages(t *testing.T) {
+func TestMessages(t *testing.T) {
 	t.Run("writeProgress", func(t *testing.T) {
 		var buf bytes.Buffer
 		update := v1.Update{
 			Total:    2 * 1024 * 1024,
 			Complete: 1024 * 1024,
 		}
-		err := writeProgress(&buf, PullMsg(update), uint64(update.Total), uint64(update.Complete))
+		err := WriteProgress(&buf, PullMsg(update), uint64(update.Total), uint64(update.Complete))
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}
 
-		var msg ProgressMessage
+		var msg Message
 		if err := json.Unmarshal(buf.Bytes(), &msg); err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
@@ -46,7 +46,7 @@ func TestProgressMessages(t *testing.T) {
 			t.Fatalf("Failed to write success message: %v", err)
 		}
 
-		var msg ProgressMessage
+		var msg Message
 		if err := json.Unmarshal(buf.Bytes(), &msg); err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestProgressMessages(t *testing.T) {
 			t.Fatalf("Failed to write error message: %v", err)
 		}
 
-		var msg ProgressMessage
+		var msg Message
 		if err := json.Unmarshal(buf.Bytes(), &msg); err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}

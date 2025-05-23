@@ -6,15 +6,23 @@ import (
 	"io"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
-// ProgressMessage represents a structured message for progress reporting
-type ProgressMessage struct {
-	Type    string `json:"type"`    // "progress", "success", or "error"
-	Message string `json:"message"` // Human-readable message
-	Total   uint64 `json:"total"`   // Total bytes to transfer
-	Pulled  uint64 `json:"pulled"`  // Bytes transferred so far
+type Layer struct {
+	ID      string // Layer ID
+	Size    uint64 // Layer size
+	Current uint64 // Current bytes transferred
+}
+
+// Message represents a structured message for progress reporting
+type Message struct {
+	Type       string `json:"type"`       // "progress", "success", or "error"
+	Message    string `json:"message"`    // Human-readable message
+	Total      uint64 `json:"total"`      // Deprecated: Total bytes to transfer
+	Pulled     uint64 `json:"pulled"`     // Deprecated: Bytes transferred so far
+	Layer      Layer  `json:"layer"`      // Current layer information
+	LayerCount int    `json:"layerCount"` // Total number of layers
 }
 
 type Reporter struct {
@@ -70,7 +78,7 @@ func (r *Reporter) Updates() chan<- v1.Update {
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= updateInterval ||
 				bytesDownloaded >= minBytesForUpdate {
-				if err := writeProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete)); err != nil {
+				if err := WriteProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete)); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
@@ -88,22 +96,9 @@ func (r *Reporter) Wait() error {
 	return r.err
 }
 
-// writeProgressMessage writes a JSON-formatted progress message to the writer
-func writeProgressMessage(w io.Writer, msg ProgressMessage) error {
-	if w == nil {
-		return nil
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "%s\n", data)
-	return err
-}
-
-// writeProgress writes a progress update message
-func writeProgress(w io.Writer, msg string, total, pulled uint64) error {
-	return writeProgressMessage(w, ProgressMessage{
+// WriteProgress writes a progress update message
+func WriteProgress(w io.Writer, msg string, total, pulled uint64) error {
+	return write(w, Message{
 		Type:    "progress",
 		Message: msg,
 		Total:   total,
@@ -113,7 +108,7 @@ func writeProgress(w io.Writer, msg string, total, pulled uint64) error {
 
 // WriteSuccess writes a success message
 func WriteSuccess(w io.Writer, message string) error {
-	return writeProgressMessage(w, ProgressMessage{
+	return write(w, Message{
 		Type:    "success",
 		Message: message,
 	})
@@ -121,8 +116,21 @@ func WriteSuccess(w io.Writer, message string) error {
 
 // WriteError writes an error message
 func WriteError(w io.Writer, message string) error {
-	return writeProgressMessage(w, ProgressMessage{
+	return write(w, Message{
 		Type:    "error",
 		Message: message,
 	})
+}
+
+// write writes a JSON-formatted progress message to the writer
+func write(w io.Writer, msg Message) error {
+	if w == nil {
+		return nil
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "%s\n", data)
+	return err
 }
