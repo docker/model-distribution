@@ -17,12 +17,11 @@ type Layer struct {
 
 // Message represents a structured message for progress reporting
 type Message struct {
-	Type        string `json:"type"`        // "progress", "success", or "error"
-	Message     string `json:"message"`     // Human-readable message
-	Total       uint64 `json:"total"`       // Deprecated: Total bytes to transfer
-	Pulled      uint64 `json:"pulled"`      // Deprecated: Bytes transferred so far
-	Layer       Layer  `json:"layer"`       // Current layer information
-	TotalLayers int    `json:"totalLayers"` // Total number of layers
+	Type    string `json:"type"`            // "progress", "success", or "error"
+	Message string `json:"message"`         // Human-readable message
+	Total   uint64 `json:"total"`           // Deprecated: use Layer.Size
+	Pulled  uint64 `json:"pulled"`          // Deprecated: use Layer.Current
+	Layer   Layer  `json:"layer,omitempty"` // Current layer information
 }
 
 type Reporter struct {
@@ -45,14 +44,13 @@ func PushMsg(update v1.Update) string {
 	return fmt.Sprintf("Uploaded: %.2f MB", float64(update.Complete)/1024/1024)
 }
 
-func NewProgressReporter(w io.Writer, msgF progressF, layer v1.Layer, totalLayers int) *Reporter {
+func NewProgressReporter(w io.Writer, msgF progressF, layer v1.Layer) *Reporter {
 	return &Reporter{
-		out:         w,
-		progress:    make(chan v1.Update),
-		done:        make(chan struct{}),
-		format:      msgF,
-		layer:       layer,
-		TotalLayers: totalLayers,
+		out:      w,
+		progress: make(chan v1.Update),
+		done:     make(chan struct{}),
+		format:   msgF,
+		layer:    layer,
 	}
 }
 
