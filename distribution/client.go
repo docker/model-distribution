@@ -168,7 +168,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// Model doesn't exist in local store or digests don't match, pull from remote
 
-	pr := progress.NewProgressReporter(progressWriter, progress.PullMsg)
+	pr := progress.NewProgressReporter(progressWriter, progress.PullMsg, nil, 0)
 	defer func() {
 		if err := pr.Wait(); err != nil {
 			c.log.Warnf("Failed to write progress: %v", err)

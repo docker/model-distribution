@@ -15,7 +15,7 @@ func TestMessages(t *testing.T) {
 			Total:    2 * 1024 * 1024,
 			Complete: 1024 * 1024,
 		}
-		err := WriteProgress(&buf, PullMsg(update), uint64(update.Total), uint64(update.Complete))
+		err := WriteProgress(&buf, PullMsg(update), uint64(update.Total), uint64(update.Complete), nil)
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}

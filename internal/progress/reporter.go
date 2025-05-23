@@ -17,20 +17,22 @@ type Layer struct {
 
 // Message represents a structured message for progress reporting
 type Message struct {
-	Type       string `json:"type"`       // "progress", "success", or "error"
-	Message    string `json:"message"`    // Human-readable message
-	Total      uint64 `json:"total"`      // Deprecated: Total bytes to transfer
-	Pulled     uint64 `json:"pulled"`     // Deprecated: Bytes transferred so far
-	Layer      Layer  `json:"layer"`      // Current layer information
-	LayerCount int    `json:"layerCount"` // Total number of layers
+	Type        string `json:"type"`        // "progress", "success", or "error"
+	Message     string `json:"message"`     // Human-readable message
+	Total       uint64 `json:"total"`       // Deprecated: Total bytes to transfer
+	Pulled      uint64 `json:"pulled"`      // Deprecated: Bytes transferred so far
+	Layer       Layer  `json:"layer"`       // Current layer information
+	TotalLayers int    `json:"totalLayers"` // Total number of layers
 }
 
 type Reporter struct {
-	progress chan v1.Update
-	done     chan struct{}
-	err      error
-	out      io.Writer
-	format   progressF
+	progress    chan v1.Update
+	done        chan struct{}
+	err         error
+	out         io.Writer
+	format      progressF
+	layer       v1.Layer
+	TotalLayers int // Total number of layers
 }
 
 type progressF func(update v1.Update) string
@@ -43,12 +45,14 @@ func PushMsg(update v1.Update) string {
 	return fmt.Sprintf("Uploaded: %.2f MB", float64(update.Complete)/1024/1024)
 }
 
-func NewProgressReporter(w io.Writer, msgF progressF) *Reporter {
+func NewProgressReporter(w io.Writer, msgF progressF, layer v1.Layer, totalLayers int) *Reporter {
 	return &Reporter{
-		out:      w,
-		progress: make(chan v1.Update),
-		done:     make(chan struct{}),
-		format:   msgF,
+		out:         w,
+		progress:    make(chan v1.Update),
+		done:        make(chan struct{}),
+		format:      msgF,
+		layer:       layer,
+		TotalLayers: totalLayers,
 	}
 }
 
@@ -78,7 +82,7 @@ func (r *Reporter) Updates() chan<- v1.Update {
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= updateInterval ||
 				bytesDownloaded >= minBytesForUpdate {
-				if err := WriteProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete)); err != nil {
+				if err := WriteProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete), r.layer); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
@@ -97,12 +101,36 @@ func (r *Reporter) Wait() error {
 }
 
 // WriteProgress writes a progress update message
-func WriteProgress(w io.Writer, msg string, total, pulled uint64) error {
+func WriteProgress(w io.Writer, msg string, total, pulled uint64, layer v1.Layer) error {
+	if layer == nil {
+		return write(w, Message{
+			Type:    "progress",
+			Message: msg,
+			Total:   total,
+			Pulled:  pulled,
+		})
+	}
+
+	id, err := layer.DiffID()
+	if err != nil {
+		return err
+	}
+
+	size, err := layer.Size()
+	if err != nil {
+		return err
+	}
+
 	return write(w, Message{
 		Type:    "progress",
 		Message: msg,
 		Total:   total,
 		Pulled:  pulled,
+		Layer: Layer{
+			ID:      id.String(),
+			Size:    safeUint64(size),
+			Current: pulled,
+		},
 	})
 }
 
