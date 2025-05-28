@@ -9,6 +9,13 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
+// UpdateInterval defines how often progress updates should be sent
+const UpdateInterval = 500 * time.Millisecond
+
+// MinBytesForUpdate defines the minimum number of bytes that need to be transferred
+// before sending a progress update
+const MinBytesForUpdate = 1024 * 1024 // 1MB
+
 type Layer struct {
 	ID      string // Layer ID
 	Size    uint64 // Layer size
@@ -66,25 +73,36 @@ func safeUint64(n int64) uint64 {
 // the channel when they are done sending Updates. Should only be called once per Reporter instance.
 func (r *Reporter) Updates() chan<- v1.Update {
 	go func() {
-		var lastComplete int64
+
 		var lastUpdate time.Time
-		const updateInterval = 500 * time.Millisecond // Update every 500ms
-		const minBytesForUpdate = 1024 * 1024         // At least 1MB difference
 
 		for p := range r.progress {
 			if r.out == nil || r.err != nil {
 				continue // If we fail to write progress, don't try again
 			}
 			now := time.Now()
-			bytesDownloaded := p.Complete - lastComplete
+			var total int64
+			var layerID string
+			if r.layer != nil { // In case of Push there is no layer yet
+				id, err := r.layer.DiffID()
+				layerID = id.String()
+				size, err := r.layer.Size()
+				if err != nil {
+					r.err = err
+					continue
+				}
+				total = size
+			} else {
+				total = p.Total
+			}
+
 			// Only update if enough time has passed or enough bytes downloaded or finished
-			if now.Sub(lastUpdate) >= updateInterval ||
-				bytesDownloaded >= minBytesForUpdate {
-				if err := WriteProgress(r.out, r.format(p), safeUint64(p.Total), safeUint64(p.Complete), r.layer); err != nil {
+			if now.Sub(lastUpdate) >= UpdateInterval ||
+				p.Complete >= MinBytesForUpdate {
+				if err := WriteProgress(r.out, r.format(p), safeUint64(total), safeUint64(p.Complete), layerID); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
-				lastComplete = p.Complete
 			}
 		}
 		close(r.done) // Close the done channel when progress is complete
@@ -99,35 +117,16 @@ func (r *Reporter) Wait() error {
 }
 
 // WriteProgress writes a progress update message
-func WriteProgress(w io.Writer, msg string, total, pulled uint64, layer v1.Layer) error {
-	if layer == nil {
-		return write(w, Message{
-			Type:    "progress",
-			Message: msg,
-			Total:   total,
-			Pulled:  pulled,
-		})
-	}
-
-	id, err := layer.DiffID()
-	if err != nil {
-		return err
-	}
-
-	size, err := layer.Size()
-	if err != nil {
-		return err
-	}
-
+func WriteProgress(w io.Writer, msg string, total, current uint64, layerID string) error {
 	return write(w, Message{
 		Type:    "progress",
 		Message: msg,
 		Total:   total,
-		Pulled:  pulled,
+		Pulled:  current,
 		Layer: Layer{
-			ID:      id.String(),
-			Size:    safeUint64(size),
-			Current: pulled,
+			ID:      layerID,
+			Size:    total,
+			Current: current,
 		},
 	})
 }
