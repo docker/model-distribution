@@ -915,7 +915,7 @@ func TestPushProgress(t *testing.T) {
 	tag := uri.Host + "/some/model/repo:some-tag"
 
 	// Create random "model" of a given size
-	sz := int64(2 * 1024 * 1024) // 2 MB
+	sz := int64(progress.MinBytesForUpdate)
 	path, err := randomFile(sz)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
