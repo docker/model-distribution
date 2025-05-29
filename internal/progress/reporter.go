@@ -14,7 +14,7 @@ const UpdateInterval = 500 * time.Millisecond
 
 // MinBytesForUpdate defines the minimum number of bytes that need to be transferred
 // before sending a progress update
-const MinBytesForUpdate = 1024 * 1024 // 1MB
+const MinBytesForUpdate = 5 * 1024 * 1024 // 5MB
 
 type Layer struct {
 	ID      string // Layer ID
@@ -54,7 +54,7 @@ func PushMsg(update v1.Update) string {
 func NewProgressReporter(w io.Writer, msgF progressF, layer v1.Layer) *Reporter {
 	return &Reporter{
 		out:      w,
-		progress: make(chan v1.Update),
+		progress: make(chan v1.Update, 100),
 		done:     make(chan struct{}),
 		format:   msgF,
 		layer:    layer,
