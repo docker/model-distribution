@@ -73,9 +73,8 @@ func safeUint64(n int64) uint64 {
 // the channel when they are done sending Updates. Should only be called once per Reporter instance.
 func (r *Reporter) Updates() chan<- v1.Update {
 	go func() {
-
+		var lastComplete int64
 		var lastUpdate time.Time
-		var lastUpdateBytes int64
 
 		for p := range r.progress {
 			if r.out == nil || r.err != nil {
@@ -86,6 +85,10 @@ func (r *Reporter) Updates() chan<- v1.Update {
 			var layerID string
 			if r.layer != nil { // In case of Push there is no layer yet
 				id, err := r.layer.DiffID()
+				if err != nil {
+					r.err = err
+					continue
+				}
 				layerID = id.String()
 				size, err := r.layer.Size()
 				if err != nil {
@@ -96,15 +99,16 @@ func (r *Reporter) Updates() chan<- v1.Update {
 			} else {
 				total = p.Total
 			}
+			incrementalBytes := p.Complete - lastComplete
 
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= UpdateInterval ||
-				p.Complete-lastUpdateBytes >= MinBytesForUpdate {
+				incrementalBytes >= MinBytesForUpdate {
 				if err := WriteProgress(r.out, r.format(p), safeUint64(total), safeUint64(p.Complete), layerID); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
-				lastUpdateBytes = p.Complete
+				lastComplete = p.Complete
 			}
 		}
 		close(r.done) // Close the done channel when progress is complete
