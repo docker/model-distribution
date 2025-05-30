@@ -75,6 +75,7 @@ func (r *Reporter) Updates() chan<- v1.Update {
 	go func() {
 
 		var lastUpdate time.Time
+		var lastUpdateBytes int64
 
 		for p := range r.progress {
 			if r.out == nil || r.err != nil {
@@ -98,11 +99,12 @@ func (r *Reporter) Updates() chan<- v1.Update {
 
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= UpdateInterval ||
-				p.Complete >= MinBytesForUpdate {
+				p.Complete-lastUpdateBytes >= MinBytesForUpdate {
 				if err := WriteProgress(r.out, r.format(p), safeUint64(total), safeUint64(p.Complete), layerID); err != nil {
 					r.err = err
 				}
 				lastUpdate = now
+				lastUpdateBytes = p.Complete
 			}
 		}
 		close(r.done) // Close the done channel when progress is complete

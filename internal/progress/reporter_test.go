@@ -190,13 +190,14 @@ func TestProgressEmissionScenarios(t *testing.T) {
 		{
 			name: "no updates - too few bytes",
 			updates: []v1.Update{
-				{Complete: 100}, // First update always sent
-				{Complete: 100}, // Too few bytes, but enough time passed
+				{Complete: 50},                      // First update always sent
+				{Complete: MinBytesForUpdate},       // Too few bytes
+				{Complete: MinBytesForUpdate + 100}, // enough bytes now
 			},
 			delays: []time.Duration{
 				10 * time.Millisecond,
 			},
-			expectedCount: 1, // First update
+			expectedCount: 2, // First update and last update
 			description:   "should emit updates based on time even with few bytes",
 			layerSize:     100,
 		},
