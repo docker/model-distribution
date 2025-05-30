@@ -166,7 +166,7 @@ func TestProgressEmissionScenarios(t *testing.T) {
 				{Complete: MinBytesForUpdate * 2},
 			},
 			delays: []time.Duration{
-				100 * time.Millisecond, // Short delay, should trigger based on bytes
+				10 * time.Millisecond, // Short delay, should trigger based on bytes
 			},
 			expectedCount: 2, // First update + 1 byte-based update
 			description:   "should emit update based on byte threshold",
@@ -180,8 +180,8 @@ func TestProgressEmissionScenarios(t *testing.T) {
 				{Complete: 100}, // Too frequent, no update
 			},
 			delays: []time.Duration{
-				100 * time.Millisecond, // Too short
-				100 * time.Millisecond, // Too short
+				10 * time.Millisecond, // Too short
+				10 * time.Millisecond, // Too short
 			},
 			expectedCount: 1, // Only first update
 			description:   "should not emit updates if too frequent",
@@ -194,7 +194,7 @@ func TestProgressEmissionScenarios(t *testing.T) {
 				{Complete: 100}, // Too few bytes, but enough time passed
 			},
 			delays: []time.Duration{
-				100 * time.Millisecond,
+				10 * time.Millisecond,
 			},
 			expectedCount: 1, // First update
 			description:   "should emit updates based on time even with few bytes",

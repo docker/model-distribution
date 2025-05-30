@@ -10,11 +10,11 @@ import (
 )
 
 // UpdateInterval defines how often progress updates should be sent
-const UpdateInterval = 500 * time.Millisecond
+const UpdateInterval = 100 * time.Millisecond
 
 // MinBytesForUpdate defines the minimum number of bytes that need to be transferred
 // before sending a progress update
-const MinBytesForUpdate = 5 * 1024 * 1024 // 5MB
+const MinBytesForUpdate = 1024 * 1024 // 5MB
 
 type Layer struct {
 	ID      string // Layer ID
