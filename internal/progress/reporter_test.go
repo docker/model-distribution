@@ -162,8 +162,8 @@ func TestProgressEmissionScenarios(t *testing.T) {
 		{
 			name: "byte-based updates",
 			updates: []v1.Update{
-				{Complete: MinBytesForUpdate * 2}, // First update always sent
-				{Complete: MinBytesForUpdate * 2},
+				{Complete: MinBytesForUpdate},     // First update always sent
+				{Complete: MinBytesForUpdate * 2}, // Second update with 1MB difference
 			},
 			delays: []time.Duration{
 				10 * time.Millisecond, // Short delay, should trigger based on bytes

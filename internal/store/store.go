@@ -2,10 +2,11 @@ package store
 
 import (
 	"fmt"
-	"github.com/docker/model-distribution/internal/progress"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/docker/model-distribution/internal/progress"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
@@ -269,9 +270,14 @@ type ProgressReader struct {
 
 func (pr *ProgressReader) Read(p []byte) (int, error) {
 	n, err := pr.Reader.Read(p)
-	if n > 0 {
-		pr.Total += int64(n)
+	pr.Total += int64(n)
+	if err == io.EOF {
 		pr.ProgressChan <- v1.Update{Complete: pr.Total}
+	} else if n > 0 {
+		select {
+		case pr.ProgressChan <- v1.Update{Complete: pr.Total}:
+		default: // if the progress channel is full, it skips sending rather than blocking the Read() call.
+		}
 	}
 	return n, err
 }
