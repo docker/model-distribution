@@ -424,11 +424,11 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Parse progress output as JSON
-		var messages []progress.ProgressMessage
+		var messages []progress.Message
 		scanner := bufio.NewScanner(&progressBuffer)
 		for scanner.Scan() {
 			line := scanner.Text()
-			var msg progress.ProgressMessage
+			var msg progress.Message
 			if err := json.Unmarshal([]byte(line), &msg); err != nil {
 				t.Fatalf("Failed to parse JSON progress message: %v, line: %s", err, line)
 			}
@@ -915,7 +915,7 @@ func TestPushProgress(t *testing.T) {
 	tag := uri.Host + "/some/model/repo:some-tag"
 
 	// Create random "model" of a given size
-	sz := int64(2 * 1024 * 1024) // 2 MB
+	sz := int64(progress.MinBytesForUpdate)
 	path, err := randomFile(sz)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
