@@ -914,8 +914,9 @@ func TestPushProgress(t *testing.T) {
 	}
 	tag := uri.Host + "/some/model/repo:some-tag"
 
-	// Create random "model" of a given size
-	sz := int64(progress.MinBytesForUpdate)
+	// Create random "model" of a given size - make it large enough to ensure multiple updates
+	// We want at least 2MB to ensure we get both time-based and byte-based updates
+	sz := int64(progress.MinBytesForUpdate * 2)
 	path, err := randomFile(sz)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
@@ -948,17 +949,23 @@ func TestPushProgress(t *testing.T) {
 		lines = append(lines, line)
 	}
 
+	// Wait for the push to complete
+	if err := <-done; err != nil {
+		t.Fatalf("Failed to push model: %v", err)
+	}
+
+	// Verify we got at least 3 messages (2 progress + 1 success)
 	if len(lines) < 3 {
 		t.Fatalf("Expected at least 3 progress messages, got %d", len(lines))
 	}
-	if !strings.Contains(lines[len(lines)-2], "Uploaded:") {
-		t.Fatalf("Expected progress message to contain 'Uploaded: x MB', got %q", lines[len(lines)-2])
+
+	// Verify the last two messages
+	lastTwo := lines[len(lines)-2:]
+	if !strings.Contains(lastTwo[0], "Uploaded:") {
+		t.Fatalf("Expected progress message to contain 'Uploaded: x MB', got %q", lastTwo[0])
 	}
-	if !strings.Contains(lines[len(lines)-1], "success") {
-		t.Fatalf("Expected last progress message to contain 'success', got %q", lines[len(lines)-1])
-	}
-	if err := <-done; err != nil {
-		t.Fatalf("Failed to push model: %v", err)
+	if !strings.Contains(lastTwo[1], "success") {
+		t.Fatalf("Expected last progress message to contain 'success', got %q", lastTwo[1])
 	}
 }
 
