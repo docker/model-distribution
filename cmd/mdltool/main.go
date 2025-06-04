@@ -96,6 +96,8 @@ func main() {
 		exitCode = cmdRm(client, args)
 	case "tag":
 		exitCode = cmdTag(client, args)
+	case "get-remote":
+		exitCode = cmdGetRemote(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -115,6 +117,7 @@ func printUsage() {
 	fmt.Println("  push <tag>                      Push a model from the content store to the registry")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
+	fmt.Println("  get-remote <reference>          Get model information from registry without pulling")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
 	fmt.Println("\nExamples:")
@@ -370,5 +373,45 @@ func cmdTag(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Successfully applied tag %s to model: %s\n", target, source)
+	return 0
+}
+
+func cmdGetRemote(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool get-remote <reference>\n")
+		return 1
+	}
+
+	reference := args[0]
+	ctx := context.Background()
+
+	model, err := client.GetRemoteModel(ctx, reference)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting remote model: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Remote Model: %s\n", reference)
+
+	digest, err := model.Digest()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting model digest: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Digest: %s\n", digest)
+
+	config, err := model.Config()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading model config: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Format: %s\n", config.Format)
+	fmt.Printf("Architecture: %s\n", config.Architecture)
+	fmt.Printf("Parameters: %s\n", config.Parameters)
+	fmt.Printf("Quantization: %s\n", config.Quantization)
+	fmt.Printf("GGUF: %s\n", config.GGUF)
+
 	return 0
 }

@@ -222,6 +222,18 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	return model, nil
 }
 
+// GetRemoteModel returns a remote model by reference
+func (c *Client) GetRemoteModel(ctx context.Context, reference string) (types.ModelArtifact, error) {
+	c.log.Infoln("Getting remote model by reference:", reference)
+
+	remote, err := c.registry.Model(ctx, reference)
+	if err != nil {
+		return nil, fmt.Errorf("reading model from registry: %w", err)
+	}
+
+	return remote, nil
+}
+
 // DeleteModel deletes a model
 func (c *Client) DeleteModel(reference string, force bool) error {
 	mdl, err := c.store.Read(reference)

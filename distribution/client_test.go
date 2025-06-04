@@ -1104,3 +1104,138 @@ func randomFile(size int64) (string, error) {
 
 	return f.Name(), nil
 }
+
+func TestClientGetRemoteModel(t *testing.T) {
+	// Set up test registry
+	server := httptest.NewServer(registry.New())
+	defer server.Close()
+	registryURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse registry URL: %v", err)
+	}
+
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create model from test GGUF file
+	model, err := gguf.NewModel(testGGUFFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// Push model to registry
+	tag := registryURL.Host + "/testmodel:v1.0.0"
+	ref, err := name.ParseReference(tag)
+	if err != nil {
+		t.Fatalf("Failed to parse reference: %v", err)
+	}
+	if err := remote.Write(ref, model); err != nil {
+		t.Fatalf("Failed to push model: %v", err)
+	}
+
+	t.Run("get existing remote model", func(t *testing.T) {
+		// Get remote model
+		remoteModel, err := client.GetRemoteModel(context.Background(), tag)
+		if err != nil {
+			t.Fatalf("Failed to get remote model: %v", err)
+		}
+
+		// Verify model digest
+		digest, err := remoteModel.Digest()
+		if err != nil {
+			t.Fatalf("Failed to get model digest: %v", err)
+		}
+
+		// Get original model digest for comparison
+		originalDigest, err := model.Digest()
+		if err != nil {
+			t.Fatalf("Failed to get original model digest: %v", err)
+		}
+
+		if digest != originalDigest {
+			t.Errorf("Remote model digest doesn't match original: got %s, want %s", digest, originalDigest)
+		}
+
+		// Verify model config
+		config, err := remoteModel.Config()
+		if err != nil {
+			t.Fatalf("Failed to get model config: %v", err)
+		}
+
+		// Verify config fields
+		if config.Format == "" {
+			t.Error("Model config format is empty")
+		}
+		if config.Architecture == "" {
+			t.Error("Model config architecture is empty")
+		}
+		if config.Parameters == "" {
+			t.Error("Model config parameters is empty")
+		}
+		if config.Quantization == "" {
+			t.Error("Model config quantization is empty")
+		}
+		if config.GGUF == nil {
+			t.Error("Model config GGUF is nil")
+		}
+		if len(config.GGUF) == 0 {
+			t.Error("Model config GGUF is empty")
+		}
+	})
+
+	t.Run("get non-existent remote model", func(t *testing.T) {
+		// Try to get non-existent model
+		nonExistentRef := registryURL.Host + "/nonexistent/model:v1.0.0"
+		_, err := client.GetRemoteModel(context.Background(), nonExistentRef)
+		if err == nil {
+			t.Fatal("Expected error for non-existent model, got nil")
+		}
+
+		// Verify it's a registry.Error
+		var pullErr *mdregistry.Error
+		ok := errors.As(err, &pullErr)
+		if !ok {
+			t.Fatalf("Expected PullError, got %T", err)
+		}
+
+		// Verify error fields
+		if pullErr.Reference != nonExistentRef {
+			t.Errorf("Expected reference %q, got %q", nonExistentRef, pullErr.Reference)
+		}
+		if pullErr.Code != "NAME_UNKNOWN" {
+			t.Errorf("Expected error code NAME_UNKNOWN, got %q", pullErr.Code)
+		}
+		if pullErr.Message != "Repository not found" {
+			t.Errorf("Expected message 'Repository not found', got %q", pullErr.Message)
+		}
+		if pullErr.Err == nil {
+			t.Error("Expected underlying error to be non-nil")
+		}
+		if !errors.Is(pullErr, mdregistry.ErrModelNotFound) {
+			t.Errorf("Expected underlying error to match ErrModelNotFound, got %v", pullErr.Err)
+		}
+	})
+
+	t.Run("get remote model with invalid reference", func(t *testing.T) {
+		// Try to get model with invalid reference
+		invalidRef := "invalid:reference:format"
+		_, err := client.GetRemoteModel(context.Background(), invalidRef)
+		if err == nil {
+			t.Fatal("Expected error for invalid reference, got nil")
+		}
+
+		if !errors.Is(err, ErrInvalidReference) {
+			t.Fatalf("Expected error to match sentinel invalid reference error, got %v", err)
+		}
+	})
+}
