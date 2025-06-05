@@ -200,7 +200,7 @@ func (c *Client) ListModels() ([]types.Model, error) {
 		// Read the models
 		model, err := c.store.Read(modelInfo.ID)
 		if err != nil {
-			c.log.Warnf("Failed to read model with tag %s: %v", modelInfo.Tags[0], err)
+			c.log.Warnf("Failed to read model with ID %s: %v", modelInfo.ID, err)
 			continue
 		}
 		result = append(result, model)
