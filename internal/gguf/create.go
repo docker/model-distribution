@@ -45,6 +45,16 @@ func configFromFile(path string) types.Config {
 	if err != nil {
 		return types.Config{} // continue without metadata
 	}
+
+	// default capabilities
+	capabilities := &types.Capabilities{
+		IO: types.IOTypes{
+			Input:  []string{types.IOTypeText},
+			Output: []string{types.IOTypeText},
+		},
+		ToolUsage: boolPtr(false),
+	}
+
 	return types.Config{
 		Format:       types.FormatGGUF,
 		Parameters:   strings.TrimSpace(gguf.Metadata().Parameters.String()),
@@ -52,5 +62,10 @@ func configFromFile(path string) types.Config {
 		Quantization: strings.TrimSpace(gguf.Metadata().FileType.String()),
 		Size:         strings.TrimSpace(gguf.Metadata().Size.String()),
 		GGUF:         extractGGUFMetadata(&gguf.Header),
+		Capabilities: capabilities,
 	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
