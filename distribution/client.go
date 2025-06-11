@@ -120,7 +120,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 		return fmt.Errorf("reading model from registry: %w", err)
 	}
 
-	//Check for supported type
+	// Check for supported type
 	if err := checkCompat(remoteModel); err != nil {
 		return err
 	}
@@ -168,14 +168,7 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 
 	// Model doesn't exist in local store or digests don't match, pull from remote
 
-	pr := progress.NewProgressReporter(progressWriter, progress.PullMsg)
-	defer func() {
-		if err := pr.Wait(); err != nil {
-			c.log.Warnf("Failed to write progress: %v", err)
-		}
-	}()
-
-	if err = c.store.Write(remoteModel, []string{reference}, pr.Updates()); err != nil {
+	if err = c.store.Write(remoteModel, []string{reference}, progressWriter); err != nil {
 		if writeErr := progress.WriteError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
 			c.log.Warnf("Failed to write error message: %v", writeErr)
 			// If we fail to write error message, don't try again
@@ -207,7 +200,7 @@ func (c *Client) ListModels() ([]types.Model, error) {
 		// Read the models
 		model, err := c.store.Read(modelInfo.ID)
 		if err != nil {
-			c.log.Warnf("Failed to read model with tag %s: %v", modelInfo.Tags[0], err)
+			c.log.Warnf("Failed to read model with ID %s: %v", modelInfo.ID, err)
 			continue
 		}
 		result = append(result, model)
@@ -305,6 +298,15 @@ func (c *Client) PushModel(ctx context.Context, tag string, progressWriter io.Wr
 		c.log.Warnf("Failed to write success message: %v", err)
 	}
 
+	return nil
+}
+
+func (c *Client) ResetStore() error {
+	c.log.Infoln("Resetting store")
+	if err := c.store.Reset(); err != nil {
+		c.log.Errorln("Failed to reset store:", err)
+		return fmt.Errorf("resetting store: %w", err)
+	}
 	return nil
 }
 
