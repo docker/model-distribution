@@ -99,7 +99,7 @@ func TestCapabilitiesValidate(t *testing.T) {
 					Input:  []string{IOTypeText},
 					Output: []string{IOTypeText},
 				},
-				ToolUsage: true,
+				ToolUsage: boolPtr(true),
 			},
 			wantErr: false,
 		},
@@ -115,7 +115,7 @@ func TestCapabilitiesValidate(t *testing.T) {
 					Input:  []string{"invalid"},
 					Output: []string{IOTypeText},
 				},
-				ToolUsage: true,
+				ToolUsage: boolPtr(true),
 			},
 			wantErr: true,
 		},
@@ -194,4 +194,8 @@ func TestNewCapabilities(t *testing.T) {
 			}
 		})
 	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

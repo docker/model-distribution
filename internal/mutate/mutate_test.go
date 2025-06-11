@@ -103,7 +103,7 @@ func TestWithConfig(t *testing.T) {
 				Input:  []string{types.IOTypeText, types.IOTypeAudio},
 				Output: []string{types.IOTypeText, types.IOTypeAudio},
 			},
-			ToolUsage: true,
+			ToolUsage: boolPtr(true),
 		},
 	}
 
@@ -140,7 +140,7 @@ func TestWithConfig(t *testing.T) {
 	if config.Capabilities == nil {
 		t.Error("Expected non-nil capabilities")
 	} else {
-		if !config.Capabilities.ToolUsage {
+		if !*config.Capabilities.ToolUsage {
 			t.Error("Expected tool usage to be true")
 		}
 		if len(config.Capabilities.IO.Input) != 2 || config.Capabilities.IO.Input[0] != types.IOTypeText || config.Capabilities.IO.Input[1] != types.IOTypeAudio {
@@ -150,4 +150,8 @@ func TestWithConfig(t *testing.T) {
 			t.Errorf("Expected output type [%s, %s], got %v", types.IOTypeText, types.IOTypeAudio, config.Capabilities.IO.Output)
 		}
 	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

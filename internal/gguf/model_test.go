@@ -119,7 +119,7 @@ func TestDefaultCapabilities(t *testing.T) {
 	}
 
 	// Verify tool usage is false by default
-	if config.Capabilities.ToolUsage {
+	if config.Capabilities.ToolUsage == nil || *config.Capabilities.ToolUsage {
 		t.Error("Expected tool usage to be false by default")
 	}
 }

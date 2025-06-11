@@ -52,7 +52,7 @@ func configFromFile(path string) types.Config {
 			Input:  []string{types.IOTypeText},
 			Output: []string{types.IOTypeText},
 		},
-		ToolUsage: false,
+		ToolUsage: boolPtr(false),
 	}
 
 	return types.Config{
@@ -64,4 +64,8 @@ func configFromFile(path string) types.Config {
 		GGUF:         extractGGUFMetadata(&gguf.Header),
 		Capabilities: capabilities,
 	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

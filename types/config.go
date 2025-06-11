@@ -92,7 +92,7 @@ func (io *IOTypes) Validate() error {
 // Capabilities describes what the model can do
 type Capabilities struct {
 	IO        IOTypes `json:"io"`
-	ToolUsage bool    `json:"tool_usage"`
+	ToolUsage *bool   `json:"tool_usage"`
 }
 
 // Validate validates the Capabilities
@@ -110,7 +110,7 @@ func NewCapabilities(input, output []string, toolUsage bool) (*Capabilities, err
 			Input:  input,
 			Output: output,
 		},
-		ToolUsage: toolUsage,
+		ToolUsage: &toolUsage,
 	}
 	if err := capabilities.Validate(); err != nil {
 		return nil, err
