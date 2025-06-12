@@ -52,6 +52,9 @@ COPY --link --from=downloader /model/model.gguf /model/model.gguf
 COPY --link --from=downloader /licenses/LICENSE /licenses/LICENSE
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
 
+# Install ca-certificates for the model-distribution-tool
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Login to Docker Hub using build secrets
 RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
     --mount=type=secret,id=DOCKER_PASSWORD,env=DOCKER_PASSWORD \
