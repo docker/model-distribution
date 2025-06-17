@@ -183,7 +183,6 @@ func (s *LocalStore) Version() string {
 
 // Write writes a model to the store
 func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
-
 	// Write the config JSON file
 	if err := s.writeConfigFile(mdl); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
@@ -202,12 +201,18 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
 			pr = progress.NewProgressReporter(w, progress.PullMsg, layer)
 			progressChan = pr.Updates()
 		}
-		if err := s.writeBlob(layer, progressChan); err != nil {
+
+		err := s.writeBlob(layer, progressChan)
+
+		if progressChan != nil {
 			close(progressChan)
-			return fmt.Errorf("writing blob: %w", err)
+			if err := pr.Wait(); err != nil {
+				fmt.Printf("reporter finished with non-fatal error: %v\n", err)
+			}
 		}
-		if pr != nil {
-			close(progressChan)
+
+		if err != nil {
+			return fmt.Errorf("writing blob: %w", err)
 		}
 	}
 
