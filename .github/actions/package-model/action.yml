@@ -1,5 +1,5 @@
 name: 'Package Model'
-description: 'Package a GGUF model file as an OCI artifact and push it to a registry'
+description: 'Package a GGUF model file as an OCI artifact and push it to a registry using Docker Build Cloud'
 inputs:
   gguf-file-url:
     description: 'URL to the GGUF file (e.g., https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf)'
@@ -13,72 +13,58 @@ inputs:
   license-url:
     description: 'URL to the license file'
     required: false
+    default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
   docker-username:
     description: 'Docker Hub username'
     required: true
   docker-password:
     description: 'Docker Hub password/token'
     required: true
-  go-version:
-    description: 'Go version to use for building the tool'
+  platforms:
+    description: 'Target platforms for the build (e.g., linux/amd64,linux/arm64)'
     required: false
-    default: '1.24.2'
+    default: 'linux/arm64'
+  buildx-endpoint:
+    description: 'Docker Buildx cloud endpoint'
+    required: false
 outputs:
   model-reference:
     description: "Full model reference that was pushed"
-    value: ${{ steps.package.outputs.model-reference }}
+    value: ${{ steps.set-output.outputs.model-reference }}
 runs:
   using: "composite"
   steps:
-    - name: Setup Go
-      uses: actions/setup-go@v5
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
       with:
-        go-version: ${{ inputs.go-version }}
+        username: ${{ inputs.docker-username }}
+        password: ${{ inputs.docker-password }}
 
-    - name: Build model-distribution-tool
-      run: make build
-      shell: bash
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: cloud
+        endpoint: ${{ inputs.buildx-endpoint || format('{0}/default', inputs.docker-username) }}
+        install: true
 
-    - name: Create temporary directories
-      run: |
-        mkdir -p /tmp/model-packaging/model
-        mkdir -p /tmp/model-packaging/licenses
-      shell: bash
-
-    - name: Download GGUF file
-      run: |
-        echo "Downloading GGUF file from: ${{ inputs.gguf-file-url }}"
-        curl -L "${{ inputs.gguf-file-url }}" -o /tmp/model-packaging/model/model.gguf
-        echo "Downloaded GGUF file size: $(du -h /tmp/model-packaging/model/model.gguf | cut -f1)"
-      shell: bash
-
-    - name: Download license file
-      run: |
-        echo "Downloading license from: ${{ inputs.license-url }}"
-        curl -L "${{ inputs.license-url }}" -o /tmp/model-packaging/licenses/LICENSE
-        echo "Downloaded license file"
-      shell: bash
-
-    - name: Package and push model
-      id: package
+    - name: Set model reference
+      id: set-output
       run: |
         MODEL_REFERENCE="${{ inputs.registry-repository }}:${{ inputs.tag }}"
-        echo "Packaging model as: $MODEL_REFERENCE"
-        
-        ./bin/model-distribution-tool package \
-          --licenses /tmp/model-packaging/licenses/LICENSE \
-          /tmp/model-packaging/model/model.gguf \
-          "$MODEL_REFERENCE"
-        
         echo "model-reference=$MODEL_REFERENCE" >> $GITHUB_OUTPUT
-        echo "Successfully packaged and pushed model: $MODEL_REFERENCE"
+        echo "Will package model as: $MODEL_REFERENCE"
       shell: bash
-      env:
-        DOCKER_USERNAME: ${{ inputs.docker-username }}
-        DOCKER_PASSWORD: ${{ inputs.docker-password }}
 
-    - name: Cleanup temporary files
-      if: always()
-      run: |
-        rm -rf /tmp/model-packaging
-      shell: bash
+    - name: Build and push model
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: ${{ inputs.platforms }}
+        build-args: |
+          GGUF_FILE_URL=${{ inputs.gguf-file-url }}
+          LICENSE_URL=${{ inputs.license-url }}
+          HUB_REPOSITORY=${{ inputs.registry-repository }}
+          TAG=${{ inputs.tag }}
+        secrets: |
+          DOCKER_USERNAME=${{ inputs.docker-username }}
+          DOCKER_PASSWORD=${{ inputs.docker-password }}

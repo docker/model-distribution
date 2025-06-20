@@ -1,13 +1,13 @@
 # Package Model Action
 
-A composite GitHub Action that packages GGUF model files as OCI artifacts and pushes them to a registry using the model-distribution-tool.
+A composite GitHub Action that packages GGUF model files as OCI artifacts and pushes them to a registry using Docker Build Cloud.
 
 ## Features
 
 - Downloads GGUF model files from any URL (e.g., Hugging Face)
 - Downloads license files automatically
-- Builds and uses the model-distribution-tool
-- Packages models as OCI artifacts
+- Uses Docker Build Cloud for improved performance and caching
+- Packages models as OCI artifacts using existing Dockerfile
 - Pushes to Docker Hub or any OCI-compatible registry
 - Provides the full model reference as output
 
@@ -76,7 +76,7 @@ jobs:
 | `license-url` | URL to the license file | No | Apache 2.0 license |
 | `docker-username` | Docker Hub username | Yes | - |
 | `docker-password` | Docker Hub password/token | Yes | - |
-| `go-version` | Go version to use for building the tool | No | `1.24.2` |
+| `buildx-endpoint` | Docker Buildx cloud endpoint | No | `{username}/default` |
 
 ## Outputs
 
@@ -86,9 +86,9 @@ jobs:
 
 ## Requirements
 
-- The repository must contain the model-distribution-tool source code
-- A `Makefile` with a `build` target that creates `./bin/model-distribution-tool`
+- The repository must contain the model-distribution-tool source code and Dockerfile
 - Docker Hub credentials stored as repository secrets
+- Access to Docker Build Cloud (for improved performance)
 
 ## Secrets Required
 
