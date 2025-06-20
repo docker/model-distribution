@@ -31,6 +31,9 @@ make build
 # Package a model with license files and push to a registry
 ./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
 
+# Package a model with a default context size and push to a registry
+./bin/model-distribution-tool ./model.gguf --context-size 2048 registry.example.com/models/llama:v1.0
+
 # Push a model from the content store to the registry
 ./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
 
