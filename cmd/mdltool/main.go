@@ -62,12 +62,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create the client
-	client, err := distribution.NewClient(
+	// Create the client with auth if environment variables are set
+	clientOpts := []distribution.Option{
 		distribution.WithStoreRootPath(absStorePath),
-		distribution.WithUserAgent("model-distribution-tool/"+version),
-	)
+		distribution.WithUserAgent("model-distribution-tool/" + version),
+	}
 
+	if username := os.Getenv("DOCKER_USERNAME"); username != "" {
+		if password := os.Getenv("DOCKER_PASSWORD"); password != "" {
+			clientOpts = append(clientOpts, distribution.WithRegistryAuth(username, password))
+		}
+	}
+
+	client, err := distribution.NewClient(clientOpts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 		os.Exit(1)
@@ -176,10 +183,23 @@ func cmdPackage(args []string) int {
 		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
 	}
 
-	// Parse the reference
-	target, err := registry.NewClient(
+	// Prepare registry client options
+	registryClientOpts := []registry.ClientOption{
 		registry.WithUserAgent("model-distribution-tool/" + version),
-	).NewTarget(reference)
+	}
+
+	// Add auth if available
+	if username := os.Getenv("DOCKER_USERNAME"); username != "" {
+		if password := os.Getenv("DOCKER_PASSWORD"); password != "" {
+			registryClientOpts = append(registryClientOpts, registry.WithAuthConfig(username, password))
+		}
+	}
+
+	// Create registry client once with all options
+	registryClient := registry.NewClient(registryClientOpts...)
+
+	// Parse the reference
+	target, err := registryClient.NewTarget(reference)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
 		return 1
