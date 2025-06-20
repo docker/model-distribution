@@ -97,26 +97,6 @@ Store these as repository secrets:
 - `DOCKER_USERNAME`: Your Docker Hub username
 - `DOCKER_PASSWORD`: Your Docker Hub password or access token
 
-## Example Model URLs
-
-### Hugging Face Models
-```
-https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf
-https://huggingface.co/microsoft/DialoGPT-medium-GGUF/resolve/main/DialoGPT-medium-q4_0.gguf
-```
-
-### License URLs
-```
-# Apache 2.0 (default)
-https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md
-
-# MIT License
-https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/mit.md
-
-# Custom license from model repository
-https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/LICENSE
-```
-
 ## Error Handling
 
 The action includes automatic cleanup of temporary files and provides detailed logging for troubleshooting. If the action fails:

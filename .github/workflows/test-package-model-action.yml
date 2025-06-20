@@ -6,15 +6,15 @@ on:
       model_url:
         description: 'URL to the GGUF model file'
         required: true
-        default: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf'
+        default: 'https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf'
       model_name:
         description: 'Model name for the repository'
         required: true
-        default: 'test-qwen3'
+        default: 'smollm2'
       model_tag:
         description: 'Tag for the model'
         required: true
-        default: '4B-Q4_K_M-test'
+        default: '135M-Q2_K'
       license_url:
         description: 'License URL (optional)'
         required: false
