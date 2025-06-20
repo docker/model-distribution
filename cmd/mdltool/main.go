@@ -11,6 +11,7 @@ import (
 	"github.com/docker/model-distribution/builder"
 	"github.com/docker/model-distribution/distribution"
 	"github.com/docker/model-distribution/registry"
+	"github.com/docker/model-distribution/types"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -152,9 +153,25 @@ func cmdPull(client *distribution.Client, args []string) int {
 }
 
 func cmdPackage(args []string) int {
-	fs := flag.NewFlagSet("push", flag.ExitOnError)
+	fs := flag.NewFlagSet("package", flag.ExitOnError)
 	var licensePaths stringSliceFlag
+	var inputTypesStr string
+	var outputTypesStr string
+	var toolUsage bool
+
+	validTypes := []string{
+		types.IOTypeText,
+		types.IOTypeEmbedding,
+		types.IOTypeImage,
+		types.IOTypeAudio,
+		types.IOTypeVideo,
+	}
+	validTypesStr := strings.Join(validTypes, ", ")
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
+	fs.StringVar(&inputTypesStr, "input", "text", "Comma-separated input types ("+validTypesStr+")")
+	fs.StringVar(&outputTypesStr, "output", "text", "Comma-separated output types ("+validTypesStr+")")
+	fs.BoolVar(&toolUsage, "tool-usage", false, "Enable tool usage support")
+
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		return 1
@@ -163,7 +180,9 @@ func cmdPackage(args []string) int {
 
 	if len(args) < 2 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--licenses <path-to-license-file1> --licenses <path-to-license-file2> ...]\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package <source> <reference> [options]\n")
+		fmt.Fprintf(os.Stderr, "\nOptions:\n")
+		fs.PrintDefaults()
 		return 1
 	}
 
@@ -220,6 +239,24 @@ func cmdPackage(args []string) int {
 			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
 			return 1
 		}
+	}
+
+	// Parse input/output types
+	inputTypes := strings.Split(inputTypesStr, ",")
+	outputTypes := strings.Split(outputTypesStr, ",")
+
+	// Create capabilities with validation
+	capabilities, err := types.NewCapabilities(inputTypes, outputTypes, toolUsage)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating capabilities: %v\n", err)
+		return 1
+	}
+
+	// Add capabilities
+	builder, err = builder.WithCapabilities(capabilities)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting capabilities: %v\n", err)
+		return 1
 	}
 
 	// Push the image
