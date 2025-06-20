@@ -1,0 +1,70 @@
+name: 'Package Model'
+description: 'Package a GGUF model file as an OCI artifact and push it to a registry using Docker Build Cloud'
+inputs:
+  gguf-file-url:
+    description: 'URL to the GGUF file (e.g., https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf)'
+    required: true
+  registry-repository:
+    description: 'OCI Registry repository (e.g., myorg/mymodel)'
+    required: true
+  tag:
+    description: 'Tag for the model (e.g., v1.0, 4B-Q4_K_M)'
+    required: true
+  license-url:
+    description: 'URL to the license file'
+    required: false
+    default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
+  docker-username:
+    description: 'Docker Hub username'
+    required: true
+  docker-password:
+    description: 'Docker Hub password/token'
+    required: true
+  platforms:
+    description: 'Target platforms for the build (e.g., linux/amd64,linux/arm64)'
+    required: false
+    default: 'linux/arm64'
+  buildx-endpoint:
+    description: 'Docker Buildx cloud endpoint'
+    required: false
+outputs:
+  model-reference:
+    description: "Full model reference that was pushed"
+    value: ${{ steps.set-output.outputs.model-reference }}
+runs:
+  using: "composite"
+  steps:
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ inputs.docker-username }}
+        password: ${{ inputs.docker-password }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: cloud
+        endpoint: ${{ inputs.buildx-endpoint || format('{0}/default', inputs.docker-username) }}
+        install: true
+
+    - name: Set model reference
+      id: set-output
+      run: |
+        MODEL_REFERENCE="${{ inputs.registry-repository }}:${{ inputs.tag }}"
+        echo "model-reference=$MODEL_REFERENCE" >> $GITHUB_OUTPUT
+        echo "Will package model as: $MODEL_REFERENCE"
+      shell: bash
+
+    - name: Build and push model
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: ${{ inputs.platforms }}
+        build-args: |
+          GGUF_FILE_URL=${{ inputs.gguf-file-url }}
+          LICENSE_URL=${{ inputs.license-url }}
+          HUB_REPOSITORY=${{ inputs.registry-repository }}
+          TAG=${{ inputs.tag }}
+        secrets: |
+          DOCKER_USERNAME=${{ inputs.docker-username }}
+          DOCKER_PASSWORD=${{ inputs.docker-password }}
