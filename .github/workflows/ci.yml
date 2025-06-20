@@ -21,3 +21,6 @@ jobs:
 
     - name: Run all checks
       run: make all
+
+    - name: Run tests with race detection
+      run: go test -race ./...
