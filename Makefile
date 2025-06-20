@@ -28,7 +28,7 @@ build:
 
 test:
 	@echo "Running unit tests..."
-	@go test -v ./...
+	@go test -race ./...
 
 clean:
 	@echo "Cleaning..."
