@@ -1,0 +1,85 @@
+name: 'Package Model'
+description: 'Package a GGUF model file as an OCI artifact and push it to a registry'
+inputs:
+  gguf-file-url:
+    description: 'URL to the GGUF file (e.g., https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf)'
+    required: true
+  registry-repository:
+    description: 'OCI Registry repository (e.g., myorg/mymodel)'
+    required: true
+  tag:
+    description: 'Tag for the model (e.g., v1.0, 4B-Q4_K_M)'
+    required: true
+  license-url:
+    description: 'URL to the license file'
+    required: false
+    default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
+  docker-username:
+    description: 'Docker Hub username'
+    required: true
+  docker-password:
+    description: 'Docker Hub password/token'
+    required: true
+  go-version:
+    description: 'Go version to use for building the tool'
+    required: false
+    default: '1.24.2'
+outputs:
+  model-reference:
+    description: "Full model reference that was pushed"
+    value: ${{ steps.package.outputs.model-reference }}
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Build model-distribution-tool
+      run: make build
+      shell: bash
+
+    - name: Create temporary directories
+      run: |
+        mkdir -p /tmp/model-packaging/model
+        mkdir -p /tmp/model-packaging/licenses
+      shell: bash
+
+    - name: Download GGUF file
+      run: |
+        echo "Downloading GGUF file from: ${{ inputs.gguf-file-url }}"
+        curl -L "${{ inputs.gguf-file-url }}" -o /tmp/model-packaging/model/model.gguf
+        echo "Downloaded GGUF file size: $(du -h /tmp/model-packaging/model/model.gguf | cut -f1)"
+      shell: bash
+
+    - name: Download license file
+      run: |
+        echo "Downloading license from: ${{ inputs.license-url }}"
+        curl -L "${{ inputs.license-url }}" -o /tmp/model-packaging/licenses/LICENSE
+        echo "Downloaded license file"
+      shell: bash
+
+    - name: Package and push model
+      id: package
+      run: |
+        MODEL_REFERENCE="${{ inputs.registry-repository }}:${{ inputs.tag }}"
+        echo "Packaging model as: $MODEL_REFERENCE"
+        
+        ./bin/model-distribution-tool package \
+          --licenses /tmp/model-packaging/licenses/LICENSE \
+          /tmp/model-packaging/model/model.gguf \
+          "$MODEL_REFERENCE"
+        
+        echo "model-reference=$MODEL_REFERENCE" >> $GITHUB_OUTPUT
+        echo "Successfully packaged and pushed model: $MODEL_REFERENCE"
+      shell: bash
+      env:
+        DOCKER_USERNAME: ${{ inputs.docker-username }}
+        DOCKER_PASSWORD: ${{ inputs.docker-password }}
+
+    - name: Cleanup temporary files
+      if: always()
+      run: |
+        rm -rf /tmp/model-packaging
+      shell: bash
