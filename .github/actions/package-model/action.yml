@@ -13,7 +13,6 @@ inputs:
   license-url:
     description: 'URL to the license file'
     required: false
-    default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
   docker-username:
     description: 'Docker Hub username'
     required: true

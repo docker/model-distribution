@@ -1,7 +1,6 @@
 name: Test Package Model Action
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       model_url:
@@ -37,9 +36,9 @@ jobs:
         uses: ./.github/actions/package-model
         with:
           gguf-file-url: ${{ github.event.inputs.model_url }}
+          license-url: ${{ github.event.inputs.license_url }}
           registry-repository: ${{ secrets.DOCKER_USER_STAGING }}/${{ github.event.inputs.model_name }}
           tag: ${{ github.event.inputs.model_tag }}
-          license-url: ${{ github.event.inputs.license_url }}
           docker-username: ${{ secrets.DOCKER_USER_STAGING }}
           docker-password: ${{ secrets.DOCKER_OAT_STAGING }}
 
