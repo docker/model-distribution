@@ -1,6 +1,7 @@
 name: Test Package Model Action
 
 on:
+  push:
   workflow_dispatch:
     inputs:
       model_url:
