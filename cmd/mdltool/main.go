@@ -183,18 +183,20 @@ func cmdPackage(args []string) int {
 		fmt.Fprintf(os.Stderr, "Continuing anyway, but this may cause issues.\n")
 	}
 
-	// Create registry client with auth if environment variables are set
-	registryClient := registry.NewClient(
+	// Prepare registry client options
+	registryClientOpts := []registry.ClientOption{
 		registry.WithUserAgent("model-distribution-tool/" + version),
-	)
+	}
+
+	// Add auth if available
 	if username := os.Getenv("DOCKER_USERNAME"); username != "" {
 		if password := os.Getenv("DOCKER_PASSWORD"); password != "" {
-			registryClient = registry.NewClient(
-				registry.WithUserAgent("model-distribution-tool/"+version),
-				registry.WithAuthConfig(username, password),
-			)
+			registryClientOpts = append(registryClientOpts, registry.WithAuthConfig(username, password))
 		}
 	}
+
+	// Create registry client once with all options
+	registryClient := registry.NewClient(registryClientOpts...)
 
 	// Parse the reference
 	target, err := registryClient.NewTarget(reference)
