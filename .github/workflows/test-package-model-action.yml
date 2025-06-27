@@ -1,0 +1,64 @@
+name: Test Package Model Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_url:
+        description: 'URL to the GGUF model file'
+        required: true
+        default: 'https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf'
+      model_name:
+        description: 'Model name for the repository'
+        required: true
+        default: 'smollm2'
+      model_tag:
+        description: 'Tag for the model'
+        required: true
+        default: '135M-Q2_K'
+      license_url:
+        description: 'License URL (optional)'
+        required: false
+        default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
+
+permissions:
+  contents: read
+
+jobs:
+  test-package-action:
+    runs-on: ubuntu-latest
+    name: Test Package Model Composite Action
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package Model using Composite Action
+        id: package
+        uses: ./.github/actions/package-model
+        with:
+          gguf-file-url: ${{ github.event.inputs.model_url }}
+          registry-repository: ${{ secrets.DOCKER_USER_STAGING }}/${{ github.event.inputs.model_name }}
+          tag: ${{ github.event.inputs.model_tag }}
+          license-url: ${{ github.event.inputs.license_url }}
+          docker-username: ${{ secrets.DOCKER_USER_STAGING }}
+          docker-password: ${{ secrets.DOCKER_OAT_STAGING }}
+          buildx-endpoint: ${{ secrets.DOCKER_USER_STAGING }}/default
+
+      - name: Display Results
+        run: |
+          echo "✅ Successfully packaged model!"
+          echo "📦 Model Reference: ${{ steps.package.outputs.model-reference }}"
+          echo "🔗 Model URL: ${{ github.event.inputs.model_url }}"
+          echo "📄 License URL: ${{ github.event.inputs.license_url }}"
+          echo ""
+          echo "You can now pull this model using:"
+          echo "docker pull ${{ steps.package.outputs.model-reference }}"
+
+      - name: Verify Model (Optional)
+        run: |
+          echo "To verify the model was pushed correctly, you can run:"
+          echo "./bin/model-distribution-tool pull ${{ steps.package.outputs.model-reference }}"
+          echo ""
+          echo "Note: This step is commented out to avoid downloading the model again"
+          # Uncomment the following lines to actually verify the model
+          # ./bin/model-distribution-tool pull "${{ steps.package.outputs.model-reference }}"
+          # ./bin/model-distribution-tool list
