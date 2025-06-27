@@ -17,11 +17,12 @@ A composite GitHub Action that packages GGUF model files as OCI artifacts and pu
 
 ```yaml
 - name: Package Model
-  uses: ./.github/actions/package-model
+  uses: docker/model-distribution/.github/actions/package-model@main
   with:
     gguf-file-url: 'url-to-gguf'
     registry-repository: 'myorg/mymodel'
     tag: '4B-Q4_K_M'
+    license-url: 'https://example.com/license.txt'
     docker-username: ${{ secrets.DOCKER_USERNAME }}
     docker-password: ${{ secrets.DOCKER_PASSWORD }}
 ```
@@ -37,46 +38,59 @@ on:
       model_url:
         description: 'URL to the GGUF model file'
         required: true
+        default: 'https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf'
       model_name:
         description: 'Model name for the repository'
         required: true
+        default: 'smollm2'
       model_tag:
         description: 'Tag for the model'
         required: true
+        default: '135M-Q2_K'
+      license_url:
+        description: 'License URL'
+        required: true
+        default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
 
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Package Model
         id: package
-        uses: ./.github/actions/package-model
+        uses: docker/model-distribution/.github/actions/package-model@main
         with:
           gguf-file-url: ${{ github.event.inputs.model_url }}
           registry-repository: ${{ secrets.DOCKER_USERNAME }}/${{ github.event.inputs.model_name }}
           tag: ${{ github.event.inputs.model_tag }}
+          license-url: ${{ github.event.inputs.license_url }}
           docker-username: ${{ secrets.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Show packaged model reference
         run: |
-          echo "Model packaged as: ${{ steps.package.outputs.model-reference }}"
+          echo "✅ Successfully packaged model!"
+          echo "📦 Model Reference: ${{ steps.package.outputs.model-reference }}"
+          echo "🔗 Model URL: ${{ github.event.inputs.model_url }}"
+          echo "📄 License URL: ${{ github.event.inputs.license_url }}"
+          echo ""
+          echo "You can now pull this model using:"
+          echo "docker pull ${{ steps.package.outputs.model-reference }}"
 ```
 
 ## Inputs
 
-| Input                 | Description                                     | Required | Default              |
-|-----------------------|-------------------------------------------------|----------|----------------------|
-| `gguf-file-url`       | URL to the GGUF file                            | Yes      | -                    |
-| `registry-repository` | OCI Registry repository (e.g., `myorg/mymodel`) | Yes      | -                    |
-| `tag`                 | Tag for the model (e.g., `v1.0`, `4B-Q4_K_M`)   | Yes      | -                    |
-| `license-url`         | URL to the license file                         | yes      | -                    |
-| `docker-username`     | Docker Hub username                             | Yes      | -                    |
-| `docker-password`     | Docker Hub password/token                       | Yes      | -                    |
-| `buildx-endpoint`     | Docker Buildx cloud endpoint                    | No       | `{username}/default` |
+| Input                    | Description                                     | Required | Default              |
+|--------------------------|-------------------------------------------------|----------|----------------------|
+| `gguf-file-url`          | URL to the GGUF file                            | Yes      | -                    |
+| `registry-repository`    | OCI Registry repository (e.g., `myorg/mymodel`) | Yes      | -                    |
+| `tag`                    | Tag for the model (e.g., `v1.0`, `4B-Q4_K_M`)   | Yes      | -                    |
+| `license-url`            | URL to the license file                         | Yes      | -                    |
+| `docker-username`        | Docker Hub username                             | Yes      | -                    |
+| `docker-password`        | Docker Hub password/token                       | Yes      | -                    |
+| `platforms`              | Target platforms for the build                  | No       | `linux/arm64`        |
+| `buildx-endpoint`        | Docker Buildx cloud endpoint                    | No       | `{username}/default` |
+| `model-distribution-ref` | Git ref of model-distribution repo to use       | No       | `main`               |
 
 ## Outputs
 
@@ -86,9 +100,9 @@ jobs:
 
 ## Requirements
 
-- The repository must contain the model-distribution-tool source code and Dockerfile
 - Docker Hub credentials stored as repository secrets
 - Access to Docker Build Cloud (for improved performance)
+- The action automatically checks out the `docker/model-distribution` repository for the build context
 
 ## Secrets Required
 
