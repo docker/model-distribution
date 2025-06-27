@@ -152,9 +152,18 @@ func cmdPull(client *distribution.Client, args []string) int {
 }
 
 func cmdPackage(args []string) int {
-	fs := flag.NewFlagSet("push", flag.ExitOnError)
+	fs := flag.NewFlagSet("package", flag.ExitOnError)
 	var licensePaths stringSliceFlag
+	var contextSize uint64
+
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
+	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf> <reference>\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+	}
+
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		return 1
@@ -163,7 +172,7 @@ func cmdPackage(args []string) int {
 
 	if len(args) < 2 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool push <source> <reference> [--licenses <path-to-license-file1> --licenses <path-to-license-file2> ...]\n")
+		fs.Usage()
 		return 1
 	}
 
@@ -220,6 +229,11 @@ func cmdPackage(args []string) int {
 			fmt.Fprintf(os.Stderr, "Error adding license layer for %s: %v\n", path, err)
 			return 1
 		}
+	}
+
+	if contextSize > 0 {
+		fmt.Println("Setting context size:", contextSize)
+		builder = builder.WithContextSize(contextSize)
 	}
 
 	// Push the image

@@ -83,3 +83,32 @@ func TestConfigMediaTypes(t *testing.T) {
 		t.Fatalf("Expected media type %s, got %s", newMediaType, manifest2.Config.MediaType)
 	}
 }
+
+func TestContextSize(t *testing.T) {
+	mdl1, err := gguf.NewModel(filepath.Join("..", "..", "assets", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	cfg, err := mdl1.Config()
+	if err != nil {
+		t.Fatalf("Failed to get config file: %v", err)
+	}
+	if cfg.ContextSize != nil {
+		t.Fatalf("Epected nil context size got %d", cfg.ContextSize)
+	}
+
+	// set the context size
+	mdl2 := mutate.ContextSize(mdl1, 2096)
+
+	// check the config
+	cfg2, err := mdl2.Config()
+	if err != nil {
+		t.Fatalf("Failed to get config file: %v", err)
+	}
+	if cfg2.ContextSize == nil {
+		t.Fatal("Expected non-nil context")
+	}
+	if *cfg2.ContextSize != uint64(2096) {
+		t.Fatalf("Expected context size of 2096 got %d", *cfg2.ContextSize)
+	}
+}
