@@ -68,20 +68,20 @@ jobs:
 
 ## Inputs
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `gguf-file-url` | URL to the GGUF file | Yes | - |
-| `registry-repository` | OCI Registry repository (e.g., `myorg/mymodel`) | Yes | - |
-| `tag` | Tag for the model (e.g., `v1.0`, `4B-Q4_K_M`) | Yes | - |
-| `license-url` | URL to the license file | No | Apache 2.0 license |
-| `docker-username` | Docker Hub username | Yes | - |
-| `docker-password` | Docker Hub password/token | Yes | - |
-| `buildx-endpoint` | Docker Buildx cloud endpoint | No | `{username}/default` |
+| Input                 | Description                                     | Required | Default              |
+|-----------------------|-------------------------------------------------|----------|----------------------|
+| `gguf-file-url`       | URL to the GGUF file                            | Yes      | -                    |
+| `registry-repository` | OCI Registry repository (e.g., `myorg/mymodel`) | Yes      | -                    |
+| `tag`                 | Tag for the model (e.g., `v1.0`, `4B-Q4_K_M`)   | Yes      | -                    |
+| `license-url`         | URL to the license file                         | yes      | -                    |
+| `docker-username`     | Docker Hub username                             | Yes      | -                    |
+| `docker-password`     | Docker Hub password/token                       | Yes      | -                    |
+| `buildx-endpoint`     | Docker Buildx cloud endpoint                    | No       | `{username}/default` |
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
+| Output            | Description                                                       |
+|-------------------|-------------------------------------------------------------------|
 | `model-reference` | Full model reference that was pushed (e.g., `myorg/mymodel:v1.0`) |
 
 ## Requirements
