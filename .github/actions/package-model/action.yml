@@ -57,7 +57,7 @@ runs:
     - name: Build and push model
       uses: docker/build-push-action@v6
       with:
-        context: .
+        context: ${{ github.action_path }}
         platforms: ${{ inputs.platforms }}
         build-args: |
           GGUF_FILE_URL=${{ inputs.gguf-file-url }}
