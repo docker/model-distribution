@@ -11,6 +11,7 @@ import (
 	"github.com/docker/model-distribution/builder"
 	"github.com/docker/model-distribution/distribution"
 	"github.com/docker/model-distribution/registry"
+	"github.com/docker/model-distribution/tar"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -153,11 +154,17 @@ func cmdPull(client *distribution.Client, args []string) int {
 
 func cmdPackage(args []string) int {
 	fs := flag.NewFlagSet("package", flag.ExitOnError)
-	var licensePaths stringSliceFlag
-	var contextSize uint64
+	var (
+		licensePaths stringSliceFlag
+		contextSize  uint64
+		file         string
+	)
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
+	fs.StringVar(&file, "file", "", "Write model to the given file instead of pushing to a registry")
+	fs.Parse(args)
+
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf> <reference>\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -207,10 +214,17 @@ func cmdPackage(args []string) int {
 	// Create registry client once with all options
 	registryClient := registry.NewClient(registryClientOpts...)
 
-	// Parse the reference
-	target, err := registryClient.NewTarget(reference)
+	var (
+		target builder.Target
+		err    error
+	)
+	if file != "" {
+		target, err = tar.NewTarget(reference, file)
+	} else {
+		target, err = registryClient.NewTarget(reference)
+	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Create packaging target: %v\n", err)
 		return 1
 	}
 
