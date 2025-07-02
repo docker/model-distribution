@@ -1,0 +1,93 @@
+name: Package GGUF model
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Single model inputs
+      gguf_file_url:
+        description: 'URL to the GGUF file (e.g., https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf)'
+        required: false
+        type: string
+      registry_repository:
+        description: 'OCI Registry repository'
+        required: false
+        type: string
+        default: 'qwen3'
+      tag:
+        description: 'Tag for the Docker image (e.g., 4B-Q4_K_M)'
+        required: false
+        type: string
+      license_url:
+        description: 'URL to the license file'
+        required: false
+        type: string
+        default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
+      # Multi-model input
+      models_json:
+        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"gguf_url":"https://...", "repository":"repo", "tag":"tag", "license_url":"https://..."}]'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      strategy: ${{ steps.determine-strategy.outputs.strategy }}
+      matrix: ${{ steps.determine-strategy.outputs.matrix }}
+    steps:
+      - name: Determine packaging strategy
+        id: determine-strategy
+        run: |
+          if [ -n "${{ inputs.models_json }}" ]; then
+            echo "strategy=multi" >> $GITHUB_OUTPUT
+            echo "matrix=${{ inputs.models_json }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.gguf_file_url }}" ]; then
+            echo "strategy=single" >> $GITHUB_OUTPUT
+            # Create single-item array for matrix strategy
+            single_model='[{"gguf_url":"${{ inputs.gguf_file_url }}", "repository":"${{ inputs.registry_repository }}", "tag":"${{ inputs.tag }}", "license_url":"${{ inputs.license_url }}"}]'
+            echo "matrix=$single_model" >> $GITHUB_OUTPUT
+          else
+            echo "Error: Either provide single model inputs (gguf_file_url, registry_repository, tag) or models_json array"
+            exit 1
+          fi
+
+  package:
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        model: ${{ fromJson(needs.validate-inputs.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER_STAGING }}
+          password: ${{ secrets.DOCKER_OAT_STAGING }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: cloud
+          endpoint: "${{ secrets.DOCKER_USER_STAGING }}/default"
+          install: true
+
+      - name: Build and push model
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: 'linux/arm64'
+          build-args: |          
+            GGUF_FILE_URL=${{ matrix.model.gguf_url }}
+            LICENSE_URL=${{ matrix.model.license_url }}
+            HUB_REPOSITORY=${{ secrets.DOCKER_USER_STAGING }}/${{ matrix.model.repository }}
+            TAG=${{ matrix.model.tag }}
+          secrets: |
+            DOCKER_USERNAME=${{ secrets.DOCKER_USER_STAGING }}
+            DOCKER_PASSWORD=${{ secrets.DOCKER_OAT_STAGING }}
