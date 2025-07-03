@@ -1,0 +1,80 @@
+name: Promote Model to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_namespace:
+        description: 'Source namespace (e.g., aistaging)'
+        required: false
+        type: string
+        default: 'aistaging'
+      target_namespace:
+        description: 'Target namespace (e.g., ai)'
+        required: false
+        type: string
+        default: 'ai'
+      image:
+        description: 'Image to promote in format repository:tag (e.g., smollm2:135M-Q4_K_M)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        run: |
+          echo "Validating workflow inputs..."
+          if [ -z "${{ inputs.image }}" ]; then
+            echo "Error: image is required"
+            exit 1
+          fi
+          if [[ ! "${{ inputs.image }}" == *":"* ]]; then
+            echo "Error: image must be in format repository:tag (e.g., smollm2:135M-Q4_K_M)"
+            exit 1
+          fi
+          echo "All required inputs provided ✓"
+
+      - name: Set up Crane
+        run: |
+          echo "Installing crane..."
+          curl -LO https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz
+          tar -xzvf go-containerregistry_Linux_x86_64.tar.gz crane
+          sudo mv crane /usr/local/bin/
+          crane version
+          echo "Crane installed successfully ✓"
+
+      - name: Log in to DockerHub (destination)
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKER_OAT }}
+        run: |
+          echo "Authenticating to DockerHub..."
+          crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+          echo "DockerHub authentication successful ✓"
+
+      - name: Construct image URLs
+        id: images
+        run: |
+          SOURCE_IMAGE="${{ inputs.source_namespace }}/${{ inputs.image }}"
+          TARGET_IMAGE="docker.io/${{ inputs.target_namespace }}/${{ inputs.image }}"
+          
+          echo "source_image=$SOURCE_IMAGE" >> $GITHUB_OUTPUT
+          echo "target_image=$TARGET_IMAGE" >> $GITHUB_OUTPUT
+          
+          echo "Source image: $SOURCE_IMAGE"
+          echo "Target image: $TARGET_IMAGE"
+
+      - name: Copy image
+        run: |
+          echo "Starting image promotion..."
+          echo "Copying from: ${{ steps.images.outputs.source_image }}"
+          echo "Copying to: ${{ steps.images.outputs.target_image }}"
+          
+          crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
+          
+          echo "Image promotion completed successfully ✓"
+          echo "Model ${{ inputs.image }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
