@@ -120,3 +120,90 @@ if err != nil {
     // Handle error
 }
 ```
+
+### GitHub Workflows for Model Packaging and Promotion
+
+This project provides GitHub workflows to automate the process of packaging GGUF models and promoting them from staging to production environments.
+
+#### Overview
+
+The model promotion process follows a two-step workflow:
+1. **Package and Push to Staging**: Use `package-gguf-model.yml` to download a GGUF model from HuggingFace and push it to the `aistaging` namespace
+2. **Promote to Production**: Use `promote-model-to-production.yml` to copy the model from staging (`aistaging`) to production (`ai`) namespace
+
+#### Prerequisites
+
+The following GitHub secrets must be configured:
+- `DOCKER_USER`: DockerHub username for production namespace
+- `DOCKER_OAT`: DockerHub access token for production namespace
+- `DOCKER_USER_STAGING`: DockerHub username for staging namespace (typically `aistaging`)
+- `DOCKER_OAT_STAGING`: DockerHub access token for staging namespace
+
+**Note**: The current secrets are configured to write to the `ai` production namespace. If you need to write to a different namespace, you'll need to update the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets accordingly.
+
+#### Step 1: Package Model to Staging
+
+Use the **Package GGUF model** workflow to download a model from HuggingFace and push it to the staging environment.
+
+**Single Model Example:**
+1. Go to Actions → Package GGUF model → Run workflow
+2. Fill in the inputs:
+   - **GGUF file URL**: `https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf`
+   - **Registry repository**: `smollm2`
+   - **Tag**: `135M-Q4_K_M`
+   - **License URL**: `https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md`
+
+This will create: `aistaging/smollm2:135M-Q4_K_M`
+
+**Multi-Model Example:**
+For packaging multiple models at once, use the `models_json` input:
+```json
+[
+  {
+    "gguf_url": "https://huggingface.co/unsloth/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_XL.gguf",
+    "repository": "qwen3-gguf",
+    "tag": "32B-Q4_K_XL",
+    "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md"
+  },
+  {
+    "gguf_url": "https://huggingface.co/unsloth/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q8_0.gguf",
+    "repository": "qwen3-gguf", 
+    "tag": "32B-Q8_0",
+    "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md"
+  }
+]
+```
+
+#### Step 2: Promote to Production
+
+Once your model is successfully packaged in staging, use the **Promote Model to Production** workflow to copy it to the production namespace.
+
+1. Go to Actions → Promote Model to Production → Run workflow
+2. Fill in the inputs:
+   - **Image**: `smollm2:135M-Q4_K_M` (must match the repository:tag from Step 1)
+   - **Source namespace**: `aistaging` (default, can be changed if needed)
+   - **Target namespace**: `ai` (default, can be changed if needed)
+
+This will copy: `aistaging/smollm2:135M-Q4_K_M` → `ai/smollm2:135M-Q4_K_M`
+
+#### Complete Example Walkthrough
+
+Let's walk through packaging and promoting a Qwen3 model:
+
+1. **Package to Staging**:
+   - Workflow: Package GGUF model
+   - GGUF file URL: `https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf`
+   - Registry repository: `smollm2`
+   - Tag: `135M-Q4_K_M`
+   - License URL: `https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md`
+   - Result: `aistaging/smollm2:135M-Q4_K_M`
+
+2. **Promote to Production**:
+   - Workflow: Promote Model to Production
+   - Image: `smollm2:135M-Q4_K_M`
+   - Result: `ai/smollm2:135M-Q4_K_M`
+
+Your model is now available in production and can be pulled using:
+```bash
+docker pull ai/smollm2:135M-Q4_K_M
+```
