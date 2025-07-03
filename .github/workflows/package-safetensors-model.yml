@@ -1,7 +1,6 @@
 name: Package Safetensors model
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       # Single model inputs
@@ -19,14 +18,18 @@ on:
         type: string
       quantization:
         description: 'Quantization type (e.g., Q4_K_M, Q8_0, F16)'
-        required: true
+        required: false
         type: string
         default: 'Q4_K_M'
+      llama_cpp_tag:
+        description: 'Llama.cpp Docker image tag'
+        required: true
+        type: string
+        default: 'full-b5763'
       license_url:
         description: 'URL to the license file'
         required: true
         type: string
-        default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
       # Multi-model input
       models_json:
         description: 'JSON array of models to package (alternative to single model inputs). Format: [{"hf_repository":"HuggingFaceTB/SmolLM2-135M-Instruct)", "repository":"repo", "weights":"medium", "quantization":"Q4_K_M", "license_url":"https://..."}]'
@@ -52,7 +55,7 @@ jobs:
           elif [ -n "${{ inputs.huggingface_repository }}" ]; then
             echo "strategy=single" >> $GITHUB_OUTPUT
             # Create single-item array for matrix strategy
-            single_model='[{"hf_repository":"${{ inputs.huggingface_repository }}", "repository":"${{ inputs.registry_repository }}", "weights":"${{ inputs.weights }}", "quantization":"${{ inputs.quantization }}", "license_url":"${{ inputs.license_url }}"}]'
+            single_model='[{"hf_repository":"${{ inputs.huggingface_repository }}", "repository":"${{ inputs.registry_repository }}", "weights":"${{ inputs.weights }}", "quantization":"${{ inputs.quantization }}", "llama_cpp_tag":"${{ inputs.llama_cpp_tag }}", "license_url":"${{ inputs.license_url }}"}]'
             echo "matrix=$single_model" >> $GITHUB_OUTPUT
           else
             echo "Error: Either provide single model inputs (huggingface_repository, registry_repository, weights) or models_json array"
@@ -95,6 +98,7 @@ jobs:
             HUB_REPOSITORY=${{ secrets.DOCKER_USER_STAGING }}/${{ matrix.model.repository }}
             WEIGHTS=${{ matrix.model.weights }}
             QUANTIZATION=${{ matrix.model.quantization }}
+            LLAMA_CPP_TAG=${{ inputs.llama_cpp_tag }}
           secrets: |
             DOCKER_USERNAME=${{ secrets.DOCKER_USER_STAGING }}
             DOCKER_PASSWORD=${{ secrets.DOCKER_OAT_STAGING }}

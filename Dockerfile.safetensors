@@ -3,6 +3,7 @@
 ARG GO_VERSION=1.24.2
 ARG GIT_VERSION=v2.47.2
 ARG UBUNTU_VERSION=24.04
+ARG LLAMA_CPP_TAG=full-b5763
 
 FROM golang:${GO_VERSION}-bookworm AS builder
 
@@ -25,6 +26,21 @@ COPY --link . .
 # Build the application
 RUN make build
 
+FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS llama-converter
+
+# Install git-lfs to handle Hugging Face repositories
+RUN apt-get update && apt-get install -y git-lfs && \
+    git lfs install
+
+# Copy the modified entrypoint script
+COPY scripts/model-push/llama-converter/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Allow passing Hugging Face API Token as an environment variable
+ENV HUGGINGFACE_TOKEN=""
+
+ENTRYPOINT ["/entrypoint.sh"]
+
 FROM alpine/git:${GIT_VERSION} AS cloner
 
 ARG HUGGINGFACE_REPOSITORY
@@ -36,14 +52,14 @@ RUN git lfs install
 RUN --mount=type=secret,id=HUGGINGFACE_TOKEN,env=HUGGINGFACE_TOKEN \
     git clone --depth=1 "https://user:$HUGGINGFACE_TOKEN@huggingface.co/$HUGGINGFACE_REPOSITORY" "model"
 
-FROM ignaciolopezluna020/llama-converter:latest AS ggufier
+FROM llama-converter AS ggufier
 
 # Copy the cloned model from the cloner stage
 COPY --from=cloner /app/model /model
 
 RUN ./convert_hf_to_gguf.py --outfile /model/model.gguf /model
 
-FROM ignaciolopezluna020/llama-converter:latest AS quantizier
+FROM llama-converter AS quantizier
 
 ARG QUANTIZATION
 

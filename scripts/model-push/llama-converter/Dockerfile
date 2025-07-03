@@ -1,4 +1,5 @@
-FROM ghcr.io/ggml-org/llama.cpp:full-b5763
+ARG LLAMA_CPP_TAG=full-b5763
+FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG}
 
 # Install git-lfs to handle Hugging Face repositories
 RUN apt-get update && apt-get install -y git-lfs && \
