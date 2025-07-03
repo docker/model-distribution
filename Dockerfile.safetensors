@@ -28,18 +28,7 @@ RUN make build
 
 FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS llama-converter
 
-# Install git-lfs to handle Hugging Face repositories
-RUN apt-get update && apt-get install -y git-lfs && \
-    git lfs install
-
-# Copy the modified entrypoint script
-COPY scripts/model-push/llama-converter/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Allow passing Hugging Face API Token as an environment variable
-ENV HUGGINGFACE_TOKEN=""
-
-ENTRYPOINT ["/entrypoint.sh"]
+WORKDIR /workspace
 
 FROM alpine/git:${GIT_VERSION} AS cloner
 
