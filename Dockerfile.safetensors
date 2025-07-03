@@ -37,14 +37,14 @@ RUN git lfs install
 RUN --mount=type=secret,id=HUGGINGFACE_TOKEN,env=HUGGINGFACE_TOKEN \
     git clone --depth=1 "https://user:$HUGGINGFACE_TOKEN@huggingface.co/$HUGGINGFACE_REPOSITORY" "model"
 
-FROM FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS ggufier
+FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS ggufier
 
 # Copy the cloned model from the cloner stage
 COPY --from=cloner /app/model /model
 
 RUN ./convert_hf_to_gguf.py --outfile /model/model.gguf /model
 
-FROM FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS quantizier
+FROM ghcr.io/ggml-org/llama.cpp:${LLAMA_CPP_TAG} AS quantizier
 
 ARG QUANTIZATION
 
