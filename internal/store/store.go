@@ -188,17 +188,25 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
-	// Write the blobs
 	layers, err := mdl.Layers()
 	if err != nil {
 		return fmt.Errorf("getting layers: %w", err)
+	}
+
+	imageSize := int64(0)
+	for _, layer := range layers {
+		size, err := layer.Size()
+		if err != nil {
+			return fmt.Errorf("getting layer size: %w", err)
+		}
+		imageSize += size
 	}
 
 	for _, layer := range layers {
 		var pr *progress.Reporter
 		var progressChan chan<- v1.Update
 		if w != nil {
-			pr = progress.NewProgressReporter(w, progress.PullMsg, layer)
+			pr = progress.NewProgressReporter(w, progress.PullMsg, imageSize, layer)
 			progressChan = pr.Updates()
 		}
 

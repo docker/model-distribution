@@ -58,10 +58,10 @@ func TestMessages(t *testing.T) {
 		update := v1.Update{
 			Complete: 1024 * 1024,
 		}
-		layer := newMockLayer(2016)
-		size := layer.size
+		layer1 := newMockLayer(2016)
+		layer2 := newMockLayer(1)
 
-		err := WriteProgress(&buf, PullMsg(update), uint64(size), uint64(update.Complete), layer.diffID)
+		err := WriteProgress(&buf, PullMsg(update), uint64(layer1.size+layer2.size), uint64(layer1.size), uint64(update.Complete), layer1.diffID)
 		if err != nil {
 			t.Fatalf("Failed to write progress message: %v", err)
 		}
@@ -76,6 +76,9 @@ func TestMessages(t *testing.T) {
 		}
 		if msg.Message != "Downloaded: 1.00 MB" {
 			t.Errorf("Expected message 'Downloaded: 1.00 MB', got '%s'", msg.Message)
+		}
+		if msg.Total != uint64(2017) {
+			t.Errorf("Expected total 2017, got %d", msg.Total)
 		}
 		if msg.Pulled != uint64(1024*1024) {
 			t.Errorf("Expected pulled 1MB, got %d", msg.Pulled)
@@ -208,7 +211,7 @@ func TestProgressEmissionScenarios(t *testing.T) {
 			var buf bytes.Buffer
 			layer := newMockLayer(tt.layerSize)
 
-			reporter := NewProgressReporter(&buf, PullMsg, layer)
+			reporter := NewProgressReporter(&buf, PullMsg, 0, layer)
 			updates := reporter.Updates()
 
 			// Send updates with delays
