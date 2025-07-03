@@ -104,7 +104,8 @@ func (r *Reporter) Updates() chan<- v1.Update {
 
 			// Only update if enough time has passed or enough bytes downloaded or finished
 			if now.Sub(lastUpdate) >= UpdateInterval ||
-				incrementalBytes >= MinBytesForUpdate {
+				incrementalBytes >= MinBytesForUpdate ||
+				safeUint64(p.Complete) == layerSize {
 				if err := WriteProgress(r.out, r.format(p), r.imageSize, layerSize, safeUint64(p.Complete), layerID); err != nil {
 					r.err = err
 				}
