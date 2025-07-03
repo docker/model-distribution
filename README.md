@@ -13,6 +13,8 @@ Model Distribution is a Go library and CLI tool that allows you to package, push
 - Local model storage
 - Model metadata management
 - Command-line interface for all operations
+- GitHub workflows for automated model packaging
+- Support for both GGUF and safetensors model formats
 
 ## Usage
 
@@ -120,3 +122,38 @@ if err != nil {
     // Handle error
 }
 ```
+
+## GitHub Workflows
+
+This repository includes GitHub workflows for automated model packaging:
+
+### Package GGUF Model Workflow
+
+The `package-gguf-model.yml` workflow packages pre-built GGUF models from direct URLs.
+
+**Usage:**
+- Go to Actions → Package GGUF model
+- Provide the GGUF file URL, registry repository, tag, and license URL
+- The workflow will download, package, and push the model to your registry
+
+**Example:**
+- GGUF File URL: `https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf`
+- Registry Repository: `qwen3`
+- Tag: `4B-Q4_K_M`
+
+### Package Safetensors Model Workflow
+
+The `package-safetensors-model.yml` workflow converts safetensors models from HuggingFace to GGUF format and packages them.
+
+**Usage:**
+- Go to Actions → Package Safetensors model
+- Provide the HuggingFace repository, registry repository, weights tag, quantization type, and license URL
+- The workflow will clone the repository, convert to GGUF, quantize, and push to your registry
+
+**Example:**
+- HuggingFace Repository: `microsoft/DialoGPT-medium`
+- Registry Repository: `dialogpt`
+- Weights: `medium`
+- Quantization: `Q4_K_M`
+
+Both workflows support batch processing using JSON arrays for multiple models.
