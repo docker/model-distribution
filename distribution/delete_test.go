@@ -3,6 +3,7 @@ package distribution
 import (
 	"errors"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/docker/model-distribution/internal/gguf"
@@ -122,11 +123,26 @@ func TestDeleteModel(t *testing.T) {
 			}
 
 			// Attempt to delete the model and check for expected error
-			if err := client.DeleteModel(tc.ref, tc.force); !errors.Is(err, tc.expectedErr) {
+			out, err := client.DeleteModel(tc.ref, tc.force)
+			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Expected error %v, got: %v", tc.expectedErr, err)
 			}
 			if tc.expectedErr != nil {
 				return
+			}
+
+			expectedOut := ""
+			if slices.Contains(tc.tags, tc.ref) {
+				// tc.ref is a tag
+				expectedOut = "Untagged: " + tc.ref + "\n"
+			} else {
+				// tc.ref is an ID
+				for _, tag := range tc.tags {
+					expectedOut += "Untagged: " + tag + "\n"
+				}
+			}
+			if expectedOut != out {
+				t.Fatalf("Expected output %q, got: %q", expectedOut, out)
 			}
 
 			// Verify model ref unreachable by ref (untagged)
