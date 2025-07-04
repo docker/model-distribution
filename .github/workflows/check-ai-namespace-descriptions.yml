@@ -5,7 +5,7 @@ on:
     # Run daily at 9:00 AM UTC
     - cron: '0 9 * * *'
   workflow_dispatch:
-    # Allow manual triggering
+  # Allow manual triggering
 
 permissions:
   contents: read
@@ -22,57 +22,48 @@ jobs:
       - name: Run description check script
         id: check-script
         run: |
-          # Run the script and capture output
-          output=$(./scripts/check-namespace-descriptions.sh --namespace ai 2>&1)
-          exit_code=$?
+          # Make script executable
+          chmod +x ./scripts/check-namespace-descriptions.sh
+          
+          # Run the script and capture output directly to GitHub Actions output
+          ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script_output.txt
+          exit_code=${PIPESTATUS[0]}
+          
+          # Debug: Show what we captured
+          echo "Script exit code: $exit_code"
+          echo "Script output size: $(wc -c < script_output.txt)"
+          echo "First 200 chars of output:"
+          head -c 200 script_output.txt
+          echo ""
           
           # Save output for later use
           echo "script_output<<EOF" >> $GITHUB_OUTPUT
-          echo "$output" >> $GITHUB_OUTPUT
+          cat script_output.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
           # Exit with the same code as the script
           exit $exit_code
 
-      - name: Debug Slack message (always runs)
-        run: |
-          echo "=== SLACK MESSAGE PREVIEW ==="
-          echo "text: \":warning: Docker Hub AI Namespace Description Check Failed\""
-          echo "blocks:"
-          echo "  - type: \"section\""
-          echo "    text:"
-          echo "      type: \"mrkdwn\""
-          echo "      text: \":warning: *Docker Hub AI Namespace Description Check Failed*\""
-          echo "  - type: \"section\""
-          echo "    text:"
-          echo "      type: \"mrkdwn\""
-          echo "      text: \"\`\`\`${{ steps.check-script.outputs.script_output }}\`\`\`\""
-          echo "  - type: \"section\""
-          echo "    text:"
-          echo "      type: \"mrkdwn\""
-          echo "      text: \"<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>\""
-          echo "=== END SLACK MESSAGE PREVIEW ==="
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":warning: Docker Hub AI Namespace Description Check Failed"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "```${{ steps.check-script.outputs.script_output }}```"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
 
-#      - name: Notify Slack on failure
-#        if: failure()
-#        uses: slackapi/slack-github-action@v2.1.0
-#        with:
-#          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-#          webhook-type: incoming-webhook
-#          payload: |
-#            text: ":warning: Docker Hub AI Namespace Description Check Failed"
-#            blocks:
-#              - type: "section"
-#                text:
-#                  type: "mrkdwn"
-#                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
-#              - type: "section"
-#                text:
-#                  type: "mrkdwn"
-#                  text: "```${{ steps.check-script.outputs.script_output }}```"
-#              - type: "section"
-#                text:
-#                  type: "mrkdwn"
-#                  text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
-#
 
