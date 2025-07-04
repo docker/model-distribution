@@ -2,10 +2,8 @@ name: Check AI Namespace Repository Descriptions
 
 on:
   schedule:
-    # Run daily at 9:00 AM UTC
     - cron: '0 9 * * *'
   workflow_dispatch:
-  # Allow manual triggering
 
 permissions:
   contents: read
@@ -14,7 +12,7 @@ jobs:
   check-descriptions:
     name: Check Repository Descriptions
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,27 +20,17 @@ jobs:
       - name: Run description check script
         id: check-script
         run: |
-          # Make script executable
-          chmod +x ./scripts/check-namespace-descriptions.sh
-          
-          # Run the script and capture output directly to GitHub Actions output
-          ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script_output.txt
-          exit_code=${PIPESTATUS[0]}
-          
-          # Debug: Show what we captured
-          echo "Script exit code: $exit_code"
-          echo "Script output size: $(wc -c < script_output.txt)"
-          echo "First 200 chars of output:"
-          head -c 200 script_output.txt
-          echo ""
-          
-          # Save output for later use
-          echo "script_output<<EOF" >> $GITHUB_OUTPUT
-          cat script_output.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
+          # Run the script and capture output
+          output=$(./scripts/check-namespace-descriptions.sh --namespace ai 2>&1)
+          exit_code=$?
+          echo "$output" >> $GITHUB_OUTPUT
           # Exit with the same code as the script
           exit $exit_code
+
+      - name: Debug Output
+        if: failure()
+        run: |
+          echo "Output: ${{ steps.check-script.outputs.script_output }}"
 
       - name: Notify Slack on failure
         if: failure()
@@ -51,12 +39,8 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: ":warning: Docker Hub AI Namespace Description Check Failed"
+            text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
             blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
               - type: "section"
                 text:
                   type: "mrkdwn"
@@ -65,5 +49,3 @@ jobs:
                 text:
                   type: "mrkdwn"
                   text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
-
-

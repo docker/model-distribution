@@ -8,13 +8,6 @@ set -euo pipefail
 # Default values
 NAMESPACE=""
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 # Function to show usage
 show_usage() {
     cat << EOF
@@ -35,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         *)
-            echo -e "${RED}❌ Unknown argument: $1${NC}" >&2
+            echo "Unknown argument: $1" >&2
             show_usage
             exit 1
             ;;
@@ -44,15 +37,13 @@ done
 
 # Validate required arguments
 if [[ -z "$NAMESPACE" ]]; then
-    echo -e "${RED}❌ Error: --namespace is required${NC}" >&2
+    echo "Error: --namespace is required" >&2
     show_usage
     exit 1
 fi
 
 # Configuration
 BASE_URL="https://hub.docker.com/v2/repositories"
-
-echo -e "${BLUE}🔍 Checking repository descriptions in namespace: $NAMESPACE${NC}"
 
 # Function to make API calls
 api_call() {
@@ -70,7 +61,7 @@ api_call() {
     rm -f "$temp_file"
 
     if [[ "$http_code" -ne 200 ]]; then
-        echo -e "${RED}❌ API call failed with HTTP $http_code${NC}" >&2
+        echo "API call failed with HTTP $http_code" >&2
         echo "URL: $url" >&2
         echo "Response: $body" >&2
         exit 1
@@ -153,8 +144,7 @@ while true; do
     page=$((page + 1))
 done
 
-echo ""
-echo "📊 Summary Report"
+echo "Summary Report"
 echo "================="
 echo "Total repositories checked: $total_repos"
 echo "Repositories missing description: ${#repos_missing_description[@]}"
@@ -162,41 +152,20 @@ echo "Repositories missing full_description: ${#repos_missing_full_description[@
 echo "Repositories missing both: ${#repos_missing_both[@]}"
 echo ""
 
-# Report detailed findings
+# Report summary only
 has_issues=false
 
 if [[ ${#repos_missing_description[@]} -gt 0 ]]; then
     has_issues=true
-    echo -e "${YELLOW}⚠️  Repositories missing 'description':${NC}"
-    for repo in "${repos_missing_description[@]}"; do
-        echo "   - $repo"
-    done
-    echo ""
 fi
 
 if [[ ${#repos_missing_full_description[@]} -gt 0 ]]; then
     has_issues=true
-    echo -e "${YELLOW}⚠️  Repositories missing 'full_description':${NC}"
-    for repo in "${repos_missing_full_description[@]}"; do
-        echo "   - $repo"
-    done
-    echo ""
-fi
-
-if [[ ${#repos_missing_both[@]} -gt 0 ]]; then
-    echo -e "${RED}🚨 Repositories missing BOTH descriptions:${NC}"
-    for repo in "${repos_missing_both[@]}"; do
-        echo "   - $repo"
-    done
-    echo ""
 fi
 
 # Final result
 if [[ "$has_issues" == true ]]; then
-    echo -e "${RED}❌ ISSUES FOUND: Some repositories are missing descriptions${NC}"
     exit 1
 else
-    echo -e "${GREEN}✅ SUCCESS: All repositories have proper descriptions${NC}"
-    echo "All $total_repos repositories in the '$NAMESPACE' namespace have both description and full_description set."
     exit 0
 fi
