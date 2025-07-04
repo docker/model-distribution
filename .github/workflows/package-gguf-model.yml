@@ -12,7 +12,6 @@ on:
         description: 'OCI Registry repository'
         required: false
         type: string
-        default: 'qwen3'
       tag:
         description: 'Tag for the Docker image (e.g., 4B-Q4_K_M)'
         required: false
@@ -21,7 +20,6 @@ on:
         description: 'URL to the license file'
         required: false
         type: string
-        default: 'https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md'
       # Multi-model input
       models_json:
         description: 'JSON array of models to package (alternative to single model inputs). Format: [{"gguf_url":"https://...", "repository":"repo", "tag":"tag", "license_url":"https://..."}]'
