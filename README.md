@@ -125,13 +125,13 @@ if err != nil {
 
 ### GitHub Workflows for Model Packaging and Promotion
 
-This project provides GitHub workflows to automate the process of packaging both GGUF and safetensors models and promoting them from staging to production environments.
+This project provides GitHub workflows to automate the process of packaging both GGUF and Safetensors models and promoting them from staging to production environments.
 
 #### Overview
 
 The model promotion process follows a two-step workflow:
 1. **Package and Push to Staging**: Use either:
-   - `package-gguf-model.yml` to download a pre-built GGUF model from HuggingFace and push it to the `aistaging` namespace
+   - `package-gguf-model.yml` to download a pre-built GGUF model and push it to the `aistaging` namespace
    - `package-safetensors-model.yml` to clone a safetensors model from HuggingFace, convert it to GGUF, and push it to the `aistaging` namespace
 2. **Promote to Production**: Use `promote-model-to-production.yml` to copy the model from staging (`aistaging`) to production (`ai`) namespace
 
@@ -140,7 +140,7 @@ The model promotion process follows a two-step workflow:
 The following GitHub secrets must be configured:
 - `DOCKER_USER`: DockerHub username for production namespace
 - `DOCKER_OAT`: DockerHub access token for production namespace
-- `DOCKER_USER_STAGING`: DockerHub username for staging namespace (typically `aistaging`)
+- `DOCKER_USER_STAGING`: DockerHub username for staging namespace (`aistaging`)
 - `DOCKER_OAT_STAGING`: DockerHub access token for staging namespace
 
 **Note**: The current secrets are configured to write to the `ai` production namespace. If you need to write to a different namespace, you'll need to update the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets accordingly.
@@ -149,7 +149,7 @@ The following GitHub secrets must be configured:
 
 ##### Option A: Package GGUF Model
 
-Use the **Package GGUF model** workflow to download a pre-built GGUF model from HuggingFace and push it to the staging environment.
+Use the **Package GGUF model** workflow to download a pre-built GGUF model and push it to the staging environment.
 
 **Single Model Example:**
 1. Go to Actions → Package GGUF model → Run workflow
@@ -182,7 +182,7 @@ For packaging multiple models at once, use the `models_json` input:
 
 ##### Option B: Package Safetensors Model
 
-Use the **Package Safetensors model** workflow to clone a safetensors model from HuggingFace, convert it to GGUF format, and push it to the staging environment.
+Use the **Package Safetensors model** workflow to clone a Safetensors model from HuggingFace, convert it to GGUF format, and push it to the staging environment.
 
 **Single Model Example:**
 1. Go to Actions → Package Safetensors model → Run workflow
@@ -205,7 +205,6 @@ For packaging multiple safetensors models at once, use the `models_json` input:
     "repository": "dialogpt",
     "weights": "medium",
     "quantization": "Q4_K_M",
-    "llama_cpp_tag": "full-b5763",
     "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/mit.md"
   },
   {
@@ -213,17 +212,10 @@ For packaging multiple safetensors models at once, use the `models_json` input:
     "repository": "dialogpt",
     "weights": "large",
     "quantization": "Q8_0",
-    "llama_cpp_tag": "full-b5763",
     "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/mit.md"
   }
 ]
 ```
-
-**Key Differences from GGUF Workflow:**
-- **Input**: HuggingFace repository URL instead of direct GGUF file URL
-- **Process**: Clones entire repository, converts safetensors to GGUF, then quantizes
-- **Flexibility**: Supports different quantization levels and llama.cpp versions
-- **Output**: Same GGUF format as the GGUF workflow, ready for promotion
 
 #### Step 2: Promote to Production
 
@@ -285,4 +277,3 @@ Your converted model is now available in production and can be pulled using:
 docker pull ai/smollm2-safetensors:135M-Q4_K_M
 ```
 
-**Note**: Both workflows produce the same GGUF format in the final container, making them interchangeable for downstream usage.
