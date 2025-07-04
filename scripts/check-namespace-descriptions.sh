@@ -152,15 +152,27 @@ echo "Repositories missing full_description: ${#repos_missing_full_description[@
 echo "Repositories missing both: ${#repos_missing_both[@]}"
 echo ""
 
-# Report summary only
+# Report detailed results
 has_issues=false
 
 if [[ ${#repos_missing_description[@]} -gt 0 ]]; then
     has_issues=true
+    echo "Repositories missing description:"
+    printf '  - %s\n' "${repos_missing_description[@]}"
+    echo ""
 fi
 
 if [[ ${#repos_missing_full_description[@]} -gt 0 ]]; then
     has_issues=true
+    echo "Repositories missing full_description:"
+    printf '  - %s\n' "${repos_missing_full_description[@]}"
+    echo ""
+fi
+
+if [[ ${#repos_missing_both[@]} -gt 0 ]]; then
+    echo "Repositories missing both description and full_description:"
+    printf '  - %s\n' "${repos_missing_both[@]}"
+    echo ""
 fi
 
 # Final result

@@ -2,8 +2,10 @@ name: Check AI Namespace Repository Descriptions
 
 on:
   schedule:
+    # Run daily at 9:00 AM UTC
     - cron: '0 9 * * *'
   workflow_dispatch:
+  # Allow manual triggering
 
 permissions:
   contents: read
@@ -12,7 +14,7 @@ jobs:
   check-descriptions:
     name: Check Repository Descriptions
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,17 +22,28 @@ jobs:
       - name: Run description check script
         id: check-script
         run: |
-          # Run the script and capture output
-          output=$(./scripts/check-namespace-descriptions.sh --namespace ai 2>&1)
-          exit_code=$?
-          echo "$output" >> $GITHUB_OUTPUT
-          # Exit with the same code as the script
+          echo "=== Running script ==="
+          ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
+          exit_code=${PIPESTATUS[0]}
+          
+          echo "=== Capturing output ==="
+          output=$(cat script.log)
+          echo "Raw Output:"
+          echo "$output"
+          
+          {
+            echo 'script_output<<EOF'
+            echo "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
           exit $exit_code
 
-      - name: Debug Output
+      - name: Show script output
         if: failure()
         run: |
-          echo "Output: ${{ steps.check-script.outputs.script_output }}"
+          echo "hello!"
+          echo "${{ steps.check-script.outputs.script_output }}"
 
       - name: Notify Slack on failure
         if: failure()
@@ -39,8 +52,12 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+            text: ":warning: Docker Hub AI Namespace Description Check Failed"
             blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
               - type: "section"
                 text:
                   type: "mrkdwn"
