@@ -1,0 +1,25 @@
+name: Check AI Namespace Repository Descriptions
+
+on:
+  push:
+  schedule:
+    # Run daily at 9:00 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  check-descriptions:
+    name: Check Repository Descriptions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run description check script
+        run: |
+          ./scripts/check-namespace-descriptions.sh --namespace ai
