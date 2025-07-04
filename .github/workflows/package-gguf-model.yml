@@ -43,12 +43,17 @@ jobs:
         run: |
           if [ -n "${{ inputs.models_json }}" ]; then
             echo "strategy=multi" >> $GITHUB_OUTPUT
-            echo "matrix=${{ inputs.models_json }}" >> $GITHUB_OUTPUT
+            # Properly escape the JSON for GitHub Actions output
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ inputs.models_json }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           elif [ -n "${{ inputs.gguf_file_url }}" ]; then
             echo "strategy=single" >> $GITHUB_OUTPUT
             # Create single-item array for matrix strategy
             single_model='[{"gguf_url":"${{ inputs.gguf_file_url }}", "repository":"${{ inputs.registry_repository }}", "tag":"${{ inputs.tag }}", "license_url":"${{ inputs.license_url }}"}]'
-            echo "matrix=$single_model" >> $GITHUB_OUTPUT
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$single_model" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
             echo "Error: Either provide single model inputs (gguf_file_url, registry_repository, tag) or models_json array"
             exit 1
