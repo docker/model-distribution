@@ -32,7 +32,7 @@ on:
         type: string
       # Multi-model input
       models_json:
-        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"hf_repository":"HuggingFaceTB/SmolLM2-135M-Instruct)", "repository":"repo", "weights":"medium", "quantization":"Q4_K_M", "license_url":"https://..."}]'
+        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"hf_repository":"HuggingFaceTB/SmolLM2-135M-Instruct", "repository":"repo", "weights":"135M", "quantization":"Q4_K_M", "license_url":"https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md"}]'
         required: false
         type: string
 
@@ -73,7 +73,7 @@ jobs:
             repository: .repository,
             weights: .weights,
             quantization: .quantization,
-            llama_cpp_tag: .llama_cpp_tag,
+            llama_cpp_tag: "'${{ inputs.llama_cpp_tag }}'",
             license_url: .license_url
           }' models.json | jq -s 'map(.)' | jq -c '.')
           
