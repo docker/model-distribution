@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to check Docker Hub namespace repositories for missing descriptions
-# Usage: ./check-namespace-descriptions.sh --namespace <namespace> --token <token>
+# Usage: ./check-namespace-descriptions.sh --namespace <namespace>
 
 set -euo pipefail
 
