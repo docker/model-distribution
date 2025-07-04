@@ -1,28 +1,38 @@
-name: Package GGUF model
+name: Package Safetensors model
 
 on:
   workflow_dispatch:
     inputs:
       # Single model inputs
-      gguf_file_url:
-        description: 'URL to the GGUF file (e.g., https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf)'
+      huggingface_repository:
+        description: 'HuggingFace repository (e.g., HuggingFaceTB/SmolLM2-135M-Instruct)'
         required: false
         type: string
       registry_repository:
         description: 'OCI Registry repository'
         required: false
         type: string
-      tag:
-        description: 'Tag for the Docker image (e.g., 4B-Q4_K_M)'
+      weights:
+        description: 'Model weights tag (e.g., 7B, 13B, medium)'
         required: false
         type: string
+      quantization:
+        description: 'Quantization type (e.g., Q4_K_M, Q8_0, F16)'
+        required: false
+        type: string
+        default: 'Q4_K_M'
+      llama_cpp_tag:
+        description: 'Llama.cpp Docker image tag'
+        required: true
+        type: string
+        default: 'full-b5763'
       license_url:
         description: 'URL to the license file'
         required: false
         type: string
       # Multi-model input
       models_json:
-        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"gguf_url":"https://...", "repository":"repo", "tag":"tag", "license_url":"https://..."}]'
+        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"hf_repository":"HuggingFaceTB/SmolLM2-135M-Instruct", "repository":"repo", "weights":"135M", "quantization":"Q4_K_M", "license_url":"https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md"}]'
         required: false
         type: string
 
@@ -41,12 +51,12 @@ jobs:
           if [ -n "${{ inputs.models_json }}" ]; then
             # Use the provided JSON array
             echo '${{ inputs.models_json }}' > models.json
-          elif [ -n "${{ inputs.gguf_file_url }}" ]; then
+          elif [ -n "${{ inputs.huggingface_repository }}" ]; then
             # Create single-item array for single model
-            single_model='[{"gguf_url":"${{ inputs.gguf_file_url }}", "repository":"${{ inputs.registry_repository }}", "tag":"${{ inputs.tag }}", "license_url":"${{ inputs.license_url }}"}]'
+            single_model='[{"hf_repository":"${{ inputs.huggingface_repository }}", "repository":"${{ inputs.registry_repository }}", "weights":"${{ inputs.weights }}", "quantization":"${{ inputs.quantization }}", "llama_cpp_tag":"${{ inputs.llama_cpp_tag }}", "license_url":"${{ inputs.license_url }}"}]'
             echo "$single_model" > models.json
           else
-            echo "Error: Either provide single model inputs (gguf_file_url, registry_repository, tag) or models_json array"
+            echo "Error: Either provide single model inputs (huggingface_repository, registry_repository, weights) or models_json array"
             exit 1
           fi
           
@@ -59,9 +69,11 @@ jobs:
           # Convert JSON array to GitHub Actions matrix format
           # Each model becomes a separate matrix item with individual properties
           matrix_json=$(jq -r '.[] | {
-            gguf_url: .gguf_url,
+            hf_repository: .hf_repository,
             repository: .repository,
-            tag: .tag,
+            weights: .weights,
+            quantization: .quantization,
+            llama_cpp_tag: "'${{ inputs.llama_cpp_tag }}'",
             license_url: .license_url
           }' models.json | jq -s 'map(.)' | jq -c '.')
           
@@ -95,13 +107,16 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: 'linux/arm64'
-          file: ./Dockerfile.gguf
+          file: ./Dockerfile.safetensors
+          platforms: 'linux/amd64'
           build-args: |          
-            GGUF_FILE_URL=${{ matrix.model.gguf_url }}
-            LICENSE_URL=${{ matrix.model.license_url }}
+            HUGGINGFACE_REPOSITORY=${{ matrix.model.hf_repository }}
+            LICENSE=${{ matrix.model.license_url }}
             HUB_REPOSITORY=${{ secrets.DOCKER_USER_STAGING }}/${{ matrix.model.repository }}
-            TAG=${{ matrix.model.tag }}
+            WEIGHTS=${{ matrix.model.weights }}
+            QUANTIZATION=${{ matrix.model.quantization }}
+            LLAMA_CPP_TAG=${{ matrix.model.llama_cpp_tag }}
           secrets: |
             DOCKER_USERNAME=${{ secrets.DOCKER_USER_STAGING }}
             DOCKER_PASSWORD=${{ secrets.DOCKER_OAT_STAGING }}
+            HUGGINGFACE_TOKEN=${{ secrets.HUGGINGFACE_TOKEN }}
