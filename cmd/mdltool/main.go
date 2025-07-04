@@ -380,7 +380,7 @@ func cmdRm(client *distribution.Client, args []string) int {
 
 	reference := args[0]
 
-	if err := client.DeleteModel(reference, force); err != nil {
+	if _, err := client.DeleteModel(reference, force); err != nil {
 		fmt.Fprintf(os.Stderr, "Error removing model: %v\n", err)
 		return 1
 	}

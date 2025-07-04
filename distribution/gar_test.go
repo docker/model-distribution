@@ -52,7 +52,7 @@ func TestGARIntegration(t *testing.T) {
 		if err := client.PushModel(context.Background(), garTag, nil); err != nil {
 			t.Fatalf("Failed to push model to ECR: %v", err)
 		}
-		if err := client.DeleteModel(garTag, false); err != nil { // cleanup
+		if _, err := client.DeleteModel(garTag, false); err != nil { // cleanup
 			t.Fatalf("Failed to delete model from store: %v", err)
 		}
 	})

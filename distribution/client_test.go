@@ -246,7 +246,7 @@ func TestClientPullModel(t *testing.T) {
 		}
 
 		// Delete the local model to force a pull
-		if err := client.DeleteModel(tag, false); err != nil {
+		if _, err := client.DeleteModel(tag, false); err != nil {
 			t.Fatalf("Failed to delete model: %v", err)
 		}
 
@@ -866,7 +866,7 @@ func TestPush(t *testing.T) {
 	}
 
 	// Delete local copy (so we can test pulling)
-	if err := client.DeleteModel(tag, false); err != nil {
+	if _, err := client.DeleteModel(tag, false); err != nil {
 		t.Fatalf("Failed to delete model: %v", err)
 	}
 

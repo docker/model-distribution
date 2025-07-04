@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -243,14 +244,14 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 }
 
 // DeleteModel deletes a model
-func (c *Client) DeleteModel(reference string, force bool) error {
+func (c *Client) DeleteModel(reference string, force bool) (string, error) {
 	mdl, err := c.store.Read(reference)
 	if err != nil {
-		return err
+		return "", err
 	}
 	id, err := mdl.ID()
 	if err != nil {
-		return fmt.Errorf("getting model ID: %w", err)
+		return "", fmt.Errorf("getting model ID: %w", err)
 	}
 	isTag := id != reference
 
@@ -258,29 +259,35 @@ func (c *Client) DeleteModel(reference string, force bool) error {
 		c.log.Infoln("Untagging model:", reference)
 		if err := c.store.RemoveTags([]string{reference}); err != nil {
 			c.log.Errorln("Failed to untag model:", err, "tag:", reference)
-			return fmt.Errorf("untagging model: %w", err)
+			return "", fmt.Errorf("untagging model: %w", err)
 		}
 	}
 
 	if len(mdl.Tags()) > 1 {
 		if isTag {
-			return nil // we are done after untagging
+			// TODO: This should return the full matching tag.
+			return fmt.Sprintf("Untagged: %s\n", reference), nil
 		} else if !force {
 			// if the reference is not a tag and there are multiple tags, return an error unless forced
-			return fmt.Errorf(
+			return "", fmt.Errorf(
 				"unable to delete %q (must be forced) due to multiple tag references: %w",
 				reference, ErrConflict,
 			)
 		}
 	}
 
+	var untaggedInfo strings.Builder
+	for _, tag := range mdl.Tags() {
+		untaggedInfo.WriteString(fmt.Sprintf("Untagged: %s\n", tag))
+	}
+
 	c.log.Infoln("Deleting model:", id)
 	if err := c.store.Delete(id); err != nil {
 		c.log.Errorln("Failed to delete model:", err, "tag:", reference)
-		return fmt.Errorf("deleting model: %w", err)
+		return "", fmt.Errorf("deleting model: %w", err)
 	}
 	c.log.Infoln("Successfully deleted model:", reference)
-	return nil
+	return untaggedInfo.String(), nil
 }
 
 // Tag adds a tag to a model

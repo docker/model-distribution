@@ -122,7 +122,7 @@ func TestDeleteModel(t *testing.T) {
 			}
 
 			// Attempt to delete the model and check for expected error
-			if err := client.DeleteModel(tc.ref, tc.force); !errors.Is(err, tc.expectedErr) {
+			if _, err := client.DeleteModel(tc.ref, tc.force); !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Expected error %v, got: %v", tc.expectedErr, err)
 			}
 			if tc.expectedErr != nil {
