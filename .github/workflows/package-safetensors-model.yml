@@ -10,11 +10,11 @@ on:
         type: string
       registry_repository:
         description: 'OCI Registry repository'
-        required: true
+        required: false
         type: string
       weights:
         description: 'Model weights tag (e.g., 7B, 13B, medium)'
-        required: true
+        required: false
         type: string
       quantization:
         description: 'Quantization type (e.g., Q4_K_M, Q8_0, F16)'
@@ -28,11 +28,11 @@ on:
         default: 'full-b5763'
       license_url:
         description: 'URL to the license file'
-        required: true
+        required: false
         type: string
       # Multi-model input
       models_json:
-        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"hf_repository":"HuggingFaceTB/SmolLM2-135M-Instruct)", "repository":"repo", "weights":"medium", "quantization":"Q4_K_M", "license_url":"https://..."}]'
+        description: 'JSON array of models to package (alternative to single model inputs). Format: [{"gguf_url":"https://...", "repository":"repo", "tag":"tag", "license_url":"https://..."}]'
         required: false
         type: string
 
@@ -40,34 +40,51 @@ permissions:
   contents: read
 
 jobs:
-  validate-inputs:
+  prepare-matrix:
     runs-on: ubuntu-latest
     outputs:
-      strategy: ${{ steps.determine-strategy.outputs.strategy }}
-      matrix: ${{ steps.determine-strategy.outputs.matrix }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Determine packaging strategy
-        id: determine-strategy
+      - name: Generate matrix
+        id: set-matrix
         run: |
           if [ -n "${{ inputs.models_json }}" ]; then
-            echo "strategy=multi" >> $GITHUB_OUTPUT
-            echo "matrix=${{ inputs.models_json }}" >> $GITHUB_OUTPUT
+            # Use the provided JSON array
+            echo '${{ inputs.models_json }}' > models.json
           elif [ -n "${{ inputs.huggingface_repository }}" ]; then
-            echo "strategy=single" >> $GITHUB_OUTPUT
-            # Create single-item array for matrix strategy
+            # Create single-item array for single model
             single_model='[{"hf_repository":"${{ inputs.huggingface_repository }}", "repository":"${{ inputs.registry_repository }}", "weights":"${{ inputs.weights }}", "quantization":"${{ inputs.quantization }}", "llama_cpp_tag":"${{ inputs.llama_cpp_tag }}", "license_url":"${{ inputs.license_url }}"}]'
-            echo "matrix=$single_model" >> $GITHUB_OUTPUT
+            echo "$single_model" > models.json
           else
             echo "Error: Either provide single model inputs (huggingface_repository, registry_repository, weights) or models_json array"
             exit 1
           fi
+          
+          # Validate JSON format
+          if ! jq empty models.json 2>/dev/null; then
+            echo "Error: Invalid JSON format in models_json input"
+            exit 1
+          fi
+          
+          # Convert JSON array to GitHub Actions matrix format
+          # Each model becomes a separate matrix item with individual properties
+          matrix_json=$(jq -r '.[] | {
+            hf_repository: .hf_repository,
+            repository: .repository,
+            weights: .weights,
+            quantization: .quantization,
+            llama_cpp_tag: .llama_cpp_tag,
+            license_url: .license_url
+          }' models.json | jq -s 'map(.)' | jq -c '.')
+          
+          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
 
   package:
-    needs: validate-inputs
+    needs: prepare-matrix
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        model: ${{ fromJson(needs.validate-inputs.outputs.matrix) }}
+        model: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
       - name: Checkout repository
@@ -98,7 +115,7 @@ jobs:
             HUB_REPOSITORY=${{ secrets.DOCKER_USER_STAGING }}/${{ matrix.model.repository }}
             WEIGHTS=${{ matrix.model.weights }}
             QUANTIZATION=${{ matrix.model.quantization }}
-            LLAMA_CPP_TAG=${{ inputs.llama_cpp_tag }}
+            LLAMA_CPP_TAG=${{ matrix.model.llama_cpp_tag }}
           secrets: |
             DOCKER_USERNAME=${{ secrets.DOCKER_USER_STAGING }}
             DOCKER_PASSWORD=${{ secrets.DOCKER_OAT_STAGING }}
