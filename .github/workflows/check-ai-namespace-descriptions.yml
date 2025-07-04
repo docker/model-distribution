@@ -21,5 +21,52 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run description check script
+        id: check-script
         run: |
-          ./scripts/check-namespace-descriptions.sh --namespace ai
+          # Run the script and capture output
+          output=$(./scripts/check-namespace-descriptions.sh --namespace ai 2>&1)
+          exit_code=$?
+          
+          # Save output for later use
+          echo "script_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$output" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Exit with the same code as the script
+          exit $exit_code
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: |
+                    The automated check for missing repository descriptions in the `ai` namespace has failed.
+                    
+                    *Repository:* ${{ github.repository }}
+                    *Workflow:* ${{ github.workflow }}
+                    *Run ID:* ${{ github.run_id }}
+                    *Commit:* ${{ github.sha }}
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Script Output:*"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "```${{ steps.check-script.outputs.script_output }}```"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Please check the workflow logs and update any repositories missing descriptions."
