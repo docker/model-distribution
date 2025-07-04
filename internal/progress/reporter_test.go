@@ -188,7 +188,22 @@ func TestProgressEmissionScenarios(t *testing.T) {
 			},
 			expectedCount: 1, // Only first update
 			description:   "should not emit updates if too frequent",
-			layerSize:     100,
+			layerSize:     200,
+		},
+		{
+			name: "finsh update",
+			updates: []v1.Update{
+				{Complete: 100}, // First update always sent
+				{Complete: 100}, // Too frequent, no update
+				{Complete: 200}, // Too frequent, but finished, report update
+			},
+			delays: []time.Duration{
+				10 * time.Millisecond, // Too short
+				10 * time.Millisecond, // Too short
+			},
+			expectedCount: 2, // first and last update
+			description:   "should emit updates if finished",
+			layerSize:     200,
 		},
 		{
 			name: "no updates - too few bytes",
