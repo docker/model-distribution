@@ -30,39 +30,49 @@ permissions:
   contents: read
 
 jobs:
-  validate-inputs:
+  prepare-matrix:
     runs-on: ubuntu-latest
     outputs:
-      strategy: ${{ steps.determine-strategy.outputs.strategy }}
-      matrix: ${{ steps.determine-strategy.outputs.matrix }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Determine packaging strategy
-        id: determine-strategy
+      - name: Generate matrix
+        id: set-matrix
         run: |
           if [ -n "${{ inputs.models_json }}" ]; then
-            echo "strategy=multi" >> $GITHUB_OUTPUT
-            # Properly escape the JSON for GitHub Actions output
-            echo "matrix<<EOF" >> $GITHUB_OUTPUT
-            echo "${{ inputs.models_json }}" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            # Use the provided JSON array
+            echo '${{ inputs.models_json }}' > models.json
           elif [ -n "${{ inputs.gguf_file_url }}" ]; then
-            echo "strategy=single" >> $GITHUB_OUTPUT
-            # Create single-item array for matrix strategy
+            # Create single-item array for single model
             single_model='[{"gguf_url":"${{ inputs.gguf_file_url }}", "repository":"${{ inputs.registry_repository }}", "tag":"${{ inputs.tag }}", "license_url":"${{ inputs.license_url }}"}]'
-            echo "matrix<<EOF" >> $GITHUB_OUTPUT
-            echo "$single_model" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "$single_model" > models.json
           else
             echo "Error: Either provide single model inputs (gguf_file_url, registry_repository, tag) or models_json array"
             exit 1
           fi
+          
+          # Validate JSON format
+          if ! jq empty models.json 2>/dev/null; then
+            echo "Error: Invalid JSON format in models_json input"
+            exit 1
+          fi
+          
+          # Convert JSON array to GitHub Actions matrix format
+          # Each model becomes a separate matrix item with individual properties
+          matrix_json=$(jq -r '.[] | {
+            gguf_url: .gguf_url,
+            repository: .repository,
+            tag: .tag,
+            license_url: .license_url
+          }' models.json | jq -s 'map(.)' | jq -c '.')
+          
+          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
 
   package:
-    needs: validate-inputs
+    needs: prepare-matrix
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        model: ${{ fromJson(needs.validate-inputs.outputs.matrix) }}
+        model: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
       - name: Checkout repository
