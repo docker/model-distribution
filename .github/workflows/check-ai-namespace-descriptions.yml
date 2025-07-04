@@ -34,38 +34,45 @@ jobs:
           # Exit with the same code as the script
           exit $exit_code
 
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v2.1.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: |
-                    The automated check for missing repository descriptions in the `ai` namespace has failed.
-                    
-                    *Repository:* ${{ github.repository }}
-                    *Workflow:* ${{ github.workflow }}
-                    *Run ID:* ${{ github.run_id }}
-                    *Commit:* ${{ github.sha }}
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Script Output:*"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "```${{ steps.check-script.outputs.script_output }}```"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "Please check the workflow logs and update any repositories missing descriptions."
+      - name: Debug Slack message (always runs)
+        run: |
+          echo "=== SLACK MESSAGE PREVIEW ==="
+          echo "text: \":warning: Docker Hub AI Namespace Description Check Failed\""
+          echo "blocks:"
+          echo "  - type: \"section\""
+          echo "    text:"
+          echo "      type: \"mrkdwn\""
+          echo "      text: \":warning: *Docker Hub AI Namespace Description Check Failed*\""
+          echo "  - type: \"section\""
+          echo "    text:"
+          echo "      type: \"mrkdwn\""
+          echo "      text: \"\`\`\`${{ steps.check-script.outputs.script_output }}\`\`\`\""
+          echo "  - type: \"section\""
+          echo "    text:"
+          echo "      type: \"mrkdwn\""
+          echo "      text: \"<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>\""
+          echo "=== END SLACK MESSAGE PREVIEW ==="
+
+#      - name: Notify Slack on failure
+#        if: failure()
+#        uses: slackapi/slack-github-action@v2.1.0
+#        with:
+#          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+#          webhook-type: incoming-webhook
+#          payload: |
+#            text: ":warning: Docker Hub AI Namespace Description Check Failed"
+#            blocks:
+#              - type: "section"
+#                text:
+#                  type: "mrkdwn"
+#                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+#              - type: "section"
+#                text:
+#                  type: "mrkdwn"
+#                  text: "```${{ steps.check-script.outputs.script_output }}```"
+#              - type: "section"
+#                text:
+#                  type: "mrkdwn"
+#                  text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
+#
+
