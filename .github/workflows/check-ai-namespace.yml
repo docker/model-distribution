@@ -1,4 +1,4 @@
-name: Check AI Namespace Repository Descriptions
+name: Check AI Namespace Repository Descriptions and Catalog Inclusion
 
 on:
   schedule:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   check-descriptions:
-    name: Check Repository Descriptions
+    name: Check Repository Descriptions and Catalog Inclusion
     runs-on: ubuntu-latest
     
     steps:
@@ -25,10 +25,21 @@ jobs:
           ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
           exit_code=${PIPESTATUS[0]}        
           output=$(cat script.log)
-          echo "Raw Output:"
-          echo "$output"          
           {
             echo 'script_output<<EOF'
+            echo "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
+
+      - name: Run catalog inclusion check script
+        id: catalog-check-script
+        run: |
+          ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
+          exit_code=${PIPESTATUS[0]}        
+          output=$(cat catalog-script.log)      
+          {
+            echo 'catalog_script_output<<EOF'
             echo "$output"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
@@ -37,8 +48,12 @@ jobs:
       - name: Show script output
         if: failure()
         run: |
-          echo "hello!"
           echo "${{ steps.check-script.outputs.script_output }}"
+
+      - name: Show catalog script output
+        if: failure()
+        run: |
+          echo "${{ steps.catalog-check-script.outputs.catalog_script_output }}"
 
       - name: Notify Slack on failure
         if: failure()
@@ -47,16 +62,20 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: ":warning: Docker Hub AI Namespace Description Check Failed"
+            text: ":warning: Docker Hub AI Namespace Check Failed"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+                  text: ":warning: *Docker Hub AI Namespace Check Failed*"
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}
+                  text: "*Description Check Results:*\n${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Catalog Inclusion Check Results:*\n${{ toJson(format('```{0}```', steps.catalog-check-script.outputs.catalog_script_output)) }}"
               - type: "section"
                 text:
                   type: "mrkdwn"
