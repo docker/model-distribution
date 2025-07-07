@@ -1,0 +1,63 @@
+name: Check AI Namespace Repository Descriptions
+
+on:
+  schedule:
+    # Run daily at 9:00 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+  # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  check-descriptions:
+    name: Check Repository Descriptions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run description check script
+        id: check-script
+        run: |
+          ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
+          exit_code=${PIPESTATUS[0]}        
+          output=$(cat script.log)
+          echo "Raw Output:"
+          echo "$output"          
+          {
+            echo 'script_output<<EOF'
+            echo "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
+
+      - name: Show script output
+        if: failure()
+        run: |
+          echo "hello!"
+          echo "${{ steps.check-script.outputs.script_output }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":warning: Docker Hub AI Namespace Description Check Failed"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":warning: *Docker Hub AI Namespace Description Check Failed*"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
