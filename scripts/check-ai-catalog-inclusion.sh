@@ -16,7 +16,7 @@ Usage: $0 --namespace <namespace>
 Check that all Docker Hub AI namespace repositories are included in the Gen AI catalog.
 
 Required Arguments:
-  --namespace <name>    Docker Hub namespace to check (must be 'ai')
+  --namespace <name>    Docker Hub namespace to check (e.g., 'ai')
 EOF
 }
 
