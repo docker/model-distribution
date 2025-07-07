@@ -112,9 +112,9 @@ ai_repos=()
 catalog_repos=()
 missing_from_catalog=()
 
-echo "Fetching AI namespace repositories..."
+echo "Fetching $NAMESPACE namespace repositories..."
 
-# Get all repositories in the AI namespace with pagination
+# Get all repositories in the namespace with pagination
 page=1
 page_size=100
 total_ai_repos=0
@@ -148,7 +148,14 @@ while true; do
     page=$((page + 1))
 done
 
-echo "Found $total_ai_repos repositories in AI namespace"
+echo "Found $total_ai_repos repositories in $NAMESPACE namespace"
+
+# Check if any repositories were found
+if [[ $total_ai_repos -eq 0 ]]; then
+    echo "Error: No repositories found in namespace '$NAMESPACE'" >&2
+    echo "Please verify the namespace exists and contains repositories." >&2
+    exit 1
+fi
 
 echo "Fetching Gen AI catalog..."
 
@@ -163,7 +170,7 @@ while IFS= read -r repo_name; do
 done <<< "$catalog_repo_list"
 
 total_catalog_repos=${#catalog_repos[@]}
-echo "Found $total_catalog_repos AI repositories in Gen AI catalog"
+echo "Found $total_catalog_repos repositories in Gen AI catalog"
 
 echo "Comparing repositories..."
 
@@ -186,9 +193,9 @@ done
 echo ""
 echo "Gen AI Catalog Inclusion Report"
 echo "==============================="
-echo "Total AI namespace repositories: $total_ai_repos"
-echo "AI repositories in Gen AI catalog: $total_catalog_repos"
-echo "AI repositories missing from catalog: ${#missing_from_catalog[@]}"
+echo "Total $NAMESPACE namespace repositories: $total_ai_repos"
+echo "$NAMESPACE repositories in Gen AI catalog: $total_catalog_repos"
+echo "$NAMESPACE repositories missing from catalog: ${#missing_from_catalog[@]}"
 echo ""
 
 # Report detailed results
@@ -196,7 +203,7 @@ has_missing=false
 
 if [[ ${#missing_from_catalog[@]} -gt 0 ]]; then
     has_missing=true
-    echo "AI repositories missing from Gen AI catalog:"
+    echo "$NAMESPACE repositories missing from Gen AI catalog:"
     printf '  - %s\n' "${missing_from_catalog[@]}"
     echo ""
     echo "These repositories should be added to the Gen AI catalog at:"
@@ -206,9 +213,9 @@ fi
 
 # Final result
 if [[ "$has_missing" == true ]]; then
-    echo "❌ FAIL: Some AI repositories are missing from the Gen AI catalog"
+    echo "❌ FAIL: Some $NAMESPACE repositories are missing from the Gen AI catalog"
     exit 1
 else
-    echo "✅ PASS: All AI repositories are included in the Gen AI catalog"
+    echo "✅ PASS: All $NAMESPACE repositories are included in the Gen AI catalog"
     exit 0
 fi
