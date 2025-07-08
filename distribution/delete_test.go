@@ -1,6 +1,7 @@
 package distribution
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"slices"
@@ -123,7 +124,7 @@ func TestDeleteModel(t *testing.T) {
 			}
 
 			// Attempt to delete the model and check for expected error
-			out, err := client.DeleteModel(tc.ref, tc.force)
+			resp, err := client.DeleteModel(tc.ref, tc.force)
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Expected error %v, got: %v", tc.expectedErr, err)
 			}
@@ -131,18 +132,25 @@ func TestDeleteModel(t *testing.T) {
 				return
 			}
 
-			expectedOut := ""
+			expectedOut := DeleteModelResponse{}
 			if slices.Contains(tc.tags, tc.ref) {
 				// tc.ref is a tag
-				expectedOut = "Untagged: " + tc.ref + "\n"
+				ref := "index.docker.io/library/" + tc.ref
+				expectedOut = append(expectedOut, DeleteModelAction{Untagged: &ref})
+				if !tc.untagOnly {
+					expectedOut = append(expectedOut, DeleteModelAction{Deleted: &id})
+				}
 			} else {
 				// tc.ref is an ID
 				for _, tag := range tc.tags {
-					expectedOut += "Untagged: " + tag + "\n"
+					expectedOut = append(expectedOut, DeleteModelAction{Untagged: &tag})
 				}
+				expectedOut = append(expectedOut, DeleteModelAction{Deleted: &tc.ref})
 			}
-			if expectedOut != out {
-				t.Fatalf("Expected output %q, got: %q", expectedOut, out)
+			expectedOutJson, _ := json.Marshal(expectedOut)
+			respJson, _ := json.Marshal(resp)
+			if string(expectedOutJson) != string(respJson) {
+				t.Fatalf("Expected output %s, got: %s", expectedOutJson, respJson)
 			}
 
 			// Verify model ref unreachable by ref (untagged)

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/docker/model-distribution/internal/progress"
-
+	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
@@ -93,14 +93,14 @@ func (s *LocalStore) List() ([]IndexEntry, error) {
 }
 
 // Delete deletes a model by reference
-func (s *LocalStore) Delete(ref string) error {
+func (s *LocalStore) Delete(ref string) (string, []string, error) {
 	idx, err := s.readIndex()
 	if err != nil {
-		return fmt.Errorf("reading models file: %w", err)
+		return "", nil, fmt.Errorf("reading models file: %w", err)
 	}
 	model, _, ok := idx.Find(ref)
 	if !ok {
-		return ErrModelNotFound
+		return "", nil, ErrModelNotFound
 	}
 
 	// Remove manifest file
@@ -140,7 +140,7 @@ func (s *LocalStore) Delete(ref string) error {
 
 	idx = idx.Remove(model.ID)
 
-	return s.writeIndex(idx)
+	return model.ID, model.Tags, s.writeIndex(idx)
 }
 
 // AddTags adds tags to an existing model
@@ -160,15 +160,18 @@ func (s *LocalStore) AddTags(ref string, newTags []string) error {
 }
 
 // RemoveTags removes tags from models
-func (s *LocalStore) RemoveTags(tags []string) error {
+func (s *LocalStore) RemoveTags(tags []string) ([]string, error) {
 	index, err := s.readIndex()
 	if err != nil {
-		return fmt.Errorf("reading modelss index: %w", err)
+		return nil, fmt.Errorf("reading modelss index: %w", err)
 	}
+	var tagRef name.Tag
+	var tagRefs []string
 	for _, tag := range tags {
-		index = index.UnTag(tag)
+		tagRef, index = index.UnTag(tag)
+		tagRefs = append(tagRefs, tagRef.Name())
 	}
-	return s.writeIndex(index)
+	return tagRefs, s.writeIndex(index)
 }
 
 // Version returns the store version

@@ -146,12 +146,15 @@ func TestUntag(t *testing.T) {
 				},
 			},
 		}
-		idx = idx.UnTag("other-tag")
+		tag, idx := idx.UnTag("other-tag")
 		if len(idx.Models) != 2 {
 			t.Fatalf("Expected 2 models, got %d", len(idx.Models))
 		}
 		if len(idx.Models[0].Tags) != 1 {
 			t.Fatalf("Expected 1 tag, got %d", len(idx.Models[0].Tags))
+		}
+		if tag.String() != "other-tag" {
+			t.Fatalf("Expected tag 'other-tag', got '%s'", tag)
 		}
 	})
 }

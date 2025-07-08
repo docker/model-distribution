@@ -151,9 +151,12 @@ func TestStoreAPI(t *testing.T) {
 
 	// Test RemoveTags
 	t.Run("RemoveTags", func(t *testing.T) {
-		err := s.RemoveTags([]string{"api-model:api-v1.0"})
+		tags, err := s.RemoveTags([]string{"api-model:api-v1.0"})
 		if err != nil {
 			t.Fatalf("RemoveTags failed: %v", err)
+		}
+		if tags[0] != "index.docker.io/library/api-model:api-v1.0" {
+			t.Fatalf("Expected removed tag 'index.docker.io/library/api-model:api-v1.0', got '%s'", tags[0])
 		}
 
 		// Verify tag was removed from list
@@ -178,7 +181,7 @@ func TestStoreAPI(t *testing.T) {
 
 	// Test Delete
 	t.Run("Delete", func(t *testing.T) {
-		err := s.Delete("api-model:latest")
+		_, _, err := s.Delete("api-model:latest")
 		if err != nil {
 			t.Fatalf("Delete failed: %v", err)
 		}
@@ -192,7 +195,7 @@ func TestStoreAPI(t *testing.T) {
 
 	// Test Delete Non Existent Model
 	t.Run("Delete", func(t *testing.T) {
-		err := s.Delete("non-existent-model:latest")
+		_, _, err := s.Delete("non-existent-model:latest")
 		if !errors.Is(err, store.ErrModelNotFound) {
 			t.Fatalf("Expected ErrModelNotFound, got %v", err)
 		}
@@ -242,7 +245,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Delete the model
-		if err := s.Delete("blob-test:latest"); err != nil {
+		if _, _, err := s.Delete("blob-test:latest"); err != nil {
 			t.Fatalf("Delete failed: %v", err)
 		}
 
@@ -320,7 +323,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Delete the first model
-		if err := s.Delete("shared-model-1:latest"); err != nil {
+		if _, _, err := s.Delete("shared-model-1:latest"); err != nil {
 			t.Fatalf("Delete first model failed: %v", err)
 		}
 
@@ -368,7 +371,7 @@ func TestStoreAPI(t *testing.T) {
 		}
 
 		// Delete the second model
-		if err := s.Delete("shared-model-2:latest"); err != nil {
+		if _, _, err := s.Delete("shared-model-2:latest"); err != nil {
 			t.Fatalf("Delete second model failed: %v", err)
 		}
 

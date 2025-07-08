@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -243,51 +242,62 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	return model, nil
 }
 
+type DeleteModelAction struct {
+	Untagged *string `json:"Untagged,omitempty"`
+	Deleted  *string `json:"Deleted,omitempty"`
+}
+
+type DeleteModelResponse []DeleteModelAction
+
 // DeleteModel deletes a model
-func (c *Client) DeleteModel(reference string, force bool) (string, error) {
+func (c *Client) DeleteModel(reference string, force bool) (*DeleteModelResponse, error) {
 	mdl, err := c.store.Read(reference)
 	if err != nil {
-		return "", err
+		return &DeleteModelResponse{}, err
 	}
 	id, err := mdl.ID()
 	if err != nil {
-		return "", fmt.Errorf("getting model ID: %w", err)
+		return &DeleteModelResponse{}, fmt.Errorf("getting model ID: %w", err)
 	}
 	isTag := id != reference
 
+	resp := DeleteModelResponse{}
+
 	if isTag {
 		c.log.Infoln("Untagging model:", reference)
-		if err := c.store.RemoveTags([]string{reference}); err != nil {
+		tags, err := c.store.RemoveTags([]string{reference})
+		if err != nil {
 			c.log.Errorln("Failed to untag model:", err, "tag:", reference)
-			return "", fmt.Errorf("untagging model: %w", err)
+			return &DeleteModelResponse{}, fmt.Errorf("untagging model: %w", err)
+		}
+		for _, t := range tags {
+			resp = append(resp, DeleteModelAction{Untagged: &t})
+		}
+		if len(mdl.Tags()) > 1 {
+			return &resp, nil
 		}
 	}
 
-	if len(mdl.Tags()) > 1 {
-		if isTag {
-			// TODO: This should return the full matching tag.
-			return fmt.Sprintf("Untagged: %s\n", reference), nil
-		} else if !force {
-			// if the reference is not a tag and there are multiple tags, return an error unless forced
-			return "", fmt.Errorf(
-				"unable to delete %q (must be forced) due to multiple tag references: %w",
-				reference, ErrConflict,
-			)
-		}
-	}
-
-	var untaggedInfo strings.Builder
-	for _, tag := range mdl.Tags() {
-		untaggedInfo.WriteString(fmt.Sprintf("Untagged: %s\n", tag))
+	if len(mdl.Tags()) > 1 && !force {
+		// if the reference is not a tag and there are multiple tags, return an error unless forced
+		return &DeleteModelResponse{}, fmt.Errorf(
+			"unable to delete %q (must be forced) due to multiple tag references: %w",
+			reference, ErrConflict,
+		)
 	}
 
 	c.log.Infoln("Deleting model:", id)
-	if err := c.store.Delete(id); err != nil {
+	deletedID, tags, err := c.store.Delete(id)
+	if err != nil {
 		c.log.Errorln("Failed to delete model:", err, "tag:", reference)
-		return "", fmt.Errorf("deleting model: %w", err)
+		return &DeleteModelResponse{}, fmt.Errorf("deleting model: %w", err)
 	}
 	c.log.Infoln("Successfully deleted model:", reference)
-	return untaggedInfo.String(), nil
+	for _, t := range tags {
+		resp = append(resp, DeleteModelAction{Untagged: &t})
+	}
+	resp = append(resp, DeleteModelAction{Deleted: &deletedID})
+	return &resp, nil
 }
 
 // Tag adds a tag to a model
