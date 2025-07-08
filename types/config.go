@@ -1,7 +1,6 @@
 package types
 
 import (
-	"strings"
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -26,10 +25,6 @@ const (
 
 	FormatGGUF = Format("gguf")
 )
-
-func IsModelConfig(mt types.MediaType) bool {
-	return strings.HasPrefix(string(mt), string(MediaTypeModelConfigV01))
-}
 
 type Format string
 
