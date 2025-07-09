@@ -60,11 +60,6 @@ type Target interface {
 	Write(context.Context, types.ModelArtifact, io.Writer) error
 }
 
-// Model returns the underlying model artifact for testing purposes
-func (b *Builder) Model() types.ModelArtifact {
-	return b.model
-}
-
 // Build finalizes the artifact and writes it to the given target, reporting progress to the given writer
 func (b *Builder) Build(ctx context.Context, target Target, pw io.Writer) error {
 	return target.Write(ctx, b.model, pw)

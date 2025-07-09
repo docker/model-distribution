@@ -1,6 +1,8 @@
 package builder_test
 
 import (
+	"context"
+	"io"
 	"path/filepath"
 	"testing"
 
@@ -21,8 +23,14 @@ func TestWithMultimodalProjector(t *testing.T) {
 		t.Fatalf("Failed to add multimodal projector: %v", err)
 	}
 
+	// Build the model
+	target := &fakeTarget{}
+	if err := b2.Build(t.Context(), target, nil); err != nil {
+		t.Fatalf("Failed to build model: %v", err)
+	}
+
 	// Verify the model has the expected layers
-	manifest, err := b2.Model().Manifest()
+	manifest, err := target.artifact.Manifest()
 	if err != nil {
 		t.Fatalf("Failed to get manifest: %v", err)
 	}
@@ -71,20 +79,26 @@ func TestWithMultimodalProjectorChaining(t *testing.T) {
 	}
 
 	// Chain multiple operations: license + multimodal projector + context size
-	b2, err := b.WithLicense(filepath.Join("..", "assets", "license.txt"))
+	b, err = b.WithLicense(filepath.Join("..", "assets", "license.txt"))
 	if err != nil {
 		t.Fatalf("Failed to add license: %v", err)
 	}
 
-	b3, err := b2.WithMultimodalProjector(filepath.Join("..", "assets", "dummy.mmproj"))
+	b, err = b.WithMultimodalProjector(filepath.Join("..", "assets", "dummy.mmproj"))
 	if err != nil {
 		t.Fatalf("Failed to add multimodal projector: %v", err)
 	}
 
-	b4 := b3.WithContextSize(4096)
+	b = b.WithContextSize(4096)
+
+	// Build the model
+	target := &fakeTarget{}
+	if err := b.Build(t.Context(), target, nil); err != nil {
+		t.Fatalf("Failed to build model: %v", err)
+	}
 
 	// Verify the final model has all expected layers and properties
-	manifest, err := b4.Model().Manifest()
+	manifest, err := target.artifact.Manifest()
 	if err != nil {
 		t.Fatalf("Failed to get manifest: %v", err)
 	}
@@ -114,7 +128,7 @@ func TestWithMultimodalProjectorChaining(t *testing.T) {
 	}
 
 	// Check context size
-	config, err := b4.Model().Config()
+	config, err := target.artifact.Config()
 	if err != nil {
 		t.Fatalf("Failed to get config: %v", err)
 	}
@@ -125,4 +139,15 @@ func TestWithMultimodalProjectorChaining(t *testing.T) {
 
 	// Note: We can't directly test GGUFPath() and MMPROJPath() on ModelArtifact interface
 	// but we can verify the layers were added with correct media types above
+}
+
+var _ builder.Target = &fakeTarget{}
+
+type fakeTarget struct {
+	artifact types.ModelArtifact
+}
+
+func (ft *fakeTarget) Write(ctx context.Context, artifact types.ModelArtifact, writer io.Writer) error {
+	ft.artifact = artifact
+	return nil
 }
