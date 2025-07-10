@@ -465,6 +465,88 @@ func containsTag(tags []string, tag string) bool {
 	return false
 }
 
+// TestStoreWithMultimodalProjector tests storing and retrieving models with multimodal projector files
+func TestStoreWithMultimodalProjector(t *testing.T) {
+	// Create a temporary directory for the test store
+	tempDir, err := os.MkdirTemp("", "store-mmproj-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create store
+	storePath := filepath.Join(tempDir, "mmproj-model-store")
+	s, err := store.New(store.Options{
+		RootPath: storePath,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	// Create a model with a Multimodal projector
+	model := newTestModelWithMultimodalProjector(t)
+
+	// Write the model to store
+	if err := s.Write(model, []string{"mmproj-model:latest"}, nil); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	// Read the model back
+	readModel, err := s.Read("mmproj-model:latest")
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
+	// Verify the model has MMPROJPath method
+	mmprojPath, err := readModel.MMPROJPath()
+	if err != nil {
+		t.Fatalf("Failed to get multimodal projector path: %v", err)
+	}
+
+	if mmprojPath == "" {
+		t.Error("Expected non-empty multimodal projector path")
+	}
+
+	// Verify the manifest has the correct layers
+	manifest, err := readModel.Manifest()
+	if err != nil {
+		t.Fatalf("Failed to get manifest: %v", err)
+	}
+
+	// Should have 3 layers: GGUF + license + multimodal projector
+	if len(manifest.Layers) != 3 {
+		t.Fatalf("Expected 3 layers, got %d", len(manifest.Layers))
+	}
+
+	// Check that one layer has the multimodal projector media type
+	foundMMProjLayer := false
+	for _, layer := range manifest.Layers {
+		if layer.MediaType == types.MediaTypeMultimodalProjector {
+			foundMMProjLayer = true
+			break
+		}
+	}
+
+	if !foundMMProjLayer {
+		t.Error("Expected to find a layer with multimodal projector media type")
+	}
+
+	// Test List includes the multimodal projector file
+	models, err := s.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	if len(models) != 1 {
+		t.Fatalf("Expected 1 model, got %d", len(models))
+	}
+
+	// Should have 4 files: GGUF blob, license blob, multimodal projector blob, and config
+	if len(models[0].Files) != 4 {
+		t.Fatalf("Expected 4 files (gguf, license, mmproj, config), got %d", len(models[0].Files))
+	}
+}
+
 func newTestModel(t *testing.T) types.ModelArtifact {
 	var mdl types.ModelArtifact
 	var err error
@@ -478,5 +560,40 @@ func newTestModel(t *testing.T) types.ModelArtifact {
 		t.Fatalf("failed to create license layer: %v", err)
 	}
 	mdl = mutate.AppendLayers(mdl, licenseLayer)
+	return mdl
+}
+
+func newTestModelWithMultimodalProjector(t *testing.T) types.ModelArtifact {
+	var mdl types.ModelArtifact
+	var err error
+
+	mdl, err = gguf.NewModel(filepath.Join("testdata", "dummy.gguf"))
+	if err != nil {
+		t.Fatalf("failed to create model from gguf file: %v", err)
+	}
+
+	licenseLayer, err := partial.NewLayer(filepath.Join("testdata", "license.txt"), types.MediaTypeLicense)
+	if err != nil {
+		t.Fatalf("failed to create license layer: %v", err)
+	}
+
+	// Create dummy multimodal projector file for testing
+	tempDir, err := os.MkdirTemp("", "mmproj-test")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+
+	mmprojPath := filepath.Join(tempDir, "dummy.mmproj")
+	mmprojContent := []byte("dummy multimodal projector content for testing")
+	if err := os.WriteFile(mmprojPath, mmprojContent, 0644); err != nil {
+		t.Fatalf("failed to create dummy multimodal projector file: %v", err)
+	}
+
+	mmprojLayer, err := partial.NewLayer(mmprojPath, types.MediaTypeMultimodalProjector)
+	if err != nil {
+		t.Fatalf("failed to create multimodal projector layer: %v", err)
+	}
+
+	mdl = mutate.AppendLayers(mdl, licenseLayer, mmprojLayer)
 	return mdl
 }
