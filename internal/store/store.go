@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/docker/model-distribution/internal/progress"
-	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
@@ -165,11 +164,18 @@ func (s *LocalStore) RemoveTags(tags []string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading modelss index: %w", err)
 	}
-	var tagRef name.Tag
 	var tagRefs []string
 	for _, tag := range tags {
-		tagRef, index = index.UnTag(tag)
+		tagRef, newIndex, err := index.UnTag(tag)
+		if err != nil {
+			// Try to save progress before returning error.
+			if writeIndexErr := s.writeIndex(newIndex); writeIndexErr != nil {
+				return tagRefs, fmt.Errorf("untagging model: %w, also failed to save: %w", err, writeIndexErr)
+			}
+			return tagRefs, fmt.Errorf("untagging model: %w", err)
+		}
 		tagRefs = append(tagRefs, tagRef.Name())
+		index = newIndex
 	}
 	return tagRefs, s.writeIndex(index)
 }

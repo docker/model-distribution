@@ -146,15 +146,26 @@ func TestUntag(t *testing.T) {
 				},
 			},
 		}
-		tag, idx := idx.UnTag("other-tag")
-		if len(idx.Models) != 2 {
-			t.Fatalf("Expected 2 models, got %d", len(idx.Models))
-		}
-		if len(idx.Models[0].Tags) != 1 {
-			t.Fatalf("Expected 1 tag, got %d", len(idx.Models[0].Tags))
-		}
-		if tag.String() != "other-tag" {
-			t.Fatalf("Expected tag 'other-tag', got '%s'", tag)
-		}
+		t.Run("UnTagging existing tag", func(t *testing.T) {
+			tag, idx, err := idx.UnTag("other-tag")
+			if err != nil {
+				t.Fatalf("Error untagging entry: %v", err)
+			}
+			if len(idx.Models) != 2 {
+				t.Fatalf("Expected 2 models, got %d", len(idx.Models))
+			}
+			if len(idx.Models[0].Tags) != 1 {
+				t.Fatalf("Expected 1 tag, got %d", len(idx.Models[0].Tags))
+			}
+			if tag.String() != "other-tag" {
+				t.Fatalf("Expected tag 'other-tag', got '%s'", tag)
+			}
+		})
+		t.Run("UnTagging invalid tag", func(t *testing.T) {
+			_, _, err := idx.UnTag("!@#$%^&*()")
+			if err == nil {
+				t.Fatal("Expected error when untagging non-existing tag, got nil")
+			}
+		})
 	})
 }
