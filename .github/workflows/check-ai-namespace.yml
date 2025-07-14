@@ -25,6 +25,7 @@ jobs:
           echo "output<<EOF" >> "$GITHUB_OUTPUT"
           cat script.log >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   check-catalog:
     name: Check Catalog Inclusion
@@ -42,6 +43,7 @@ jobs:
           echo "output<<EOF" >> "$GITHUB_OUTPUT"
           cat catalog-script.log >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   report-status:
     name: Report and Notify
