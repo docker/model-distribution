@@ -75,8 +75,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Catalog Inclusion Check Results:*\n${{ toJson(format('```{0}```', steps.catalog-check-script.outputs.catalog_script_output)) }}"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
                   text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Logs>"
