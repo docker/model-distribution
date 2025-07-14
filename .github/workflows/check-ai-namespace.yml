@@ -21,6 +21,7 @@ jobs:
 
       - name: Run description check script
         id: check-script
+        continue-on-error: true
         run: |
           ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
           exit_code=${PIPESTATUS[0]}        
@@ -34,6 +35,7 @@ jobs:
 
       - name: Run catalog inclusion check script
         id: catalog-check-script
+        continue-on-error: true
         run: |
           ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
           exit_code=${PIPESTATUS[0]}        
