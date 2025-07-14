@@ -206,16 +206,11 @@ if [[ ${#missing_from_catalog[@]} -gt 0 ]]; then
     echo "$NAMESPACE repositories missing from Gen AI catalog:"
     printf '  - %s\n' "${missing_from_catalog[@]}"
     echo ""
-    echo "These repositories should be added to the Gen AI catalog at:"
-    echo "$CATALOG_URL"
-    echo ""
 fi
 
 # Final result
 if [[ "$has_missing" == true ]]; then
-    echo "❌ FAIL: Some $NAMESPACE repositories are missing from the Gen AI catalog"
     exit 1
 else
-    echo "✅ PASS: All $NAMESPACE repositories are included in the Gen AI catalog"
     exit 0
 fi
