@@ -69,7 +69,8 @@ jobs:
           echo "${{ needs.check-catalog.outputs.catalog_script_output }}"
 
       - name: Notify Slack on failure
-        if: failure()
+        if: |
+          needs.check-descriptions.result == 'failure' || needs.check-catalog.result == 'failure'
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
