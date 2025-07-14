@@ -89,7 +89,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ${{ toJson(format('```{0}```', needs.check-catalog.outputs.catalog_script_output)) }}                
+                  text: ${{ toJson(format('```{0}```', needs.check-catalog.outputs.catalog_script_output)) }}
               - type: "section"
                 text:
                   type: "mrkdwn"
