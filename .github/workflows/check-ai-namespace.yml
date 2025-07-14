@@ -60,11 +60,11 @@ jobs:
     steps:
       - name: Show script output
         run: |
-          echo "${{ needs.check-script.outputs.script_output }}"
+          echo "${{ needs.check-descriptions.outputs.script_output }}"
 
       - name: Show catalog script output
         run: |
-          echo "${{ needs.catalog-check-script.outputs.catalog_script_output }}"
+          echo "${{ needs.check-catalog.outputs.catalog_script_output }}"
 
       - name: Notify Slack on failure
         if: failure()
