@@ -2,10 +2,8 @@ name: Check AI Namespace Repository Descriptions and Catalog Inclusion
 
 on:
   schedule:
-    # Run daily at 9:00 AM UTC
     - cron: '0 9 * * *'
   workflow_dispatch:
-  # Allow manual triggering
 
 permissions:
   contents: read
@@ -21,50 +19,44 @@ jobs:
 
       - name: Run description check script
         id: check-script
-        continue-on-error: true
         run: |
           ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
-          exit_code=${PIPESTATUS[0]}        
-          output=$(cat script.log)
-          {
-            echo 'script_output<<EOF'
-            echo "$output"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-          exit $exit_code
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          echo "output<<EOF" >> "$GITHUB_OUTPUT"
+          cat script.log >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+  check-catalog:
+    name: Check Catalog Inclusion
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Run catalog inclusion check script
         id: catalog-check-script
-        continue-on-error: true
         run: |
           ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
-          exit_code=${PIPESTATUS[0]}        
-          output=$(cat catalog-script.log)      
-          {
-            echo 'catalog_script_output<<EOF'
-            echo "$output"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-          exit $exit_code
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          echo "output<<EOF" >> "$GITHUB_OUTPUT"
+          cat catalog-script.log >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Fail job if any check failed
-        run: |
-          exit_code_1=${{ steps.check-script.outputs.script_exit_code }}
-          exit_code_2=${{ steps.catalog-check-script.outputs.catalog_script_exit_code }}
-          if [ "$exit_code_1" -ne 0 ] || [ "$exit_code_2" -ne 0 ]; then
-            echo "At least one script failed"
-            exit 1
-          fi
+  report-status:
+    name: Report and Notify
+    runs-on: ubuntu-latest
+    needs: [check-descriptions, check-catalog]
 
-      - name: Show script output
-        if: failure()
-        run: |
-          echo "${{ steps.check-script.outputs.script_output }}"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Show catalog script output
-        if: failure()
+      - name: Determine failure and report
         run: |
-          echo "${{ steps.catalog-check-script.outputs.catalog_script_output }}"
+          echo "At least one check failed" && exit 1
+        if: |
+          needs.check-descriptions.outputs.exit_code != '0' || needs.check-catalog.outputs.exit_code != '0'
 
       - name: Notify Slack on failure
         if: failure()
@@ -82,11 +74,11 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}
+                  text: ${{ toJson(format('```{0}```', needs.check-descriptions.outputs.output)) }}
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ${{ toJson(format('```{0}```', steps.catalog-check-script.outputs.catalog_script_output)) }}
+                  ${{ toJson(format('```{0}```', needs.check-catalog.outputs.output)) }}                
               - type: "section"
                 text:
                   type: "mrkdwn"
