@@ -12,7 +12,8 @@ jobs:
   check-descriptions:
     name: Check Repository Descriptions and Catalog Inclusion
     runs-on: ubuntu-latest
-
+    outputs:
+      script_output: ${{ steps.check-script.outputs.script_output }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,7 +34,8 @@ jobs:
   check-catalog:
     name: Check Catalog Inclusion
     runs-on: ubuntu-latest
-
+    outputs:
+      catalog_script_output: ${{ steps.catalog-check-script.outputs.catalog_script_output }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,7 +45,7 @@ jobs:
         run: |
           ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
           exit_code=${PIPESTATUS[0]}        
-          output=$(cat catalog-script.log)      
+          output=$(cat catalog-script.log)
           {
             echo 'catalog_script_output<<EOF'
             echo "$output"
@@ -82,11 +84,11 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ${{ toJson(format('```{0}```', needs.check-descriptions.outputs.output)) }}
+                  text: ${{ toJson(format('```{0}```', needs.check-descriptions.outputs.script_output)) }}
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  ${{ toJson(format('```{0}```', needs.check-catalog.outputs.output)) }}                
+                  ${{ toJson(format('```{0}```', needs.check-catalog.outputs.catalog_script_output)) }}                
               - type: "section"
                 text:
                   type: "mrkdwn"
