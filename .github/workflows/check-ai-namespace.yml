@@ -12,7 +12,7 @@ jobs:
   check-descriptions:
     name: Check Repository Descriptions and Catalog Inclusion
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
         id: check-script
         run: |
           ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit_code=${PIPESTATUS[0]}
           echo "output<<EOF" >> "$GITHUB_OUTPUT"
           cat script.log >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -39,11 +39,10 @@ jobs:
         id: catalog-check-script
         run: |
           ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit_code=${PIPESTATUS[0]}
           echo "output<<EOF" >> "$GITHUB_OUTPUT"
           cat catalog-script.log >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-          exit $exit_code
 
   report-status:
     name: Report and Notify
