@@ -71,7 +71,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Description Check Results:*\n${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}"
+                  text: ${{ toJson(format('```{0}```', steps.check-script.outputs.script_output)) }}
               - type: "section"
                 text:
                   type: "mrkdwn"
