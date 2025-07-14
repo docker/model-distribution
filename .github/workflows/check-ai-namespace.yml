@@ -58,12 +58,10 @@ jobs:
 
     steps:
       - name: Show script output
-        if: failure()
         run: |
           echo "${{ needs.check-script.outputs.script_output }}"
 
       - name: Show catalog script output
-        if: failure()
         run: |
           echo "${{ needs.catalog-check-script.outputs.catalog_script_output }}"
 
