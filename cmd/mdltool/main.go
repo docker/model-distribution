@@ -155,9 +155,11 @@ func cmdPackage(args []string) int {
 	fs := flag.NewFlagSet("package", flag.ExitOnError)
 	var licensePaths stringSliceFlag
 	var contextSize uint64
+	var mmproj string
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
+	fs.StringVar(&mmproj, "mmproj", "", "Path to Multimodal Projector file")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf> <reference>\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -234,6 +236,15 @@ func cmdPackage(args []string) int {
 	if contextSize > 0 {
 		fmt.Println("Setting context size:", contextSize)
 		builder = builder.WithContextSize(contextSize)
+	}
+
+	if mmproj != "" {
+		fmt.Println("Adding multimodal projector file:", mmproj)
+		builder, err = builder.WithMultimodalProjector(mmproj)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding multimodal projector layer for %s: %v\n", mmproj, err)
+			return 1
+		}
 	}
 
 	// Push the image
