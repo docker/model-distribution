@@ -21,10 +21,13 @@ jobs:
         id: check-script
         run: |
           ./scripts/check-namespace-descriptions.sh --namespace ai 2>&1 | tee script.log
-          exit_code=${PIPESTATUS[0]}
-          echo "output<<EOF" >> "$GITHUB_OUTPUT"
-          cat script.log >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          exit_code=${PIPESTATUS[0]}        
+          output=$(cat script.log)
+          {
+            echo 'script_output<<EOF'
+            echo "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
           exit $exit_code
 
   check-catalog:
@@ -39,10 +42,14 @@ jobs:
         id: catalog-check-script
         run: |
           ./scripts/check-ai-catalog-inclusion.sh --namespace ai 2>&1 | tee catalog-script.log
-          exit_code=${PIPESTATUS[0]}
-          echo "output<<EOF" >> "$GITHUB_OUTPUT"
-          cat catalog-script.log >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          exit_code=${PIPESTATUS[0]}        
+          output=$(cat catalog-script.log)      
+          {
+            echo 'catalog_script_output<<EOF'
+            echo "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   report-status:
     name: Report and Notify
@@ -50,14 +57,15 @@ jobs:
     needs: [check-descriptions, check-catalog]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Determine failure and report
+      - name: Show script output
+        if: failure()
         run: |
-          echo "At least one check failed" && exit 1
-        if: |
-          needs.check-descriptions.outputs.exit_code != '0' || needs.check-catalog.outputs.exit_code != '0'
+          echo "${{ needs.check-script.outputs.script_output }}"
+
+      - name: Show catalog script output
+        if: failure()
+        run: |
+          echo "${{ needs.catalog-check-script.outputs.catalog_script_output }}"
 
       - name: Notify Slack on failure
         if: failure()
