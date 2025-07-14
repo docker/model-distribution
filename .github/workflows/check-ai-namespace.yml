@@ -47,6 +47,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           exit $exit_code
 
+      - name: Fail job if any check failed
+        run: |
+          exit_code_1=${{ steps.check-script.outputs.script_exit_code }}
+          exit_code_2=${{ steps.catalog-check-script.outputs.catalog_script_exit_code }}
+          if [ "$exit_code_1" -ne 0 ] || [ "$exit_code_2" -ne 0 ]; then
+            echo "At least one script failed"
+            exit 1
+          fi
+
       - name: Show script output
         if: failure()
         run: |
