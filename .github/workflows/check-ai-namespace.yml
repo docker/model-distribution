@@ -55,6 +55,7 @@ jobs:
     name: Report and Notify
     runs-on: ubuntu-latest
     needs: [check-descriptions, check-catalog]
+    if: always()  # <-- Ensures the job runs regardless of prior failures
 
     steps:
       - name: Show script output
