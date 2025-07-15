@@ -1,12 +1,13 @@
 package store
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
+	"github.com/docker/model-distribution/internal/progress"
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/docker/model-distribution/internal/progress"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
@@ -217,7 +218,7 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
 	}
 
 	// Write the manifest
-	if err := s.writeManifest(mdl); err != nil {
+	if err := s.WriteManifest(mdl); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
 	}
 
@@ -229,6 +230,86 @@ func (s *LocalStore) Write(mdl v1.Image, tags []string, w io.Writer) error {
 	entry, err := newEntry(mdl)
 	if err != nil {
 		return fmt.Errorf("creating index entry: %w", err)
+	}
+
+	// Add the model tags
+	idx = idx.Add(entry)
+	for _, tag := range tags {
+		updatedIdx, err := idx.Tag(entry.ID, tag)
+		if err != nil {
+			fmt.Printf("Warning: failed to tag model %q with tag %q: %v\n", entry.ID, tag, err)
+			continue
+		}
+		idx = updatedIdx
+	}
+
+	return s.writeIndex(idx)
+}
+
+var _ blob = &streamBlob{}
+
+type streamBlob struct {
+	diffID v1.Hash
+	rc     io.ReadCloser
+}
+
+func (s streamBlob) DiffID() (v1.Hash, error) {
+	return s.diffID, nil
+}
+
+func (s streamBlob) Uncompressed() (io.ReadCloser, error) {
+	return s.rc, nil
+}
+
+// Write writes a model to the store
+func (s *LocalStore) Stream(rc io.ReadCloser, tags []string, w io.Writer) error {
+	tr := tar.NewReader(rc)
+
+	entry := IndexEntry{
+		Tags: tags,
+	}
+
+	for hdr, err := tr.Next(); err != io.EOF; hdr, err = tr.Next() {
+		fi := hdr.FileInfo()
+		if fi.IsDir() {
+			continue
+		}
+		fmt.Println("processing", hdr.Name)
+		if filepath.Dir(filepath.Dir(hdr.Name)) == "blobs" {
+			fmt.Println("writing blob", fi.Name())
+			diffID := v1.Hash{
+				Algorithm: "sha256",
+				Hex:       filepath.Base(fi.Name()),
+			}
+			if err := s.writeBlob(&streamBlob{
+				diffID: diffID,
+				rc:     io.NopCloser(tr),
+			}, nil); err != nil {
+				return fmt.Errorf("writing blob: %w", err)
+			}
+			entry.Files = append(entry.Files, s.blobPath(diffID))
+		}
+		if hdr.Name == "manifest.json" {
+			rm, err := io.ReadAll(tr)
+			if err != nil {
+				return fmt.Errorf("reading manifest: %w", err)
+			}
+			digest, _, err := v1.SHA256(bytes.NewBuffer(rm))
+			if err != nil {
+				return fmt.Errorf("digest: %w", err)
+			}
+			fmt.Println("writing manifest", fi.Name())
+			if err := writeFile(s.manifestPath(digest), rm); err != nil {
+				return fmt.Errorf("writing manifest: %w", err)
+			}
+			entry.ID = digest.String()
+		}
+	}
+
+	// Add the model to the index
+	idx, err := s.readIndex()
+	if err != nil {
+		return fmt.Errorf("reading models: %w", err)
 	}
 
 	// Add the model tags

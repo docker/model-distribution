@@ -455,6 +455,35 @@ func TestIncompleteFileHandling(t *testing.T) {
 	}
 }
 
+func TestStream(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "incomplete-file-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create store
+	storePath := filepath.Join(tempDir, "incomplete-model-store")
+	s, err := store.New(store.Options{
+		RootPath: storePath,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	f, err := os.Open("/tmp/alpine.tar")
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer f.Close()
+
+	if err := s.Stream(f, []string{}, nil); err != nil {
+		t.Fatalf("Stream failed: %v", err)
+	}
+	fmt.Println("done")
+
+}
+
 // Helper function to check if a tag is in a slice of tags
 func containsTag(tags []string, tag string) bool {
 	for _, t := range tags {

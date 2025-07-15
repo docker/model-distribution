@@ -17,8 +17,8 @@ func (s *LocalStore) manifestPath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, manifestsDir, hash.Algorithm, hash.Hex)
 }
 
-// writeManifest writes the model's manifest to the store
-func (s *LocalStore) writeManifest(mdl v1.Image) error {
+// WriteManifest writes the model's manifest to the store
+func (s *LocalStore) WriteManifest(mdl v1.Image) error {
 	digest, err := mdl.Digest()
 	if err != nil {
 		return fmt.Errorf("get digest: %w", err)

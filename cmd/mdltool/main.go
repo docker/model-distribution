@@ -11,7 +11,7 @@ import (
 	"github.com/docker/model-distribution/builder"
 	"github.com/docker/model-distribution/distribution"
 	"github.com/docker/model-distribution/registry"
-	"github.com/docker/model-distribution/tar"
+	"github.com/docker/model-distribution/tarball"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -104,6 +104,8 @@ func main() {
 		exitCode = cmdRm(client, args)
 	case "tag":
 		exitCode = cmdTag(client, args)
+	case "import":
+		exitCode = cmdImport(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -158,11 +160,13 @@ func cmdPackage(args []string) int {
 		licensePaths stringSliceFlag
 		contextSize  uint64
 		file         string
+		load         bool
 	)
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
 	fs.StringVar(&file, "file", "", "Write model to the given file instead of pushing to a registry")
+	fs.BoolVar(&load, "load", false, "Load the model to the store instead of pushing to a registry")
 	fs.Parse(args)
 
 	fs.Usage = func() {
@@ -219,7 +223,13 @@ func cmdPackage(args []string) int {
 		err    error
 	)
 	if file != "" {
-		target, err = tar.NewTarget(reference, file)
+		target, err = tarball.NewFileTarget(reference, file)
+	} else if load {
+		//target, err = distribution.NewClient()
+		//if err != nil {
+		//	fmt.Fprintf(os.Stderr, "Failed creating distribution client: %v\n", err)
+		//	return 1
+		//}
 	} else {
 		target, err = registryClient.NewTarget(reference)
 	}
@@ -253,6 +263,27 @@ func cmdPackage(args []string) int {
 	// Push the image
 	if err := builder.Build(ctx, target, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", reference, err)
+		return 1
+	}
+	return 0
+}
+
+func cmdImport(client *distribution.Client, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing argument\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool import <path>\n")
+		return 1
+	}
+	f, err := os.Open(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening model: %v\n", err)
+		return 1
+	}
+	defer f.Close()
+	ctx := context.Background()
+
+	if err := client.ImportModel(ctx, "", f, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error importing model: %v\n", err)
 		return 1
 	}
 	return 0

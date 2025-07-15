@@ -3,11 +3,10 @@ package distribution
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/docker/model-distribution/internal/progress"
 	"github.com/docker/model-distribution/internal/store"
@@ -195,6 +194,66 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 			progressWriter = nil
 		}
 		return fmt.Errorf("writing image to store: %w", err)
+	}
+
+	if err := progress.WriteSuccess(progressWriter, "Model pulled successfully"); err != nil {
+		c.log.Warnf("Failed to write success message: %v", err)
+		// If we fail to write success message, don't try again
+		progressWriter = nil
+	}
+
+	return nil
+}
+
+//func (c *Client) ImportModel(ctx context.Context, reference string, rc io.ReadCloser, progressWriter io.Writer) error {
+//	//tag, err := name.NewTag(reference)
+//	//if err != nil {
+//	//	return fmt.Errorf("parsing reference: %w", err)
+//	//}
+//	mdl, err := tarball.Image(func() (io.ReadCloser, error) {
+//		return rc, nil
+//	}, nil)
+//	if err != nil {
+//		return fmt.Errorf("reading inpute: %w", err)
+//	}
+//	tr := tar.NewReader(rc)
+//	hdr, err := tr.Next()
+//	if err == io.EOF {
+//		return nil
+//	} else if err != nil {
+//		return fmt.Errorf("reading tarball: %w", err)
+//	}
+//	if hdr.Name != "manifest.json" {
+//		return fmt.Errorf("expected manfifest as first entry got %q", hdr.Name)
+//	}
+//	c.store.WriteManifest()
+//	else {
+//		hash := strings.TrimSuffix()
+//	}
+//
+//	// Model doesn't exist in local store or digests don't match, pull from remote
+//
+//	if err = c.store.Write(mdl, []string{}, progressWriter); err != nil {
+//		if writeErr := progress.WriteError(progressWriter, fmt.Sprintf("Error: %s", err.Error())); writeErr != nil {
+//			c.log.Warnf("Failed to write error message: %v", writeErr)
+//			// If we fail to write error message, don't try again
+//			progressWriter = nil
+//		}
+//		return fmt.Errorf("writing image to store: %w", err)
+//	}
+//
+//	if err := progress.WriteSuccess(progressWriter, "Model pulled successfully"); err != nil {
+//		c.log.Warnf("Failed to write success message: %v", err)
+//		// If we fail to write success message, don't try again
+//		progressWriter = nil
+//	}
+//
+//	return nil
+//}
+
+func (c *Client) ImportModel(ctx context.Context, reference string, rc io.ReadCloser, progressWriter io.Writer) error {
+	if err := c.store.Stream(rc, []string{reference}, nil); err != nil {
+		return err
 	}
 
 	if err := progress.WriteSuccess(progressWriter, "Model pulled successfully"); err != nil {
