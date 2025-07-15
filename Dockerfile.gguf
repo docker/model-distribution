@@ -47,7 +47,10 @@ RUN mkdir -p /licenses && \
 # Download mmproj file if URL is provided
 RUN if [ -n "$MMPROJ_URL" ]; then \
         mkdir -p /model && \
-        curl -L "$MMPROJ_URL" -o /model/model.mmproj; \
+        curl -L "$MMPROJ_URL" -o /model/model.mmproj && \
+        echo "MMPROJ file downloaded successfully"; \
+    else \
+        echo "No MMPROJ URL provided, skipping download"; \
     fi
 
 FROM ubuntu:${UBUNTU_VERSION} AS packager
@@ -60,22 +63,29 @@ COPY --link --from=downloader /model/model.gguf /model/model.gguf
 COPY --link --from=downloader /licenses/LICENSE /licenses/LICENSE
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
 
-# Copy mmproj file if it exists
-COPY --link --from=downloader /model/model.mmproj /model/model.mmproj 2>/dev/null || true
-
 # Install ca-certificates for the model-distribution-tool
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Try to copy mmproj file, but don't fail if it doesn't exist
+RUN --mount=type=bind,source=/dev/null,target=/tmp/empty \
+    if [ -n "$MMPROJ_URL" ]; then \
+        cp --from=downloader /model/model.mmproj /model/model.mmproj 2>/dev/null || echo "MMPROJ file not found, will package without it"; \
+    else \
+        echo "No MMPROJ URL provided, will package without mmproj file"; \
+    fi
 
 # Login to Docker Hub using build secrets
 RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
     --mount=type=secret,id=DOCKER_PASSWORD,env=DOCKER_PASSWORD \
-    bash -c 'if [ -n "$MMPROJ_URL" ] && [ -f /model/model.mmproj ]; then \
+    bash -c 'if [ -n "$MMPROJ_URL" ] && [ -f /model/model.mmproj ] && [ -s /model/model.mmproj ]; then \
+        echo "Packaging with multimodal projector file"; \
         model-distribution-tool package \
         --licenses /licenses/LICENSE \
         --mmproj /model/model.mmproj \
         /model/model.gguf \
         $HUB_REPOSITORY:$TAG; \
     else \
+        echo "Packaging without multimodal projector file"; \
         model-distribution-tool package \
         --licenses /licenses/LICENSE \
         /model/model.gguf \
