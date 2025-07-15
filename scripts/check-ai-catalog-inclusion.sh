@@ -112,8 +112,6 @@ ai_repos=()
 catalog_repos=()
 missing_from_catalog=()
 
-echo "Fetching $NAMESPACE namespace repositories..."
-
 # Get all repositories in the namespace with pagination
 page=1
 page_size=100
@@ -148,16 +146,12 @@ while true; do
     page=$((page + 1))
 done
 
-echo "Found $total_ai_repos repositories in $NAMESPACE namespace"
-
 # Check if any repositories were found
 if [[ $total_ai_repos -eq 0 ]]; then
     echo "Error: No repositories found in namespace '$NAMESPACE'" >&2
     echo "Please verify the namespace exists and contains repositories." >&2
     exit 1
 fi
-
-echo "Fetching Gen AI catalog..."
 
 # Fetch and parse catalog
 catalog_html=$(fetch_catalog)
@@ -170,9 +164,6 @@ while IFS= read -r repo_name; do
 done <<< "$catalog_repo_list"
 
 total_catalog_repos=${#catalog_repos[@]}
-echo "Found $total_catalog_repos repositories in Gen AI catalog"
-
-echo "Comparing repositories..."
 
 # Check which AI repos are missing from catalog
 for ai_repo in "${ai_repos[@]}"; do
@@ -206,16 +197,11 @@ if [[ ${#missing_from_catalog[@]} -gt 0 ]]; then
     echo "$NAMESPACE repositories missing from Gen AI catalog:"
     printf '  - %s\n' "${missing_from_catalog[@]}"
     echo ""
-    echo "These repositories should be added to the Gen AI catalog at:"
-    echo "$CATALOG_URL"
-    echo ""
 fi
 
 # Final result
 if [[ "$has_missing" == true ]]; then
-    echo "❌ FAIL: Some $NAMESPACE repositories are missing from the Gen AI catalog"
     exit 1
 else
-    echo "✅ PASS: All $NAMESPACE repositories are included in the Gen AI catalog"
     exit 0
 fi
