@@ -44,15 +44,11 @@ RUN mkdir -p /model && \
 RUN mkdir -p /licenses && \
     curl -L "$LICENSE_URL" -o /licenses/LICENSE
 
-# Download mmproj file if URL is provided, otherwise create empty file
+# Download mmproj file if URL is provided
 RUN if [ -n "$MMPROJ_URL" ]; then \
         mkdir -p /model && \
         curl -L "$MMPROJ_URL" -o /model/model.mmproj && \
         echo "MMPROJ file downloaded successfully"; \
-    else \
-        mkdir -p /model && \
-        touch /model/model.mmproj && \
-        echo "No MMPROJ URL provided, created empty mmproj file"; \
     fi
 
 FROM ubuntu:${UBUNTU_VERSION} AS packager
@@ -63,7 +59,8 @@ ARG MMPROJ_URL
 
 COPY --link --from=downloader /model/model.gguf /model/model.gguf
 COPY --link --from=downloader /licenses/LICENSE /licenses/LICENSE
-COPY --link --from=downloader /model/model.mmproj /model/model.mmproj
+# Copy mmproj file if exists
+COPY --link --from=downloader /model/model.mmproj* /model/model.mmproj
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
 
 # Install ca-certificates for the model-distribution-tool
