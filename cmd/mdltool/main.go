@@ -118,7 +118,7 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Println("\nCommands:")
 	fmt.Println("  pull <reference>                Pull a model from a registry")
-	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and push it to a registry (use --licenses to add license files)")
+	fmt.Println("  package <source> <reference>    Package a model file as an OCI artifact and push it to a registry (use --licenses to add license files, --mmproj for multimodal projector)")
 	fmt.Println("  push <tag>                      Push a model from the content store to the registry")
 	fmt.Println("  list                            List all models")
 	fmt.Println("  get <reference>                 Get a model by reference")
@@ -127,6 +127,7 @@ func printUsage() {
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
+	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --mmproj ./model.mmproj")
 	fmt.Println("  model-distribution-tool push registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
@@ -155,9 +156,11 @@ func cmdPackage(args []string) int {
 	fs := flag.NewFlagSet("package", flag.ExitOnError)
 	var licensePaths stringSliceFlag
 	var contextSize uint64
+	var mmproj string
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
+	fs.StringVar(&mmproj, "mmproj", "", "Path to Multimodal Projector file")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf> <reference>\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -234,6 +237,15 @@ func cmdPackage(args []string) int {
 	if contextSize > 0 {
 		fmt.Println("Setting context size:", contextSize)
 		builder = builder.WithContextSize(contextSize)
+	}
+
+	if mmproj != "" {
+		fmt.Println("Adding multimodal projector file:", mmproj)
+		builder, err = builder.WithMultimodalProjector(mmproj)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding multimodal projector layer for %s: %v\n", mmproj, err)
+			return 1
+		}
 	}
 
 	// Push the image
