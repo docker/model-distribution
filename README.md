@@ -34,7 +34,10 @@ make build
 ./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
 
 # Package a model with a default context size and push to a registry
-./bin/model-distribution-tool ./model.gguf --context-size 2048 registry.example.com/models/llama:v1.0
+./bin/model-distribution-tool package ./model.gguf --context-size 2048 registry.example.com/models/llama:v1.0
+
+# Package a model with a multimodal projector file and push to a registry
+./bin/model-distribution-tool package ./model.gguf --mmproj ./model.mmproj registry.example.com/models/llama:v1.0
 
 # Push a model from the content store to the registry
 ./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
@@ -158,6 +161,7 @@ Use the **Package GGUF model** workflow to download a pre-built GGUF model and p
    - **Registry repository**: `smollm2`
    - **Tag**: `135M-Q4_K_M`
    - **License URL**: `https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md`
+   - **MMPROJ URL**: (optional) URL to multimodal projector file if the model supports multimodal features
 
 This will create: `aistaging/smollm2:135M-Q4_K_M`
 
@@ -169,7 +173,8 @@ For packaging multiple models at once, use the `models_json` input:
     "gguf_url": "https://huggingface.co/unsloth/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_XL.gguf",
     "repository": "qwen3-gguf",
     "tag": "32B-Q4_K_XL",
-    "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md"
+    "license_url": "https://huggingface.co/datasets/choosealicense/licenses/resolve/main/markdown/apache-2.0.md",
+    "mmproj_url": "https://huggingface.co/unsloth/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_XL.mmproj"
   },
   {
     "gguf_url": "https://huggingface.co/unsloth/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q8_0.gguf",
