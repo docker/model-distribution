@@ -44,15 +44,11 @@ RUN mkdir -p /model && \
 RUN mkdir -p /licenses && \
     curl -L "$LICENSE_URL" -o /licenses/LICENSE
 
-# Download mmproj file if URL is provided, otherwise create empty file
+# Download mmproj file if URL is provided
 RUN if [ -n "$MMPROJ_URL" ]; then \
         mkdir -p /model && \
         curl -L "$MMPROJ_URL" -o /model/model.mmproj && \
         echo "MMPROJ file downloaded successfully"; \
-    else \
-        mkdir -p /model && \
-        touch /model/model.mmproj && \
-        echo "No MMPROJ URL provided, created empty mmproj file"; \
     fi
 
 FROM ubuntu:${UBUNTU_VERSION} AS packager
@@ -65,11 +61,11 @@ COPY --link --from=downloader /model/model.gguf /model/model.gguf
 COPY --link --from=downloader /licenses/LICENSE /licenses/LICENSE
 COPY --from=builder /app/bin/model-distribution-tool /usr/local/bin/model-distribution-tool
 
+# Copy mmproj file if it exists (this step will be skipped if file doesn't exist)
+COPY --link --from=downloader /model/model.mmproj* /model/model.mmproj
+
 # Install ca-certificates for the model-distribution-tool
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
-# Copy mmproj file if it exists (this step will be skipped if file doesn't exist)
-COPY --link --from=downloader /model/model.mmproj /model/model.mmproj
 
 # Login to Docker Hub using build secrets
 RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
