@@ -223,19 +223,13 @@ func cmdPackage(args []string) int {
 		err    error
 	)
 	if file != "" {
-		target, err = tarball.NewFileTarget(reference, file)
-	} else if load {
-		//target, err = distribution.NewClient()
-		//if err != nil {
-		//	fmt.Fprintf(os.Stderr, "Failed creating distribution client: %v\n", err)
-		//	return 1
-		//}
+		target = tarball.NewFileTarget(file)
 	} else {
 		target, err = registryClient.NewTarget(reference)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Create packaging target: %v\n", err)
-		return 1
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Create packaging target: %v\n", err)
+			return 1
+		}
 	}
 
 	// Create image with layer

@@ -7,7 +7,6 @@ import (
 	"github.com/docker/model-distribution/types"
 	"github.com/google/go-containerregistry/pkg/name"
 	"io"
-	"os"
 	"path/filepath"
 )
 
@@ -108,24 +107,6 @@ func (t *Target) Write(ctx context.Context, mdl types.ModelArtifact, progressWri
 	}
 
 	return nil
-}
-
-func NewFileTarget(tag string, path string) (*Target, error) {
-	var ref name.Tag
-	if tag != "" {
-		ref, err := name.NewTag(tag)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tag: %q: %w", ref, err)
-		}
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return nil, fmt.Errorf("error creating tar archive at path %q: %w", path, err)
-	}
-	return &Target{
-		reference: ref,
-		writer:    f,
-	}, nil
 }
 
 func NewTarget(w io.Writer) (*Target, error) {

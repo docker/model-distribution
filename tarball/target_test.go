@@ -13,14 +13,15 @@ import (
 )
 
 func TestTarget(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "tar-test")
+	f, err := os.CreateTemp("", "tar-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to file for tar: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
-	path := filepath.Join(tmpDir, "result.tar")
+	path := f.Name()
+	defer os.Remove(f.Name())
+	defer f.Close()
 
-	target, err := tarball.NewFileTarget("", path)
+	target, err := tarball.NewTarget(f)
 	if err != nil {
 		t.Fatalf("Failed to create tar target: %v", err)
 	}
@@ -30,11 +31,7 @@ func TestTarget(t *testing.T) {
 		t.Fatalf("Failed to create model: %v", err)
 	}
 
-	f, err := os.Open(filepath.Join("..", "assets", "dummy.gguf"))
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
-	}
-	blobContents, err := io.ReadAll(f)
+	blobContents, err := os.ReadFile(filepath.Join("..", "assets", "dummy.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
 	}
@@ -68,7 +65,6 @@ func TestTarget(t *testing.T) {
 	hasDir(t, tr, "blobs/sha256")
 	hasFile(t, tr, "blobs/sha256/"+blobHash.Hex, blobContents)
 	hasFile(t, tr, "blobs/sha256/"+configDigest.Hex, configContents)
-	hasFile(t, tr, "manifest.json", manifestContents)
 	hasFile(t, tr, "manifest.json", manifestContents)
 }
 
