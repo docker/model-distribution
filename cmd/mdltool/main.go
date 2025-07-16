@@ -104,8 +104,8 @@ func main() {
 		exitCode = cmdRm(client, args)
 	case "tag":
 		exitCode = cmdTag(client, args)
-	case "import":
-		exitCode = cmdImport(client, args)
+	case "load":
+		exitCode = cmdLoad(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -160,13 +160,11 @@ func cmdPackage(args []string) int {
 		licensePaths stringSliceFlag
 		contextSize  uint64
 		file         string
-		load         bool
 	)
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
 	fs.StringVar(&file, "file", "", "Write model to the given file instead of pushing to a registry")
-	fs.BoolVar(&load, "load", false, "Load the model to the store instead of pushing to a registry")
 	fs.Parse(args)
 
 	fs.Usage = func() {
@@ -262,22 +260,31 @@ func cmdPackage(args []string) int {
 	return 0
 }
 
-func cmdImport(client *distribution.Client, args []string) int {
+func cmdLoad(client *distribution.Client, args []string) int {
+	fs := flag.NewFlagSet("load", flag.ExitOnError)
+	var (
+		tag string
+	)
+	fs.StringVar(&tag, "tag", "", "Apply the tag to the loaded model")
+	fs.Parse(args)
+	args = fs.Args()
+
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Error: missing argument\n")
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool import <path>\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool load <path>\n")
 		return 1
 	}
+
 	f, err := os.Open(args[0])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening model: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error opening model file: %v\n", err)
 		return 1
 	}
 	defer f.Close()
 	ctx := context.Background()
 
-	if err := client.ImportModel(ctx, "", f, os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "Error importing model: %v\n", err)
+	if err := client.LoadModel(ctx, tag, f, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading model: %v\n", err)
 		return 1
 	}
 	return 0

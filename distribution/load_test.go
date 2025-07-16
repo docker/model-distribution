@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestImportModel(t *testing.T) {
+func TestLoadModel(t *testing.T) {
 	// Create temp directory for store
 	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
 	if err != nil {
@@ -29,7 +29,7 @@ func TestImportModel(t *testing.T) {
 	}
 	done := make(chan error)
 	go func() {
-		done <- client.ImportModel(t.Context(), "some/model", pr, nil)
+		done <- client.LoadModel(t.Context(), "some/model", pr, nil)
 	}()
 	// Create model archive
 	bldr, err := builder.FromGGUF(testGGUFFile)
@@ -40,12 +40,8 @@ func TestImportModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build model: %v", err)
 	}
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("Failed to import model: %v", err)
-		}
-	case <-t.Context().Done():
+	if err := <-done; err != nil {
+		t.Fatalf("LoadModel exited with error: %v", err)
 	}
 
 	if _, err := client.GetModel("some/model"); err != nil {
