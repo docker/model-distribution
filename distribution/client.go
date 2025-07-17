@@ -3,11 +3,12 @@ package distribution
 import (
 	"context"
 	"fmt"
+	"github.com/docker/model-distribution/tarball"
+	"github.com/sirupsen/logrus"
 	"io"
+	"log"
 	"net/http"
 	"os"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/docker/model-distribution/internal/progress"
 	"github.com/docker/model-distribution/internal/store"
@@ -198,6 +199,37 @@ func (c *Client) PullModel(ctx context.Context, reference string, progressWriter
 	}
 
 	if err := progress.WriteSuccess(progressWriter, "Model pulled successfully"); err != nil {
+		c.log.Warnf("Failed to write success message: %v", err)
+		// If we fail to write success message, don't try again
+		progressWriter = nil
+	}
+
+	return nil
+}
+
+func (c *Client) LoadModel(reference string, rc io.ReadCloser, progressWriter io.Writer) error {
+	tr := tarball.NewReader(rc)
+	for {
+		diffID, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Error reading blobs from stream: %v", err)
+		}
+		if err := c.store.WriteBlob(diffID, tr); err != nil {
+			return fmt.Errorf("writing blob: %w", err)
+		}
+	}
+	manifest, digest, err := tr.Manifest()
+	if err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+	if err := c.store.WriteManifest(digest, manifest, []string{reference}); err != nil {
+		return fmt.Errorf("write manifest: %w", err)
+	}
+
+	if err := progress.WriteSuccess(progressWriter, "Model loaded successfully"); err != nil {
 		c.log.Warnf("Failed to write success message: %v", err)
 		// If we fail to write success message, don't try again
 		progressWriter = nil

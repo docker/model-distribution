@@ -23,14 +23,14 @@ func (s *LocalStore) blobPath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, blobsDir, hash.Algorithm, hash.Hex)
 }
 
-type blob interface {
+type Blob interface {
 	DiffID() (v1.Hash, error)
 	Uncompressed() (io.ReadCloser, error)
 }
 
-// writeBlob write the blob to the store, reporting progress to the given channel.
+// WriteBlob write the blob to the store, reporting progress to the given channel.
 // If the blob is already in the store, it is a no-op.
-func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
+func (s *LocalStore) writeLayer(layer Blob, progress chan<- v1.Update) error {
 	hash, err := layer.DiffID()
 	if err != nil {
 		return fmt.Errorf("get file hash: %w", err)
@@ -40,7 +40,6 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 		return nil
 	}
 
-	path := s.blobPath(hash)
 	lr, err := layer.Uncompressed()
 	if err != nil {
 		return fmt.Errorf("get blob contents: %w", err)
@@ -48,6 +47,18 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	defer lr.Close()
 	r := withProgress(lr, progress)
 
+	return s.WriteBlob(hash, r)
+}
+
+// WriteBlob write the blob to the store, reporting progress to the given channel.
+// If the blob is already in the store, it is a no-op.
+func (s *LocalStore) WriteBlob(diffID v1.Hash, r io.Reader) error {
+	if s.hasBlob(diffID) {
+		// todo: write something to the progress channel (we probably need to redo progress reporting a little bit)
+		return nil
+	}
+
+	path := s.blobPath(diffID)
 	f, err := createFile(incompletePath(path))
 	if err != nil {
 		return fmt.Errorf("create blob file: %w", err)
@@ -56,7 +67,7 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	defer f.Close()
 
 	if _, err := io.Copy(f, r); err != nil {
-		return fmt.Errorf("copy blob %q to store: %w", hash.String(), err)
+		return fmt.Errorf("copy blob %q to store: %w", diffID.String(), err)
 	}
 
 	f.Close() // Rename will fail on Windows if the file is still open.
@@ -65,6 +76,44 @@ func (s *LocalStore) writeBlob(layer blob, progress chan<- v1.Update) error {
 	}
 	return nil
 }
+
+// WriteBlob write the blob to the store, reporting progress to the given channel.
+// If the blob is already in the store, it is a no-op.
+//func (s *LocalStore) importBlobs(tr tar.Reader error {
+//	hash, err := layer.DiffID()
+//	if err != nil {
+//		return fmt.Errorf("get file hash: %w", err)
+//	}
+//	if s.hasBlob(hash) {
+//		// todo: write something to the progress channel (we probably need to redo progress reporting a little bit)
+//		return nil
+//	}
+//
+//	path := s.blobPath(hash)
+//	lr, err := layer.Uncompressed()
+//	if err != nil {
+//		return fmt.Errorf("get blob contents: %w", err)
+//	}
+//	defer lr.Close()
+//	r := withProgress(lr, progress)
+//
+//	f, err := createFile(incompletePath(path))
+//	if err != nil {
+//		return fmt.Errorf("create blob file: %w", err)
+//	}
+//	defer os.Remove(incompletePath(path))
+//	defer f.Close()
+//
+//	if _, err := io.Copy(f, r); err != nil {
+//		return fmt.Errorf("copy blob %q to store: %w", hash.String(), err)
+//	}
+//
+//	f.Close() // Rename will fail on Windows if the file is still open.
+//	if err := os.Rename(incompletePath(path), path); err != nil {
+//		return fmt.Errorf("rename blob file: %w", err)
+//	}
+//	return nil
+//}
 
 // removeBlob removes the blob with the given hash from the store.
 func (s *LocalStore) removeBlob(hash v1.Hash) error {

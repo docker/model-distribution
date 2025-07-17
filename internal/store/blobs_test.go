@@ -22,7 +22,7 @@ func TestBlobs(t *testing.T) {
 		t.Fatalf("error creating store: %v", err)
 	}
 
-	t.Run("writeBlob with missing dir", func(t *testing.T) {
+	t.Run("WriteBlob with missing dir", func(t *testing.T) {
 		// remove blobs directory to ensure it is recreated as needed
 		if err := os.RemoveAll(store.blobsDir()); err != nil {
 			t.Fatalf("expected blobs directory not be present")
@@ -37,7 +37,7 @@ func TestBlobs(t *testing.T) {
 		}
 
 		// write the blob
-		if err := store.writeBlob(blob, nil); err != nil {
+		if err := store.writeLayer(blob, nil); err != nil {
 			t.Fatalf("error writing blob: %v", err)
 		}
 
@@ -59,7 +59,7 @@ func TestBlobs(t *testing.T) {
 		}
 	})
 
-	t.Run("writeBlob fails", func(t *testing.T) {
+	t.Run("WriteBlob fails", func(t *testing.T) {
 		// simulate lingering incomplete blob file (if program crashed)
 		hash := v1.Hash{
 			Algorithm: "some-alg",
@@ -69,7 +69,7 @@ func TestBlobs(t *testing.T) {
 			t.Fatalf("error creating incomplete blob file for test: %v", err)
 		}
 
-		if err := store.writeBlob(&fakeBlob{
+		if err := store.writeLayer(&fakeBlob{
 			readCloser: &errorReader{},
 			hash:       hash,
 		}, nil); err == nil {
@@ -87,7 +87,7 @@ func TestBlobs(t *testing.T) {
 		}
 	})
 
-	t.Run("writeBlob reuses existing blob", func(t *testing.T) {
+	t.Run("WriteBlob reuses existing blob", func(t *testing.T) {
 		// simulate existing blob
 		hash := v1.Hash{
 			Algorithm: "some-alg",
@@ -97,7 +97,7 @@ func TestBlobs(t *testing.T) {
 			t.Fatalf("error creating incomplete blob file for test: %v", err)
 		}
 
-		if err := store.writeBlob(&fakeBlob{
+		if err := store.writeLayer(&fakeBlob{
 			readCloser: &errorReader{}, // will error if existing blob is not reused
 			hash:       hash,
 		}, nil); err != nil {
