@@ -74,12 +74,12 @@ RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
         model-distribution-tool package \
         --licenses /licenses/LICENSE \
         --mmproj /model/model.mmproj \
-        /model/model.gguf \
-        $HUB_REPOSITORY:$TAG; \
+        --tag  $HUB_REPOSITORY:$TAG \
+        /model/model.gguf; \
     else \
         echo "Packaging without multimodal projector file"; \
         model-distribution-tool package \
         --licenses /licenses/LICENSE \
-        /model/model.gguf \
-        $HUB_REPOSITORY:$TAG; \
+        --tag  $HUB_REPOSITORY:$TAG \
+        /model/model.gguf; \
     fi'

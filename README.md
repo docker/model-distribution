@@ -28,16 +28,22 @@ make build
 ./bin/model-distribution-tool pull registry.example.com/models/llama:v1.0
 
 # Package a model and push to a registry
-./bin/model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0
+./bin/model-distribution-tool package --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
 # Package a model with license files and push to a registry
-./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt ./model.gguf registry.example.com/models/llama:v1.0
+./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
 # Package a model with a default context size and push to a registry
-./bin/model-distribution-tool package ./model.gguf --context-size 2048 registry.example.com/models/llama:v1.0
+./bin/model-distribution-tool package --context-size 2048 --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
 # Package a model with a multimodal projector file and push to a registry
-./bin/model-distribution-tool package ./model.gguf --mmproj ./model.mmproj registry.example.com/models/llama:v1.0
+./bin/model-distribution-tool package --mmproj ./model.mmproj --tag registry.example.com/models/llama:v1.0 ./model.gguf
+
+# Package a model and output the result to a file
+./bin/model-distribution-tool package --file ./model.tar ./model.gguf
+
+# Load a model from an archive into the local store
+./bin/model-distribution-tool load ./model.tar
 
 # Push a model from the content store to the registry
 ./bin/model-distribution-tool push registry.example.com/models/llama:v1.0
