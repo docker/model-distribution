@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/static"
 )
 
 func TestBlobs(t *testing.T) {
@@ -22,7 +22,7 @@ func TestBlobs(t *testing.T) {
 		t.Fatalf("error creating store: %v", err)
 	}
 
-	t.Run("writeBlob with missing dir", func(t *testing.T) {
+	t.Run("WriteBlob with missing dir", func(t *testing.T) {
 		// remove blobs directory to ensure it is recreated as needed
 		if err := os.RemoveAll(store.blobsDir()); err != nil {
 			t.Fatalf("expected blobs directory not be present")
@@ -30,14 +30,13 @@ func TestBlobs(t *testing.T) {
 
 		// create the blob
 		expectedContent := "some data"
-		blob := static.NewLayer([]byte(expectedContent), "application/vnd.example.some.mt")
-		hash, err := blob.DiffID()
+		hash, _, err := v1.SHA256(bytes.NewBuffer([]byte(expectedContent)))
 		if err != nil {
-			t.Fatalf("error getting blob hash: %v", err)
+			t.Fatalf("error calculating hash: %v", err)
 		}
 
 		// write the blob
-		if err := store.writeBlob(blob, nil); err != nil {
+		if err := store.WriteBlob(hash, bytes.NewBuffer([]byte(expectedContent))); err != nil {
 			t.Fatalf("error writing blob: %v", err)
 		}
 
@@ -59,7 +58,7 @@ func TestBlobs(t *testing.T) {
 		}
 	})
 
-	t.Run("writeBlob fails", func(t *testing.T) {
+	t.Run("WriteBlob fails", func(t *testing.T) {
 		// simulate lingering incomplete blob file (if program crashed)
 		hash := v1.Hash{
 			Algorithm: "some-alg",
@@ -69,10 +68,7 @@ func TestBlobs(t *testing.T) {
 			t.Fatalf("error creating incomplete blob file for test: %v", err)
 		}
 
-		if err := store.writeBlob(&fakeBlob{
-			readCloser: &errorReader{},
-			hash:       hash,
-		}, nil); err == nil {
+		if err := store.WriteBlob(hash, &errorReader{}); err == nil {
 			t.Fatalf("expected error writing blob")
 		}
 
@@ -87,20 +83,18 @@ func TestBlobs(t *testing.T) {
 		}
 	})
 
-	t.Run("writeBlob reuses existing blob", func(t *testing.T) {
+	t.Run("WriteBlob reuses existing blob", func(t *testing.T) {
 		// simulate existing blob
 		hash := v1.Hash{
 			Algorithm: "some-alg",
 			Hex:       "some-hash",
 		}
-		if err := writeFile(store.blobPath(hash), []byte("some-data")); err != nil {
-			t.Fatalf("error creating incomplete blob file for test: %v", err)
+
+		if err := store.WriteBlob(hash, bytes.NewReader([]byte("some-data"))); err != nil {
+			t.Fatalf("error writing blob: %v", err)
 		}
 
-		if err := store.writeBlob(&fakeBlob{
-			readCloser: &errorReader{}, // will error if existing blob is not reused
-			hash:       hash,
-		}, nil); err != nil {
+		if err := store.WriteBlob(hash, &errorReader{}); err != nil {
 			t.Fatalf("error writing blob: %v", err)
 		}
 
@@ -115,19 +109,6 @@ func TestBlobs(t *testing.T) {
 			t.Fatalf("unexpected blob content: got %v expected %s", string(content), "some-data")
 		}
 	})
-}
-
-type fakeBlob struct {
-	readCloser io.ReadCloser
-	hash       v1.Hash
-}
-
-func (f fakeBlob) DiffID() (v1.Hash, error) {
-	return f.hash, nil
-}
-
-func (f fakeBlob) Uncompressed() (io.ReadCloser, error) {
-	return f.readCloser, nil
 }
 
 var _ io.Reader = &errorReader{}

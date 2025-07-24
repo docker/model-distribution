@@ -11,6 +11,7 @@ import (
 	"github.com/docker/model-distribution/builder"
 	"github.com/docker/model-distribution/distribution"
 	"github.com/docker/model-distribution/registry"
+	"github.com/docker/model-distribution/tarball"
 )
 
 // stringSliceFlag is a flag that can be specified multiple times to collect multiple string values
@@ -103,6 +104,8 @@ func main() {
 		exitCode = cmdRm(client, args)
 	case "tag":
 		exitCode = cmdTag(client, args)
+	case "load":
+		exitCode = cmdLoad(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -154,15 +157,23 @@ func cmdPull(client *distribution.Client, args []string) int {
 
 func cmdPackage(args []string) int {
 	fs := flag.NewFlagSet("package", flag.ExitOnError)
-	var licensePaths stringSliceFlag
-	var contextSize uint64
-	var mmproj string
+	var (
+		licensePaths stringSliceFlag
+		contextSize  uint64
+		file         string
+		tag          string
+		mmproj       string
+	)
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
 	fs.Uint64Var(&contextSize, "context-size", 0, "Context size in tokens")
 	fs.StringVar(&mmproj, "mmproj", "", "Path to Multimodal Projector file")
+	fs.StringVar(&file, "file", "", "Write archived model to the given file")
+	fs.StringVar(&tag, "tag", "", "Push model to the given registry tag")
+	fs.Parse(args)
+
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf> <reference>\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf>\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fs.PrintDefaults()
 	}
@@ -173,14 +184,18 @@ func cmdPackage(args []string) int {
 	}
 	args = fs.Args()
 
-	if len(args) < 2 {
+	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Error: missing arguments\n")
+		fs.Usage()
+		return 1
+	}
+	if file == "" && tag == "" {
+		fmt.Fprintf(os.Stderr, "Error: one of --file or --tag is required\n")
 		fs.Usage()
 		return 1
 	}
 
 	source := args[0]
-	reference := args[1]
 	ctx := context.Background()
 
 	// Check if source file exists
@@ -210,11 +225,18 @@ func cmdPackage(args []string) int {
 	// Create registry client once with all options
 	registryClient := registry.NewClient(registryClientOpts...)
 
-	// Parse the reference
-	target, err := registryClient.NewTarget(reference)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing reference: %v\n", err)
-		return 1
+	var (
+		target builder.Target
+		err    error
+	)
+	if file != "" {
+		target = tarball.NewFileTarget(file)
+	} else {
+		target, err = registryClient.NewTarget(tag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Create packaging target: %v\n", err)
+			return 1
+		}
 	}
 
 	// Create image with layer
@@ -250,9 +272,59 @@ func cmdPackage(args []string) int {
 
 	// Push the image
 	if err := builder.Build(ctx, target, os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing model %q to registry: %v\n", reference, err)
+		fmt.Fprintf(os.Stderr, "Error writing model to registry: %v\n", err)
 		return 1
 	}
+	if tag != "" {
+		fmt.Printf("Successfully packaged and pushed model: %s\n", tag)
+	} else {
+		fmt.Printf("Successfully packaged model to file: %s\n", file)
+	}
+	return 0
+}
+
+func cmdLoad(client *distribution.Client, args []string) int {
+	fs := flag.NewFlagSet("load", flag.ExitOnError)
+	var (
+		tag string
+	)
+	fs.StringVar(&tag, "tag", "", "Apply tag to the loaded model")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool load [OPTIONS] <path-to-archive>\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+	}
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		return 1
+	}
+	args = fs.Args()
+
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Error: missing required argument\n")
+		fs.Usage()
+		return 1
+	}
+	path := args[0]
+
+	f, err := os.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening model file: %v\n", err)
+		return 1
+	}
+	defer f.Close()
+
+	id, err := client.LoadModel(f, os.Stdout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading model: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(os.Stdout, "Loaded model:", id)
+	if err := client.Tag(id, tag); err != nil {
+		fmt.Fprintf(os.Stderr, "Error tagging model: %v\n", err)
+	}
+	fmt.Fprintln(os.Stdout, "Tagged model:", tag)
 	return 0
 }
 

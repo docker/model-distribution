@@ -75,5 +75,5 @@ RUN --mount=type=secret,id=DOCKER_USERNAME,env=DOCKER_USERNAME \
     --mount=type=secret,id=DOCKER_PASSWORD,env=DOCKER_PASSWORD \
     model-distribution-tool package \
     --licenses /licenses/LICENSE \
-    /model/model.gguf \
-    $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION
+    --tag $HUB_REPOSITORY:$WEIGHTS-$QUANTIZATION \
+    /model/model.gguf
