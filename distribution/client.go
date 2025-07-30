@@ -287,6 +287,13 @@ func (c *Client) GetModel(reference string) (types.Model, error) {
 	return model, nil
 }
 
+// IsModelInStore checks if a model with the given reference is in the local store
+func (c *Client) IsModelInStore(reference string) bool {
+	c.log.Infoln("Checking model by reference:", reference)
+	_, err := c.store.Read(reference)
+	return err == nil
+}
+
 type DeleteModelAction struct {
 	Untagged *string `json:"Untagged,omitempty"`
 	Deleted  *string `json:"Deleted,omitempty"`
