@@ -99,12 +99,7 @@ jobs:
           fi
           
           echo "Found tags:"
-          echo "$TAGS"
-          
-          # Debug: Show what we're passing to jq
-          echo "Debug: Repository name: '$REPOSITORY'"
-          echo "Debug: Tags to process:"
-          echo "$TAGS" | cat -n
+          echo "$TAGS"          
           
           # Convert tags to JSON matrix format using jq for proper escaping
           # Create a temporary file to ensure proper handling
@@ -114,9 +109,7 @@ jobs:
             split("\n") | 
             map(select(length > 0)) | 
             map({"repository": $repo, "tag": .})
-          ')
-          
-          echo "Debug: Raw jq output: '$matrix_json'"
+          ')      
           
           # Validate the JSON is not empty
           if [ "$matrix_json" = "[]" ] || [ -z "$matrix_json" ]; then
@@ -185,7 +178,7 @@ jobs:
           echo "Copying from: ${{ steps.images.outputs.source_image }}"
           echo "Copying to: ${{ steps.images.outputs.target_image }}"
           
-          #crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
+          crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
           
           echo "Image promotion completed successfully ✓"
           echo "Model ${{ matrix.image.repository }}:${{ matrix.image.tag }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
