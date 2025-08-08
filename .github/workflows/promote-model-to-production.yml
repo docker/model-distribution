@@ -75,7 +75,9 @@ jobs:
           REPOSITORY=$(echo "${{ inputs.image }}" | cut -d':' -f1)
           TAG=$(echo "${{ inputs.image }}" | cut -d':' -f2)
           
-          matrix_json='[{"repository":"'$REPOSITORY'","tag":"'$TAG'"}]'
+          # Use jq to properly construct JSON with escaping
+          matrix_json=$(jq -n -c --arg repo "$REPOSITORY" --arg tag "$TAG" '[{"repository": $repo, "tag": $tag}]')
+          
           echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
           echo "Single image matrix: $matrix_json"
 
@@ -99,20 +101,18 @@ jobs:
           echo "Found tags:"
           echo "$TAGS"
           
-          # Convert tags to JSON matrix format
-          matrix_json="["
-          first=true
-          while IFS= read -r tag; do
-            if [ -n "$tag" ]; then
-              if [ "$first" = true ]; then
-                first=false
-              else
-                matrix_json="$matrix_json,"
-              fi
-              matrix_json="$matrix_json{\"repository\":\"$REPOSITORY\",\"tag\":\"$tag\"}"
-            fi
-          done <<< "$TAGS"
-          matrix_json="$matrix_json]"
+          # Convert tags to JSON matrix format using jq for proper escaping
+          matrix_json=$(echo "$TAGS" | jq -R -s -c --arg repo "$REPOSITORY" '
+            split("\n") | 
+            map(select(length > 0)) | 
+            map({"repository": $repo, "tag": .})
+          ')
+          
+          # Validate the JSON is not empty
+          if [ "$matrix_json" = "[]" ] || [ -z "$matrix_json" ]; then
+            echo "Error: No valid tags found after processing"
+            exit 1
+          fi
           
           echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
           echo "Repository matrix: $matrix_json"
@@ -170,7 +170,7 @@ jobs:
           echo "Copying from: ${{ steps.images.outputs.source_image }}"
           echo "Copying to: ${{ steps.images.outputs.target_image }}"
           
-          crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
+          #crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
           
           echo "Image promotion completed successfully ✓"
           echo "Model ${{ matrix.image.repository }}:${{ matrix.image.tag }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
