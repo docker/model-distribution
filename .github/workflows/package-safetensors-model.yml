@@ -22,10 +22,10 @@ on:
         type: string
         default: 'Q4_K_M'
       llama_cpp_tag:
-        description: 'Llama.cpp Docker image tag'
+        description: 'Llama.cpp Docker image tag: https://github.com/ggml-org/llama.cpp/pkgs/container/llama.cpp/versions?filters%5Bversion_type%5D=tagged'
         required: true
         type: string
-        default: 'full-b5763'
+        default: 'full-b6115'
       license_url:
         description: 'URL to the license file'
         required: false
