@@ -121,9 +121,20 @@ jobs:
         id: set-matrix
         run: |
           if [ "${{ steps.detect-mode.outputs.mode }}" = "single" ]; then
-            echo "matrix=${{ steps.single-matrix.outputs.matrix }}" >> $GITHUB_OUTPUT
+            FINAL_MATRIX="${{ steps.single-matrix.outputs.matrix }}"
           else
-            echo "matrix=${{ steps.repo-matrix.outputs.matrix }}" >> $GITHUB_OUTPUT
+            FINAL_MATRIX="${{ steps.repo-matrix.outputs.matrix }}"
+          fi
+          
+          echo "Debug: Final matrix before output: $FINAL_MATRIX"
+          
+          # Validate JSON before outputting
+          if echo "$FINAL_MATRIX" | jq empty 2>/dev/null; then
+            echo "matrix=$FINAL_MATRIX" >> $GITHUB_OUTPUT
+            echo "✅ Valid JSON matrix generated"
+          else
+            echo "❌ Invalid JSON generated: $FINAL_MATRIX"
+            exit 1
           fi
 
   promote-images:
@@ -134,6 +145,13 @@ jobs:
         image: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
+      - name: Debug matrix
+        run: |
+          echo "Raw matrix from prepare-matrix job:"
+          echo "${{ needs.prepare-matrix.outputs.matrix }}"
+          echo "Current matrix item:"
+          echo "Repository: ${{ matrix.image.repository }}"
+          echo "Tag: ${{ matrix.image.tag }}"
       - name: Set up Crane
         run: |
           echo "Installing crane..."
