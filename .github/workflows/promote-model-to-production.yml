@@ -25,7 +25,7 @@ jobs:
   prepare-matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix: ${{ steps.detect-mode.outputs.mode == 'single' && steps.single-matrix.outputs.matrix || steps.repo-matrix.outputs.matrix }}
       mode: ${{ steps.detect-mode.outputs.mode }}
     steps:
       - name: Validate inputs
@@ -133,31 +133,6 @@ jobs:
           echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
           echo "Repository matrix: $matrix_json"
 
-      - name: Set final matrix
-        id: set-matrix
-        run: |
-          if [ "${{ steps.detect-mode.outputs.mode }}" = "single" ]; then
-            RAW_MATRIX="${{ steps.single-matrix.outputs.matrix }}"
-          else
-            RAW_MATRIX="${{ steps.repo-matrix.outputs.matrix }}"
-          fi
-          
-          echo "Debug: Raw matrix from step: $RAW_MATRIX"
-          
-          # Use jq to re-parse and ensure proper JSON formatting
-          # This fixes GitHub Actions variable interpolation that strips quotes
-          FINAL_MATRIX=$(echo "$RAW_MATRIX" | jq -c '.')
-          
-          echo "Debug: Final matrix after jq processing: $FINAL_MATRIX"
-          
-          # Validate JSON before outputting
-          if echo "$FINAL_MATRIX" | jq empty 2>/dev/null; then
-            echo "matrix=$FINAL_MATRIX" >> $GITHUB_OUTPUT
-            echo "✅ Valid JSON matrix generated"
-          else
-            echo "❌ Invalid JSON generated: $FINAL_MATRIX"
-            exit 1
-          fi
 
   promote-images:
     needs: prepare-matrix
