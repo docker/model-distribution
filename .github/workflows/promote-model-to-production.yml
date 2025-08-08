@@ -14,7 +14,7 @@ on:
         type: string
         default: 'ai'
       image:
-        description: 'Image to promote in format repository:tag (e.g., smollm2:135M-Q4_K_M)'
+        description: 'Image to promote: repository:tag for specific image (e.g., smollm2:135M-Q4_K_M) OR repository for entire repo (e.g., smollm2)'
         required: true
         type: string
 
@@ -22,8 +22,11 @@ permissions:
   contents: read
 
 jobs:
-  promote-image:
+  prepare-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      mode: ${{ steps.detect-mode.outputs.mode }}
     steps:
       - name: Validate inputs
         run: |
@@ -32,12 +35,105 @@ jobs:
             echo "Error: image is required"
             exit 1
           fi
-          if [[ ! "${{ inputs.image }}" == *":"* ]]; then
-            echo "Error: image must be in format repository:tag (e.g., smollm2:135M-Q4_K_M)"
-            exit 1
-          fi
           echo "All required inputs provided ✓"
 
+      - name: Set up Crane
+        run: |
+          echo "Installing crane..."
+          curl -LO https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz
+          tar -xzvf go-containerregistry_Linux_x86_64.tar.gz crane
+          sudo mv crane /usr/local/bin/
+          crane version
+          echo "Crane installed successfully ✓"
+
+      - name: Log in to DockerHub (source)
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKER_OAT }}
+        run: |
+          echo "Authenticating to DockerHub..."
+          crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+          echo "DockerHub authentication successful ✓"
+
+      - name: Detect promotion mode
+        id: detect-mode
+        run: |
+          if [[ "${{ inputs.image }}" == *":"* ]]; then
+            echo "mode=single" >> $GITHUB_OUTPUT
+            echo "Detected single image promotion mode"
+            echo "Image: ${{ inputs.image }}"
+          else
+            echo "mode=repository" >> $GITHUB_OUTPUT
+            echo "Detected repository promotion mode"
+            echo "Repository: ${{ inputs.image }}"
+          fi
+
+      - name: Generate matrix for single image
+        if: steps.detect-mode.outputs.mode == 'single'
+        id: single-matrix
+        run: |
+          REPOSITORY=$(echo "${{ inputs.image }}" | cut -d':' -f1)
+          TAG=$(echo "${{ inputs.image }}" | cut -d':' -f2)
+          
+          matrix_json='[{"repository":"'$REPOSITORY'","tag":"'$TAG'"}]'
+          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "Single image matrix: $matrix_json"
+
+      - name: Generate matrix for repository
+        if: steps.detect-mode.outputs.mode == 'repository'
+        id: repo-matrix
+        run: |
+          REPOSITORY="${{ inputs.image }}"
+          SOURCE_REPO="${{ inputs.source_namespace }}/$REPOSITORY"
+          
+          echo "Listing tags for repository: $SOURCE_REPO"
+          
+          # Get all tags for the repository
+          TAGS=$(crane ls "$SOURCE_REPO" 2>/dev/null || echo "")
+          
+          if [ -z "$TAGS" ]; then
+            echo "Error: No tags found for repository $SOURCE_REPO or repository does not exist"
+            exit 1
+          fi
+          
+          echo "Found tags:"
+          echo "$TAGS"
+          
+          # Convert tags to JSON matrix format
+          matrix_json="["
+          first=true
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              if [ "$first" = true ]; then
+                first=false
+              else
+                matrix_json="$matrix_json,"
+              fi
+              matrix_json="$matrix_json{\"repository\":\"$REPOSITORY\",\"tag\":\"$tag\"}"
+            fi
+          done <<< "$TAGS"
+          matrix_json="$matrix_json]"
+          
+          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "Repository matrix: $matrix_json"
+
+      - name: Set final matrix
+        id: set-matrix
+        run: |
+          if [ "${{ steps.detect-mode.outputs.mode }}" = "single" ]; then
+            echo "matrix=${{ steps.single-matrix.outputs.matrix }}" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=${{ steps.repo-matrix.outputs.matrix }}" >> $GITHUB_OUTPUT
+          fi
+
+  promote-images:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+      fail-fast: false
+    steps:
       - name: Set up Crane
         run: |
           echo "Installing crane..."
@@ -59,8 +155,8 @@ jobs:
       - name: Construct image URLs
         id: images
         run: |
-          SOURCE_IMAGE="${{ inputs.source_namespace }}/${{ inputs.image }}"
-          TARGET_IMAGE="docker.io/${{ inputs.target_namespace }}/${{ inputs.image }}"
+          SOURCE_IMAGE="${{ inputs.source_namespace }}/${{ matrix.image.repository }}:${{ matrix.image.tag }}"
+          TARGET_IMAGE="docker.io/${{ inputs.target_namespace }}/${{ matrix.image.repository }}:${{ matrix.image.tag }}"
           
           echo "source_image=$SOURCE_IMAGE" >> $GITHUB_OUTPUT
           echo "target_image=$TARGET_IMAGE" >> $GITHUB_OUTPUT
@@ -77,4 +173,29 @@ jobs:
           crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
           
           echo "Image promotion completed successfully ✓"
-          echo "Model ${{ inputs.image }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
+          echo "Model ${{ matrix.image.repository }}:${{ matrix.image.tag }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
+
+  summary:
+    needs: [prepare-matrix, promote-images]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Promotion Summary
+        run: |
+          echo "=== Promotion Summary ==="
+          echo "Mode: ${{ needs.prepare-matrix.outputs.mode }}"
+          echo "Source namespace: ${{ inputs.source_namespace }}"
+          echo "Target namespace: ${{ inputs.target_namespace }}"
+          
+          if [ "${{ needs.prepare-matrix.outputs.mode }}" = "single" ]; then
+            echo "Promoted single image: ${{ inputs.image }}"
+          else
+            echo "Promoted entire repository: ${{ inputs.image }}"
+            echo "Matrix: ${{ needs.prepare-matrix.outputs.matrix }}"
+          fi
+          
+          if [ "${{ needs.promote-images.result }}" = "success" ]; then
+            echo "✅ All promotions completed successfully"
+          else
+            echo "❌ Some promotions failed - check individual job logs"
+          fi
