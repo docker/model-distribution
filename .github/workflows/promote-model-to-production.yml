@@ -101,16 +101,32 @@ jobs:
           echo "Found tags:"
           echo "$TAGS"
           
+          # Debug: Show what we're passing to jq
+          echo "Debug: Repository name: '$REPOSITORY'"
+          echo "Debug: Tags to process:"
+          echo "$TAGS" | cat -n
+          
           # Convert tags to JSON matrix format using jq for proper escaping
-          matrix_json=$(echo "$TAGS" | jq -R -s -c --arg repo "$REPOSITORY" '
+          # Create a temporary file to ensure proper handling
+          echo "$TAGS" > /tmp/tags.txt
+          
+          matrix_json=$(cat /tmp/tags.txt | jq -R -s -c --arg repo "$REPOSITORY" '
             split("\n") | 
             map(select(length > 0)) | 
             map({"repository": $repo, "tag": .})
           ')
           
+          echo "Debug: Raw jq output: '$matrix_json'"
+          
           # Validate the JSON is not empty
           if [ "$matrix_json" = "[]" ] || [ -z "$matrix_json" ]; then
             echo "Error: No valid tags found after processing"
+            exit 1
+          fi
+          
+          # Validate JSON format
+          if ! echo "$matrix_json" | jq empty 2>/dev/null; then
+            echo "Error: Generated invalid JSON: $matrix_json"
             exit 1
           fi
           
