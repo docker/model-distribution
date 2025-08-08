@@ -137,12 +137,18 @@ jobs:
         id: set-matrix
         run: |
           if [ "${{ steps.detect-mode.outputs.mode }}" = "single" ]; then
-            FINAL_MATRIX="${{ steps.single-matrix.outputs.matrix }}"
+            RAW_MATRIX="${{ steps.single-matrix.outputs.matrix }}"
           else
-            FINAL_MATRIX="${{ steps.repo-matrix.outputs.matrix }}"
+            RAW_MATRIX="${{ steps.repo-matrix.outputs.matrix }}"
           fi
           
-          echo "Debug: Final matrix before output: $FINAL_MATRIX"
+          echo "Debug: Raw matrix from step: $RAW_MATRIX"
+          
+          # Use jq to re-parse and ensure proper JSON formatting
+          # This fixes GitHub Actions variable interpolation that strips quotes
+          FINAL_MATRIX=$(echo "$RAW_MATRIX" | jq -c '.')
+          
+          echo "Debug: Final matrix after jq processing: $FINAL_MATRIX"
           
           # Validate JSON before outputting
           if echo "$FINAL_MATRIX" | jq empty 2>/dev/null; then
