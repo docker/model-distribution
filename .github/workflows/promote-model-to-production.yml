@@ -22,11 +22,8 @@ permissions:
   contents: read
 
 jobs:
-  prepare-matrix:
+  promote-model:
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.detect-mode.outputs.mode == 'single' && steps.single-matrix.outputs.matrix || steps.repo-matrix.outputs.matrix }}
-      mode: ${{ steps.detect-mode.outputs.mode }}
     steps:
       - name: Validate inputs
         run: |
@@ -46,7 +43,7 @@ jobs:
           crane version
           echo "Crane installed successfully ✓"
 
-      - name: Log in to DockerHub (source)
+      - name: Log in to DockerHub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USER }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKER_OAT }}
@@ -55,155 +52,45 @@ jobs:
           crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
           echo "DockerHub authentication successful ✓"
 
-      - name: Detect promotion mode
-        id: detect-mode
+      - name: Promote model
         run: |
           if [[ "${{ inputs.image }}" == *":"* ]]; then
-            echo "mode=single" >> $GITHUB_OUTPUT
-            echo "Detected single image promotion mode"
-            echo "Image: ${{ inputs.image }}"
+            # Single tag promotion
+            REPOSITORY=$(echo "${{ inputs.image }}" | cut -d':' -f1)
+            TAG=$(echo "${{ inputs.image }}" | cut -d':' -f2)
+            SOURCE_IMAGE="${{ inputs.source_namespace }}/${{ inputs.image }}"
+            TARGET_IMAGE="docker.io/${{ inputs.target_namespace }}/${{ inputs.image }}"
+            
+            echo "=== Single Tag Promotion ==="
+            echo "Promoting: ${{ inputs.image }}"
+            echo "From: $SOURCE_IMAGE"
+            echo "To: $TARGET_IMAGE"
+            
+            crane copy "$SOURCE_IMAGE" "$TARGET_IMAGE"
+            
+            echo "✅ Successfully promoted ${{ inputs.image }} from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
           else
-            echo "mode=repository" >> $GITHUB_OUTPUT
-            echo "Detected repository promotion mode"
-            echo "Repository: ${{ inputs.image }}"
-          fi
-
-      - name: Generate matrix for single image
-        if: steps.detect-mode.outputs.mode == 'single'
-        id: single-matrix
-        run: |
-          REPOSITORY=$(echo "${{ inputs.image }}" | cut -d':' -f1)
-          TAG=$(echo "${{ inputs.image }}" | cut -d':' -f2)
-          
-          # Use jq to properly construct JSON with escaping
-          matrix_json=$(jq -n -c --arg repo "$REPOSITORY" --arg tag "$TAG" '[{"repository": $repo, "tag": $tag}]')
-          
-          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
-          echo "Single image matrix: $matrix_json"
-
-      - name: Generate matrix for repository
-        if: steps.detect-mode.outputs.mode == 'repository'
-        id: repo-matrix
-        run: |
-          REPOSITORY="${{ inputs.image }}"
-          SOURCE_REPO="${{ inputs.source_namespace }}/$REPOSITORY"
-          
-          echo "Listing tags for repository: $SOURCE_REPO"
-          
-          # Get all tags for the repository
-          TAGS=$(crane ls "$SOURCE_REPO" 2>/dev/null || echo "")
-          
-          if [ -z "$TAGS" ]; then
-            echo "Error: No tags found for repository $SOURCE_REPO or repository does not exist"
-            exit 1
-          fi
-          
-          echo "Found tags:"
-          echo "$TAGS"          
-          
-          # Convert tags to JSON matrix format using jq for proper escaping
-          # Create a temporary file to ensure proper handling
-          echo "$TAGS" > /tmp/tags.txt
-          
-          matrix_json=$(cat /tmp/tags.txt | jq -R -s -c --arg repo "$REPOSITORY" '
-            split("\n") | 
-            map(select(length > 0)) | 
-            map({"repository": $repo, "tag": .})
-          ')      
-          
-          # Validate the JSON is not empty
-          if [ "$matrix_json" = "[]" ] || [ -z "$matrix_json" ]; then
-            echo "Error: No valid tags found after processing"
-            exit 1
-          fi
-          
-          # Validate JSON format
-          if ! echo "$matrix_json" | jq empty 2>/dev/null; then
-            echo "Error: Generated invalid JSON: $matrix_json"
-            exit 1
-          fi
-          
-          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
-          echo "Repository matrix: $matrix_json"
-
-
-  promote-images:
-    needs: prepare-matrix
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
-      fail-fast: false
-    steps:
-      - name: Debug matrix
-        run: |
-          echo "Raw matrix from prepare-matrix job:"
-          echo "${{ needs.prepare-matrix.outputs.matrix }}"
-          echo "Current matrix item:"
-          echo "Repository: ${{ matrix.image.repository }}"
-          echo "Tag: ${{ matrix.image.tag }}"
-      - name: Set up Crane
-        run: |
-          echo "Installing crane..."
-          curl -LO https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz
-          tar -xzvf go-containerregistry_Linux_x86_64.tar.gz crane
-          sudo mv crane /usr/local/bin/
-          crane version
-          echo "Crane installed successfully ✓"
-
-      - name: Log in to DockerHub (destination)
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USER }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKER_OAT }}
-        run: |
-          echo "Authenticating to DockerHub..."
-          crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
-          echo "DockerHub authentication successful ✓"
-
-      - name: Construct image URLs
-        id: images
-        run: |
-          SOURCE_IMAGE="${{ inputs.source_namespace }}/${{ matrix.image.repository }}:${{ matrix.image.tag }}"
-          TARGET_IMAGE="docker.io/${{ inputs.target_namespace }}/${{ matrix.image.repository }}:${{ matrix.image.tag }}"
-          
-          echo "source_image=$SOURCE_IMAGE" >> $GITHUB_OUTPUT
-          echo "target_image=$TARGET_IMAGE" >> $GITHUB_OUTPUT
-          
-          echo "Source image: $SOURCE_IMAGE"
-          echo "Target image: $TARGET_IMAGE"
-
-      - name: Copy image
-        run: |
-          echo "Starting image promotion..."
-          echo "Copying from: ${{ steps.images.outputs.source_image }}"
-          echo "Copying to: ${{ steps.images.outputs.target_image }}"
-          
-          crane copy ${{ steps.images.outputs.source_image }} ${{ steps.images.outputs.target_image }}
-          
-          echo "Image promotion completed successfully ✓"
-          echo "Model ${{ matrix.image.repository }}:${{ matrix.image.tag }} has been promoted from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
-
-  summary:
-    needs: [prepare-matrix, promote-images]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Promotion Summary
-        run: |
-          echo "=== Promotion Summary ==="
-          echo "Mode: ${{ needs.prepare-matrix.outputs.mode }}"
-          echo "Source namespace: ${{ inputs.source_namespace }}"
-          echo "Target namespace: ${{ inputs.target_namespace }}"
-          
-          if [ "${{ needs.prepare-matrix.outputs.mode }}" = "single" ]; then
-            echo "Promoted single image: ${{ inputs.image }}"
-          else
-            echo "Promoted entire repository: ${{ inputs.image }}"
-            echo "Matrix: ${{ needs.prepare-matrix.outputs.matrix }}"
-          fi
-          
-          if [ "${{ needs.promote-images.result }}" = "success" ]; then
-            echo "✅ All promotions completed successfully"
-          else
-            echo "❌ Some promotions failed - check individual job logs"
+            # Repository promotion (all tags)
+            REPOSITORY="${{ inputs.image }}"
+            SOURCE_REPO="${{ inputs.source_namespace }}/$REPOSITORY"
+            TARGET_REPO="docker.io/${{ inputs.target_namespace }}/$REPOSITORY"
+            
+            echo "=== Repository Promotion (All Tags) ==="
+            echo "Promoting all tags for: $REPOSITORY"
+            echo "From: $SOURCE_REPO"
+            echo "To: $TARGET_REPO"
+            
+            # Verify source repository exists
+            if ! crane ls "$SOURCE_REPO" >/dev/null 2>&1; then
+              echo "❌ Error: Source repository $SOURCE_REPO does not exist or has no tags"
+              exit 1
+            fi
+            
+            # Show tags being copied
+            echo "Tags to be copied:"
+            crane ls "$SOURCE_REPO"
+            
+            crane copy --all-tags "$SOURCE_REPO" "$TARGET_REPO"
+            
+            echo "✅ Successfully promoted all tags for $REPOSITORY from ${{ inputs.source_namespace }} to ${{ inputs.target_namespace }}"
           fi
