@@ -29,6 +29,14 @@ on:
         description: 'JSON array of models to package (alternative to single model inputs). Format: [{"gguf_url":"https://...", "repository":"repo", "tag":"tag", "license_url":"https://...", "mmproj_url":"https://..."}]'
         required: false
         type: string
+      repository_visibility:
+        description: 'Repository visibility (private or public)'
+        required: false
+        type: choice
+        options:
+          - private
+          - public
+        default: 'private'
 
 permissions:
   contents: read
@@ -95,6 +103,42 @@ jobs:
           driver: cloud
           endpoint: "${{ secrets.DOCKER_USER_STAGING }}/default"
           install: true
+
+      - name: Create repository with specified visibility
+        if: inputs.repository_visibility == 'private'
+        run: |
+          REPO_NAME="${{ matrix.model.repository }}"
+          NAMESPACE="${{ secrets.DOCKER_USER_STAGING }}"
+          IS_PRIVATE="${{ inputs.repository_visibility == 'private' && 'true' || 'false' }}"
+          
+          echo "Creating repository: $NAMESPACE/$REPO_NAME (private: $IS_PRIVATE)"
+          
+          # Create repository using Docker Hub API
+          response=$(curl -s -w "%{http_code}" -o /tmp/create_repo_response.json \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.DOCKER_OAT_STAGING }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$REPO_NAME\", \"is_private\": $IS_PRIVATE}" \
+            "https://hub.docker.com/v2/namespaces/$NAMESPACE/repositories")
+          
+          http_code="${response: -3}"
+          
+          if [ "$http_code" = "201" ]; then
+            echo "✅ Repository created successfully"
+          elif [ "$http_code" = "400" ]; then
+            # Repository might already exist, check the error message
+            if grep -q "already exists" /tmp/create_repo_response.json 2>/dev/null; then
+              echo "ℹ️ Repository already exists, continuing..."
+            else
+              echo "❌ Error creating repository:"
+              cat /tmp/create_repo_response.json
+              exit 1
+            fi
+          else
+            echo "❌ Unexpected response code: $http_code"
+            cat /tmp/create_repo_response.json
+            exit 1
+          fi
 
       - name: Build and push model
         uses: docker/build-push-action@v6
