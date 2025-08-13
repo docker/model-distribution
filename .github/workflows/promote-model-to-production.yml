@@ -43,17 +43,19 @@ jobs:
           crane version
           echo "Crane installed successfully ✓"
 
-      - name: Log in to DockerHub
+      - name: Promote model
         env:
+          # Staging credentials for reading from source namespace
+          DOCKER_USER_STAGING: ${{ secrets.DOCKER_USER_STAGING }}
+          DOCKER_OAT_STAGING: ${{ secrets.DOCKER_OAT_STAGING }}
+          # Production credentials for writing to target namespace
           DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USER }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKER_OAT }}
         run: |
-          echo "Authenticating to DockerHub..."
-          crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
-          echo "DockerHub authentication successful ✓"
-
-      - name: Promote model
-        run: |
+          echo "Authenticating to DockerHub with staging credentials for source access..."
+          crane auth login index.docker.io -u "$DOCKER_USER_STAGING" -p "$DOCKER_OAT_STAGING"
+          echo "Staging authentication successful ✓"
+          
           if [[ "${{ inputs.image }}" == *":"* ]]; then
             # Single tag promotion
             REPOSITORY=$(echo "${{ inputs.image }}" | cut -d':' -f1)
@@ -65,6 +67,11 @@ jobs:
             echo "Promoting: ${{ inputs.image }}"
             echo "From: $SOURCE_IMAGE"
             echo "To: $TARGET_IMAGE"
+            
+            # Re-authenticate with production credentials for target write access
+            echo "Re-authenticating with production credentials for target access..."
+            crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+            echo "Production authentication successful ✓"
             
             crane copy "$SOURCE_IMAGE" "$TARGET_IMAGE"
             
@@ -89,6 +96,11 @@ jobs:
             # Show tags being copied
             echo "Tags to be copied:"
             crane ls "$SOURCE_REPO"
+            
+            # Re-authenticate with production credentials for target write access
+            echo "Re-authenticating with production credentials for target access..."
+            crane auth login index.docker.io -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+            echo "Production authentication successful ✓"
             
             crane copy --all-tags "$SOURCE_REPO" "$TARGET_REPO"
             
