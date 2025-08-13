@@ -1066,6 +1066,59 @@ func TestClientPushModelNotFound(t *testing.T) {
 	}
 }
 
+func TestIsModelInStoreNotFound(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	if inStore, err := client.IsModelInStore("non-existent-model:latest"); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	} else if inStore {
+		t.Fatalf("Expected model not to be found")
+	}
+}
+
+func TestIsModelInStoreFound(t *testing.T) {
+	// Create temp directory for store
+	tempDir, err := os.MkdirTemp("", "model-distribution-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create client
+	client, err := NewClient(WithStoreRootPath(tempDir))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create a test model
+	model, err := gguf.NewModel(testGGUFFile)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// Push the model to the store
+	if err := client.store.Write(model, []string{"some-repo:some-tag"}, nil); err != nil {
+		t.Fatalf("Failed to push model to store: %v", err)
+	}
+
+	if inStore, err := client.IsModelInStore("some-repo:some-tag"); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	} else if !inStore {
+		t.Fatalf("Expected model to be found")
+	}
+}
+
 // writeToRegistry writes a GGUF model to a registry.
 func writeToRegistry(source, reference string) error {
 
