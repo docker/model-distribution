@@ -136,6 +136,14 @@ func printUsage() {
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
 }
 
+func addDefaultNamespace(model string) string {
+	if strings.Contains(model, "/") {
+		return model
+	}
+
+	return "ai/" + model
+}
+
 func cmdPull(client *distribution.Client, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Error: missing reference argument\n")
@@ -143,7 +151,7 @@ func cmdPull(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	reference := args[0]
+	reference := addDefaultNamespace(args[0])
 	ctx := context.Background()
 
 	if err := client.PullModel(ctx, reference, os.Stdout); err != nil {
@@ -335,7 +343,7 @@ func cmdPush(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	tag := args[0]
+	tag := addDefaultNamespace(args[0])
 	ctx := context.Background()
 
 	if err := client.PushModel(ctx, tag, os.Stdout); err != nil {
@@ -384,7 +392,7 @@ func cmdGet(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	reference := args[0]
+	reference := addDefaultNamespace(args[0])
 
 	model, err := client.GetModel(reference)
 	if err != nil {
@@ -427,7 +435,7 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	reference := args[0]
+	reference := addDefaultNamespace(args[0])
 
 	model, err := client.GetModel(reference)
 	if err != nil {
@@ -462,7 +470,7 @@ func cmdRm(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	reference := args[0]
+	reference := addDefaultNamespace(args[0])
 
 	if _, err := client.DeleteModel(reference, force); err != nil {
 		fmt.Fprintf(os.Stderr, "Error removing model: %v\n", err)
@@ -479,7 +487,7 @@ func cmdTag(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	source := args[0]
+	source := addDefaultNamespace(args[0])
 	target := args[1]
 
 	if err := client.Tag(source, target); err != nil {
