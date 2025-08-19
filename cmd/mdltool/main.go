@@ -369,9 +369,12 @@ func cmdList(client *distribution.Client, args []string) int {
 		fmt.Printf("%d. ID: %s\n", i+1, id)
 		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags(), ", "))
 
-		ggufPath, err := model.GGUFPath()
+		ggufPaths, err := model.GGUFPaths()
 		if err == nil {
-			fmt.Printf("   GGUF Path: %s\n", ggufPath)
+			fmt.Print("   GGUF Paths:\n")
+			for _, path := range ggufPaths {
+				fmt.Printf("\t%s\n", path)
+			}
 		}
 	}
 	return 0
@@ -401,12 +404,15 @@ func cmdGet(client *distribution.Client, args []string) int {
 	}
 	fmt.Printf("ID: %s\n", id)
 
-	ggufPath, err := model.GGUFPath()
+	ggufPaths, err := model.GGUFPaths()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting gguf path %v\n", err)
 		return 1
 	}
-	fmt.Printf("GGUF Path: %s\n", ggufPath)
+	fmt.Print("   GGUF Paths:\n")
+	for _, path := range ggufPaths {
+		fmt.Printf("\t%s\n", path)
+	}
 
 	cfg, err := model.Config()
 	if err != nil {
@@ -435,13 +441,13 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	modelPath, err := model.GGUFPath()
-	if err != nil {
+	modelPaths, err := model.GGUFPaths()
+	if err != nil || len(modelPaths) == 0 {
 		fmt.Fprintf(os.Stderr, "Error getting model path: %v\n", err)
 		return 1
 	}
 
-	fmt.Println(modelPath)
+	fmt.Println(modelPaths[0])
 	return 0
 }
 
