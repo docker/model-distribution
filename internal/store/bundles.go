@@ -19,7 +19,7 @@ func (s *LocalStore) bundlePath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, bundlesDir, hash.Algorithm, hash.Hex)
 }
 
-func (s *LocalStore) GetBundle(ref string) (string, error) {
+func (s *LocalStore) BundlePathForModel(ref string) (string, error) {
 	mdl, err := s.Read(ref)
 	if err != nil {
 		return "", fmt.Errorf("find model content: %w", err)
@@ -39,4 +39,8 @@ func (s *LocalStore) GetBundle(ref string) (string, error) {
 		return "", fmt.Errorf("unpack bundle: %w", err)
 	}
 	return path, nil
+}
+
+func (s *LocalStore) removeBundle(hash v1.Hash) error {
+	return os.RemoveAll(s.bundlePath(hash))
 }

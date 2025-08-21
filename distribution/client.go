@@ -395,7 +395,7 @@ func (c *Client) ResetStore() error {
 }
 
 func (c *Client) GetBundle(ref string) (string, error) {
-	return c.store.GetBundle(ref)
+	return c.store.BundlePathForModel(ref)
 }
 
 func checkCompat(image types.ModelArtifact) error {
