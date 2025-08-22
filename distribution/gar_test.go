@@ -69,10 +69,14 @@ func TestGARIntegration(t *testing.T) {
 			t.Fatalf("Failed to get model: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
+		modelPaths, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+		if len(modelPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPaths))
+		}
+		modelPath := modelPaths[0]
 		defer os.Remove(modelPath)
 
 		// Verify model content

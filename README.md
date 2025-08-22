@@ -30,6 +30,9 @@ make build
 # Package a model and push to a registry
 ./bin/model-distribution-tool package --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
+# Package a sharded model and push to a registry
+./bin/model-distribution-tool package --tag registry.example.com/models/example ./model-00001-of-00007.gguf
+
 # Package a model with license files and push to a registry
 ./bin/model-distribution-tool package --licenses license1.txt --licenses license2.txt --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
@@ -65,6 +68,9 @@ make build
 
 # Tag a model with an additional reference
 ./bin/model-distribution-tool tag registry.example.com/models/llama:v1.0 registry.example.com/models/llama:latest
+
+# Create a runtime bundle for model
+./bin/model-distribution-tool bundle registry.example.com/models/llama:v1.0
 ```
 
 For more information about the CLI tool, run:
@@ -99,10 +105,16 @@ if err != nil {
     // Handle error
 }
 
-// Get the GGUF file path
-modelPath, err := model.GGUFPath()
+// Create a bundle
+bundlePath, err := client.GetBundle("registry.example.com/models/llama:v1.0")
 if err != nil {
-    // Handle error
+// Handle error
+}
+
+// Get the GGUF file path within the bundle
+modelPath, err := bundle.GGUFPath()
+if err != nil {
+// Handle error
 }
 
 fmt.Println("Model path:", modelPath)

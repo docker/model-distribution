@@ -113,7 +113,7 @@ func TestDeleteModel(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.description, func(t *testing.T) {
-			// Setup model with tags
+			// Setup model with tags and create bundle
 			if err := client.store.Write(mdl, []string{}, nil); err != nil {
 				t.Fatalf("Failed to write model to store: %v", err)
 			}
@@ -121,6 +121,10 @@ func TestDeleteModel(t *testing.T) {
 				if err := client.Tag(id, tag); err != nil {
 					t.Fatalf("Failed to tag model: %v", err)
 				}
+			}
+			bundle, err := client.GetBundle(id)
+			if err != nil {
+				t.Fatalf("Failed to get model bundle: %v", err)
 			}
 
 			// Attempt to delete the model and check for expected error
@@ -164,6 +168,12 @@ func TestDeleteModel(t *testing.T) {
 				t.Errorf("Expected ErrModelNotFound after deletion, got %v", err)
 			} else if tc.untagOnly && err != nil {
 				t.Errorf("Expected model to remain but was deleted")
+			}
+
+			if _, err := os.Stat(bundle.RootDir()); err != nil && tc.untagOnly {
+				t.Fatalf("Expected model bundle dir to remain but was deleted")
+			} else if err == nil && !tc.untagOnly {
+				t.Fatalf("Expected model bundle dir be deleted")
 			}
 		})
 	}

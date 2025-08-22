@@ -16,7 +16,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/model-distribution/internal/progress"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
+	"github.com/docker/model-distribution/internal/progress"
 	mdregistry "github.com/docker/model-distribution/registry"
 )
 
@@ -85,12 +85,15 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get model: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
+		modelPaths, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+		if len(modelPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPaths))
+		}
 		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
+		pulledContent, err := os.ReadFile(modelPaths[0])
 		if err != nil {
 			t.Fatalf("Failed to read pulled model: %v", err)
 		}
@@ -120,13 +123,16 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get model: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
+		modelPaths, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+		if len(modelPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPaths))
+		}
 
 		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
+		pulledContent, err := os.ReadFile(modelPaths[0])
 		if err != nil {
 			t.Fatalf("Failed to read pulled model: %v", err)
 		}
@@ -222,12 +228,16 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get model: %v", err)
 		}
 
-		ggufPath, err := model.GGUFPath()
+		ggufPaths, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get GGUF path: %v", err)
 		}
+		if len(ggufPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(ggufPaths))
+		}
 
 		// Create an incomplete file by copying the GGUF file and adding .incomplete suffix
+		ggufPath := ggufPaths[0]
 		incompletePath := ggufPath + ".incomplete"
 		originalContent, err := os.ReadFile(ggufPath)
 		if err != nil {
@@ -322,13 +332,16 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get first version of model: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
+		modelPath, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+		if len(modelPath) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPath))
+		}
 
 		// Verify first version content
-		pulledContent, err := os.ReadFile(modelPath)
+		pulledContent, err := os.ReadFile(modelPath[0])
 		if err != nil {
 			t.Fatalf("Failed to read pulled model: %v", err)
 		}
@@ -369,13 +382,16 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get updated model: %v", err)
 		}
 
-		updatedModelPath, err := updatedModel.GGUFPath()
+		updatedModelPaths, err := updatedModel.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get updated model path: %v", err)
 		}
+		if len(updatedModelPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPath))
+		}
 
 		// Verify updated content
-		updatedPulledContent, err := os.ReadFile(updatedModelPath)
+		updatedPulledContent, err := os.ReadFile(updatedModelPaths[0])
 		if err != nil {
 			t.Fatalf("Failed to read updated pulled model: %v", err)
 		}
@@ -456,13 +472,16 @@ func TestClientPullModel(t *testing.T) {
 			t.Fatalf("Failed to get model: %v", err)
 		}
 
-		modelPath, err := model.GGUFPath()
+		modelPaths, err := model.GGUFPaths()
 		if err != nil {
 			t.Fatalf("Failed to get model path: %v", err)
 		}
+		if len(modelPaths) != 1 {
+			t.Fatalf("Unexpected number of model files: %d", len(modelPaths))
+		}
 
 		// Verify model content
-		pulledContent, err := os.ReadFile(modelPath)
+		pulledContent, err := os.ReadFile(modelPaths[0])
 		if err != nil {
 			t.Fatalf("Failed to read pulled model: %v", err)
 		}

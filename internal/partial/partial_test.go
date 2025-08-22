@@ -50,7 +50,7 @@ func TestMMPROJPathNotFound(t *testing.T) {
 		t.Error("Expected error when getting multimodal projector path from model without multimodal projector layer")
 	}
 
-	expectedErrorMsg := "model does not contain a application/vnd.docker.ai.mmproj layer"
+	expectedErrorMsg := `model does not contain any layer of type "application/vnd.docker.ai.mmproj"`
 	if err.Error() != expectedErrorMsg {
 		t.Errorf("Expected error message %q, got %q", expectedErrorMsg, err.Error())
 	}
@@ -64,14 +64,18 @@ func TestGGUFPath(t *testing.T) {
 	}
 
 	// Test GGUFPath function
-	ggufPath, err := partial.GGUFPath(mdl)
+	ggufPaths, err := partial.GGUFPaths(mdl)
 	if err != nil {
 		t.Fatalf("Failed to get GGUF path: %v", err)
 	}
 
+	if len(ggufPaths) != 1 {
+		t.Errorf("Expected single gguf path, got %d", len(ggufPaths))
+	}
+
 	expectedPath := filepath.Join("..", "..", "assets", "dummy.gguf")
-	if ggufPath != expectedPath {
-		t.Errorf("Expected GGUF path %s, got %s", expectedPath, ggufPath)
+	if ggufPaths[0] != expectedPath {
+		t.Errorf("Expected GGUF path %s, got %s", expectedPath, ggufPaths[0])
 	}
 }
 
@@ -97,12 +101,16 @@ func TestLayerPathByMediaType(t *testing.T) {
 	mdlWithLayers := mutate.AppendLayers(mdl, licenseLayer, mmprojLayer)
 
 	// Test that we can find each layer type
-	ggufPath, err := partial.GGUFPath(mdlWithLayers)
+	ggufPaths, err := partial.GGUFPaths(mdlWithLayers)
 	if err != nil {
 		t.Fatalf("Failed to get GGUF path: %v", err)
 	}
-	if ggufPath != filepath.Join("..", "..", "assets", "dummy.gguf") {
-		t.Errorf("Expected GGUF path to be: %s, got: %s", filepath.Join("..", "..", "assets", "dummy.gguf"), ggufPath)
+
+	if len(ggufPaths) != 1 {
+		t.Fatalf("Expected single gguf path, got %d", len(ggufPaths))
+	}
+	if ggufPaths[0] != filepath.Join("..", "..", "assets", "dummy.gguf") {
+		t.Errorf("Expected GGUF path to be: %s, got: %s", filepath.Join("..", "..", "assets", "dummy.gguf"), ggufPaths[0])
 	}
 
 	mmprojPath, err := partial.MMPROJPath(mdlWithLayers)

@@ -106,6 +106,8 @@ func main() {
 		exitCode = cmdTag(client, args)
 	case "load":
 		exitCode = cmdLoad(client, args)
+	case "bundle":
+		exitCode = cmdBundle(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -127,6 +129,7 @@ func printUsage() {
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
+	fmt.Println("  bundle <reference>              Create a runtime bundle for model")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
@@ -134,6 +137,7 @@ func printUsage() {
 	fmt.Println("  model-distribution-tool push registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
+	fmt.Println("  model-distribution-tool bundle registry.example.com/models/llama:v1.0")
 }
 
 func cmdPull(client *distribution.Client, args []string) int {
@@ -369,9 +373,12 @@ func cmdList(client *distribution.Client, args []string) int {
 		fmt.Printf("%d. ID: %s\n", i+1, id)
 		fmt.Printf("   Tags: %s\n", strings.Join(model.Tags(), ", "))
 
-		ggufPath, err := model.GGUFPath()
+		ggufPaths, err := model.GGUFPaths()
 		if err == nil {
-			fmt.Printf("   GGUF Path: %s\n", ggufPath)
+			fmt.Print("   GGUF Paths:\n")
+			for _, path := range ggufPaths {
+				fmt.Printf("\t%s\n", path)
+			}
 		}
 	}
 	return 0
@@ -401,12 +408,15 @@ func cmdGet(client *distribution.Client, args []string) int {
 	}
 	fmt.Printf("ID: %s\n", id)
 
-	ggufPath, err := model.GGUFPath()
+	ggufPaths, err := model.GGUFPaths()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting gguf path %v\n", err)
 		return 1
 	}
-	fmt.Printf("GGUF Path: %s\n", ggufPath)
+	fmt.Print("   GGUF Paths:\n")
+	for _, path := range ggufPaths {
+		fmt.Printf("\t%s\n", path)
+	}
 
 	cfg, err := model.Config()
 	if err != nil {
@@ -435,13 +445,13 @@ func cmdGetPath(client *distribution.Client, args []string) int {
 		return 1
 	}
 
-	modelPath, err := model.GGUFPath()
-	if err != nil {
+	modelPaths, err := model.GGUFPaths()
+	if err != nil || len(modelPaths) == 0 {
 		fmt.Fprintf(os.Stderr, "Error getting model path: %v\n", err)
 		return 1
 	}
 
-	fmt.Println(modelPath)
+	fmt.Println(modelPaths[0])
 	return 0
 }
 
@@ -488,5 +498,20 @@ func cmdTag(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Successfully applied tag %s to model: %s\n", target, source)
+	return 0
+}
+
+func cmdBundle(client *distribution.Client, args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool bundle <reference>\n")
+		return 1
+	}
+	bundle, err := client.GetBundle(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting model bundle: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "Successfully created bundle for model %s\n", args[0])
+	fmt.Fprint(os.Stdout, bundle.RootDir())
 	return 0
 }
