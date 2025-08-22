@@ -129,6 +129,7 @@ func printUsage() {
 	fmt.Println("  get <reference>                 Get a model by reference")
 	fmt.Println("  get-path <reference>            Get the local file path for a model")
 	fmt.Println("  rm <reference>                  Remove a model by reference")
+	fmt.Println("  bundle <reference>              Create a runtime bundle for model")
 	fmt.Println("\nExamples:")
 	fmt.Println("  model-distribution-tool --store-path ./models pull registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool package ./model.gguf registry.example.com/models/llama:v1.0 --licenses ./license1.txt --licenses ./license2.txt")
@@ -136,6 +137,7 @@ func printUsage() {
 	fmt.Println("  model-distribution-tool push registry.example.com/models/llama:v1.0")
 	fmt.Println("  model-distribution-tool list")
 	fmt.Println("  model-distribution-tool rm registry.example.com/models/llama:v1.0")
+	fmt.Println("  model-distribution-tool bundle registry.example.com/models/llama:v1.0")
 }
 
 func cmdPull(client *distribution.Client, args []string) int {
