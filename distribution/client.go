@@ -394,8 +394,8 @@ func (c *Client) ResetStore() error {
 	return nil
 }
 
-func (c *Client) GetBundle(ref string) (string, error) {
-	return c.store.BundlePathForModel(ref)
+func (c *Client) GetBundle(ref string) (types.ModelBundle, error) {
+	return c.store.BundleForModel(ref)
 }
 
 func checkCompat(image types.ModelArtifact) error {

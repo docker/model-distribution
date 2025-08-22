@@ -8,6 +8,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 
 	"github.com/docker/model-distribution/internal/bundle"
+	"github.com/docker/model-distribution/types"
 )
 
 const (
@@ -19,26 +20,38 @@ func (s *LocalStore) bundlePath(hash v1.Hash) string {
 	return filepath.Join(s.rootPath, bundlesDir, hash.Algorithm, hash.Hex)
 }
 
-func (s *LocalStore) BundlePathForModel(ref string) (string, error) {
+// BundleForModel returns a runtime bundle for the given model
+func (s *LocalStore) BundleForModel(ref string) (types.ModelBundle, error) {
 	mdl, err := s.Read(ref)
 	if err != nil {
-		return "", fmt.Errorf("find model content: %w", err)
+		return nil, fmt.Errorf("find model content: %w", err)
 	}
 	dgst, err := mdl.Digest()
 	if err != nil {
-		return "", fmt.Errorf("get model ID: %w", err)
+		return nil, fmt.Errorf("get model ID: %w", err)
 	}
 	path := s.bundlePath(dgst)
-	if _, err := os.Stat(path); err == nil {
-		return path, nil
+	if bdl, err := bundle.Parse(path); err != nil {
+		// create for first time or replace bad/corrupted bundle
+		return s.createBundle(path, mdl)
+	} else {
+		return bdl, nil
+	}
+}
+
+// createBundle unpacks the bundle to path, replacing existing bundle if one is found
+func (s *LocalStore) createBundle(path string, mdl *Model) (types.ModelBundle, error) {
+	if err := os.RemoveAll(path); err != nil {
+		return nil, fmt.Errorf("remove %s: %w", path, err)
 	}
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", fmt.Errorf("create bundle directory: %w", err)
+		return nil, fmt.Errorf("create bundle directory: %w", err)
 	}
-	if err := bundle.Unpack(path, mdl); err != nil {
-		return "", fmt.Errorf("unpack bundle: %w", err)
+	bdl, err := bundle.Unpack(path, mdl)
+	if err != nil {
+		return nil, fmt.Errorf("unpack bundle: %w", err)
 	}
-	return path, nil
+	return bdl, nil
 }
 
 func (s *LocalStore) removeBundle(hash v1.Hash) error {

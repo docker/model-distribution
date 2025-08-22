@@ -122,7 +122,7 @@ func TestDeleteModel(t *testing.T) {
 					t.Fatalf("Failed to tag model: %v", err)
 				}
 			}
-			bundlePath, err := client.GetBundle(id)
+			bundle, err := client.GetBundle(id)
 			if err != nil {
 				t.Fatalf("Failed to get model bundle: %v", err)
 			}
@@ -170,7 +170,7 @@ func TestDeleteModel(t *testing.T) {
 				t.Errorf("Expected model to remain but was deleted")
 			}
 
-			if _, err := os.Stat(bundlePath); err != nil && tc.untagOnly {
+			if _, err := os.Stat(bundle.RootDir()); err != nil && tc.untagOnly {
 				t.Fatalf("Expected model bundle dir to remain but was deleted")
 			} else if err == nil && !tc.untagOnly {
 				t.Fatalf("Expected model bundle dir be deleted")

@@ -106,7 +106,7 @@ func TestBundle(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.description, func(t *testing.T) {
-			bundleDir, err := client.GetBundle(tc.ref)
+			bundle, err := client.GetBundle(tc.ref)
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Expected error %v, got: %v", tc.expectedErr, err)
 			}
@@ -114,7 +114,7 @@ func TestBundle(t *testing.T) {
 				return
 			}
 			for expectedName, shouldMatchContent := range tc.expectedFiles {
-				got, err := os.ReadFile(filepath.Join(bundleDir, expectedName))
+				got, err := os.ReadFile(filepath.Join(bundle.RootDir(), expectedName))
 				if err != nil {
 					t.Fatalf("Failed to read file: %v", err)
 				}

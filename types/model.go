@@ -19,3 +19,10 @@ type ModelArtifact interface {
 	Descriptor() (Descriptor, error)
 	v1.Image
 }
+
+type ModelBundle interface {
+	RootDir() string
+	GGUFPath() string
+	MMPROJPath() string
+	RuntimeConfig() Config
+}
