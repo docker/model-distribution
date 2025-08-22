@@ -30,7 +30,7 @@ make build
 # Package a model and push to a registry
 ./bin/model-distribution-tool package --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
-# Package a sahrded model and push to a registry
+# Package a sharded model and push to a registry
 ./bin/model-distribution-tool package --tag registry.example.com/models/example ./model-00001-of-00007.gguf
 
 # Package a model with license files and push to a registry
