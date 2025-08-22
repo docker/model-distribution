@@ -106,6 +106,8 @@ func main() {
 		exitCode = cmdTag(client, args)
 	case "load":
 		exitCode = cmdLoad(client, args)
+	case "bundle":
+		exitCode = cmdBundle(client, args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -494,5 +496,20 @@ func cmdTag(client *distribution.Client, args []string) int {
 	}
 
 	fmt.Printf("Successfully applied tag %s to model: %s\n", target, source)
+	return 0
+}
+
+func cmdBundle(client *distribution.Client, args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool bundle <reference>\n")
+		return 1
+	}
+	bundle, err := client.GetBundle(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting model bundle: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "Successfully created bundle for model %s\n", args[0])
+	fmt.Fprint(os.Stdout, bundle.RootDir())
 	return 0
 }
