@@ -21,10 +21,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 
-	"github.com/docker/model-distribution/internal/progress"
-
 	"github.com/docker/model-distribution/internal/gguf"
 	"github.com/docker/model-distribution/internal/mutate"
+	"github.com/docker/model-distribution/internal/progress"
 	mdregistry "github.com/docker/model-distribution/registry"
 )
 

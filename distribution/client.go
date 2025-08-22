@@ -394,6 +394,7 @@ func (c *Client) ResetStore() error {
 	return nil
 }
 
+// GetBundle returns a types.Bundle containing the model, creating one as necessary
 func (c *Client) GetBundle(ref string) (types.ModelBundle, error) {
 	return c.store.BundleForModel(ref)
 }

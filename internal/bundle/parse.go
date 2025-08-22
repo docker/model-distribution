@@ -18,7 +18,7 @@ func Parse(rootDir string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	mmprojPath, err := findMultiModelProjectorFile(rootDir)
+	mmprojPath, err := findMultiModalProjectorFile(rootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func findGGUFFile(rootDir string) (string, error) {
 	return filepath.Base(ggufs[0]), nil
 }
 
-func findMultiModelProjectorFile(rootDir string) (string, error) {
+func findMultiModalProjectorFile(rootDir string) (string, error) {
 	mmprojPaths, err := filepath.Glob(filepath.Join(rootDir, "*.mmproj"))
 	if err != nil {
 		return "", err

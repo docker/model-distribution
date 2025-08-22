@@ -65,11 +65,6 @@ type WithLayers interface {
 	Layers() ([]v1.Layer, error)
 }
 
-func GGUFPath(i WithLayers) (string, error) {
-	paths, err := layerPathsByMediaType(i, types.MediaTypeGGUF)
-	return paths[0], err
-}
-
 func GGUFPaths(i WithLayers) ([]string, error) {
 	return layerPathsByMediaType(i, types.MediaTypeGGUF)
 }
