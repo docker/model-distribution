@@ -48,7 +48,7 @@ func parseRuntimeConfig(rootDir string) (types.Config, error) {
 }
 
 func findGGUFFile(rootDir string) (string, error) {
-	ggufs, err := filepath.Glob(filepath.Join(rootDir, "*.gguf"))
+	ggufs, err := filepath.Glob(filepath.Join(rootDir, "[^.]*.gguf"))
 	if err != nil {
 		return "", fmt.Errorf("find gguf files: %w", err)
 	}
@@ -59,7 +59,7 @@ func findGGUFFile(rootDir string) (string, error) {
 }
 
 func findMultiModalProjectorFile(rootDir string) (string, error) {
-	mmprojPaths, err := filepath.Glob(filepath.Join(rootDir, "*.mmproj"))
+	mmprojPaths, err := filepath.Glob(filepath.Join(rootDir, "[^.]*.mmproj"))
 	if err != nil {
 		return "", err
 	}
