@@ -174,7 +174,6 @@ func cmdPackage(args []string) int {
 	fs.StringVar(&mmproj, "mmproj", "", "Path to Multimodal Projector file")
 	fs.StringVar(&file, "file", "", "Write archived model to the given file")
 	fs.StringVar(&tag, "tag", "", "Push model to the given registry tag")
-	fs.Parse(args)
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf>\n\n")
