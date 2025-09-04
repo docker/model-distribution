@@ -401,7 +401,7 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 
 	// Assert: reconstructed body matches original payload.
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 
@@ -429,7 +429,7 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 
 	// Assert
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 
@@ -453,7 +453,7 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error after exceeding retry budget, got nil")
+		t.Errorf("expected read error after exceeding retry budget, got nil")
 	}
 }
 
@@ -477,7 +477,7 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error due to wrong Content-Range start, got nil")
+		t.Errorf("expected read error due to wrong Content-Range start, got nil")
 	}
 }
 
@@ -501,7 +501,7 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error due to non-206 on resume, got nil")
+		t.Errorf("expected read error due to non-206 on resume, got nil")
 	}
 }
 
@@ -530,7 +530,7 @@ func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected mid-stream error without resume support")
+		t.Errorf("expected mid-stream error without resume support")
 	}
 }
 
@@ -558,7 +558,7 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 
 	// Assert
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 
@@ -583,7 +583,7 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error due to If-Range (ETag) mismatch causing non-206 on resume")
+		t.Errorf("expected read error due to If-Range (ETag) mismatch causing non-206 on resume")
 	}
 }
 
@@ -611,7 +611,7 @@ func TestIfRange_LastModified_Matches_AllowsResume(t *testing.T) {
 
 	// Assert
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 
@@ -636,7 +636,7 @@ func TestIfRange_LastModified_ChangedOnResume_RejectsResume(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error due to If-Range (Last-Modified) mismatch causing non-206 on resume")
+		t.Errorf("expected read error due to If-Range (Last-Modified) mismatch causing non-206 on resume")
 	}
 }
 
@@ -661,7 +661,7 @@ func TestIfRange_RequiredButUnavailable_MissingRejected(t *testing.T) {
 
 	// Assert
 	if rerr == nil {
-		t.Fatalf("expected read error because server required If-Range but provided no validators")
+		t.Errorf("expected read error because server required If-Range but provided no validators")
 	}
 }
 
@@ -694,7 +694,7 @@ func TestIfRange_WeakETag_Present_UsesLastModified_AllowsResume(t *testing.T) {
 
 	// Assert: full payload delivered successfully via resume.
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 
@@ -719,7 +719,7 @@ func TestGzipContentEncoding_DisablesResume(t *testing.T) {
 
 	// Assert: we see an error because no resume was attempted under compression.
 	if rerr == nil {
-		t.Fatalf("expected mid-stream error when initial response is compressed (no resume)")
+		t.Errorf("expected mid-stream error when initial response is compressed (no resume)")
 	}
 }
 
@@ -762,79 +762,28 @@ func TestResumeHeaders_ScrubbedAndIdentityEncoding(t *testing.T) {
 
 	// Initial request kept our original Accept-Encoding; resume must be identity.
 	if got := strings.ToLower(resumeH.Get("Accept-Encoding")); got != "identity" {
-		t.Fatalf("resume Accept-Encoding = %q, want %q", got, "identity")
+		t.Errorf("resume Accept-Encoding = %q, want %q", got, "identity")
 	}
 
 	// Conditional headers must be scrubbed on resume.
 	condKeys := []string{"If-None-Match", "If-Modified-Since", "If-Match", "If-Unmodified-Since"}
 	for _, k := range condKeys {
 		if v := resumeH.Get(k); v != "" {
-			t.Fatalf("resume header %s = %q, want empty", k, v)
+			t.Errorf("resume header %s = %q, want empty", k, v)
 		}
 	}
 
 	// Sanity: they were present on the initial request to prove scrubbing happened.
 	if initH.Get("If-None-Match") == "" || initH.Get("If-Modified-Since") == "" || initH.Get("If-Match") == "" || initH.Get("If-Unmodified-Since") == "" {
-		t.Fatalf("expected conditional headers on initial request for comparison")
+		t.Errorf("expected conditional headers on initial request for comparison")
 	}
 
 	// Range and If-Range should be present on resume.
 	if r := resumeH.Get("Range"); r == "" || !strings.HasPrefix(strings.ToLower(r), "bytes=") {
-		t.Fatalf("resume Range missing/invalid: %q", r)
+		t.Errorf("resume Range missing/invalid: %q", r)
 	}
 	if ir := resumeH.Get("If-Range"); ir == "" {
-		t.Fatalf("resume If-Range missing")
-	}
-}
-
-// ─────────────────────────────── Parser tests ───────────────────────────────
-
-// TestParseSingleRange exercises valid and invalid single-range specs.
-func TestParseSingleRange(t *testing.T) {
-	cases := []struct {
-		in         string
-		start, end int64
-		ok         bool
-	}{
-		{"", 0, -1, false},
-		{"bytes=0-99", 0, 99, true},
-		{"bytes=0-", 0, -1, true},
-		{"bytes=5-5", 5, 5, true},
-		{"BYTES=7-9", 7, 9, true},
-		{"bytes=10-5", 0, -1, false}, // end before start
-		{"bytes=-100", 0, -1, false}, // suffix not supported
-		{"items=0-10", 0, -1, false},
-		{"bytes=0-1,3-5", 0, -1, false}, // multi-range unsupported
-	}
-	for _, tc := range cases {
-		start, end, ok := parseSingleRange(tc.in)
-		if start != tc.start || end != tc.end || ok != tc.ok {
-			t.Fatalf("parseSingleRange(%q) = (%d,%d,%v), want (%d,%d,%v)", tc.in, start, end, ok, tc.start, tc.end, tc.ok)
-		}
-	}
-}
-
-// TestParseContentRange exercises valid and invalid Content-Range headers.
-func TestParseContentRange(t *testing.T) {
-	cases := []struct {
-		in         string
-		start, end int64
-		total      int64
-		ok         bool
-	}{
-		{"", 0, -1, -1, false},
-		{"bytes 0-99/200", 0, 99, 200, true},
-		{"BYTES 1-1/2", 1, 1, 2, true},
-		{"bytes 0-0/*", 0, 0, -1, true},
-		{"items 0-1/2", 0, -1, -1, false},
-		{"bytes 0-99/abc", 0, -1, -1, false},
-		{"bytes 5-4/10", 5, 4, 10, true}, // parser accepts; semantic check happens elsewhere
-	}
-	for _, tc := range cases {
-		start, end, total, ok := parseContentRange(tc.in)
-		if start != tc.start || end != tc.end || total != tc.total || ok != tc.ok {
-			t.Fatalf("parseContentRange(%q) = (%d,%d,%d,%v), want (%d,%d,%d,%v)", tc.in, start, end, total, ok, tc.start, tc.end, tc.total, tc.ok)
-		}
+		t.Errorf("resume If-Range missing")
 	}
 }
 
@@ -868,7 +817,7 @@ func TestRangeInitial_ZeroToN_NoCuts_Succeeds(t *testing.T) {
 	// Assert
 	want := payload[0 : N+1]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -900,7 +849,7 @@ func TestRangeInitial_MidSpan_NoCuts_Succeeds(t *testing.T) {
 	// Assert
 	want := payload[N : M+1]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -931,7 +880,7 @@ func TestRangeInitial_FromNToEnd_NoCuts_Succeeds(t *testing.T) {
 	// Assert
 	want := payload[N:]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -962,7 +911,7 @@ func TestRangeInitial_ZeroToN_WithCut_Resumes(t *testing.T) {
 	// Assert
 	want := payload[:N+1]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -994,7 +943,7 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 	// Assert
 	want := payload[N : M+1]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -1025,7 +974,7 @@ func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
 	// Assert
 	want := payload[N:]
 	if !bytes.Equal(got, want) {
-		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+		t.Errorf("payload mismatch: got %d bytes, want %d", len(got), len(want))
 	}
 }
 
@@ -1060,6 +1009,57 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 	resumeRange := hs[1].Get("Range")
 	want := "bytes=" + strconv.FormatInt(int64(cut), 10) + "-" + strconv.FormatInt(N, 10)
 	if resumeRange != want {
-		t.Fatalf("resume Range header = %q, want %q", resumeRange, want)
+		t.Errorf("resume Range header = %q, want %q", resumeRange, want)
+	}
+}
+
+// ─────────────────────────────── Parser tests ───────────────────────────────
+
+// TestParseSingleRange exercises valid and invalid single-range specs.
+func TestParseSingleRange(t *testing.T) {
+	cases := []struct {
+		in         string
+		start, end int64
+		ok         bool
+	}{
+		{"", 0, -1, false},
+		{"bytes=0-99", 0, 99, true},
+		{"bytes=0-", 0, -1, true},
+		{"bytes=5-5", 5, 5, true},
+		{"BYTES=7-9", 7, 9, true},
+		{"bytes=10-5", 0, -1, false}, // end before start
+		{"bytes=-100", 0, -1, false}, // suffix not supported
+		{"items=0-10", 0, -1, false},
+		{"bytes=0-1,3-5", 0, -1, false}, // multi-range unsupported
+	}
+	for _, tc := range cases {
+		start, end, ok := parseSingleRange(tc.in)
+		if start != tc.start || end != tc.end || ok != tc.ok {
+			t.Errorf("parseSingleRange(%q) = (%d,%d,%v), want (%d,%d,%v)", tc.in, start, end, ok, tc.start, tc.end, tc.ok)
+		}
+	}
+}
+
+// TestParseContentRange exercises valid and invalid Content-Range headers.
+func TestParseContentRange(t *testing.T) {
+	cases := []struct {
+		in         string
+		start, end int64
+		total      int64
+		ok         bool
+	}{
+		{"", 0, -1, -1, false},
+		{"bytes 0-99/200", 0, 99, 200, true},
+		{"BYTES 1-1/2", 1, 1, 2, true},
+		{"bytes 0-0/*", 0, 0, -1, true},
+		{"items 0-1/2", 0, -1, -1, false},
+		{"bytes 0-99/abc", 0, -1, -1, false},
+		{"bytes 5-4/10", 5, 4, 10, true}, // parser accepts; semantic check happens elsewhere
+	}
+	for _, tc := range cases {
+		start, end, total, ok := parseContentRange(tc.in)
+		if start != tc.start || end != tc.end || total != tc.total || ok != tc.ok {
+			t.Errorf("parseContentRange(%q) = (%d,%d,%d,%v), want (%d,%d,%d,%v)", tc.in, start, end, total, ok, tc.start, tc.end, tc.total, tc.ok)
+		}
 	}
 }
