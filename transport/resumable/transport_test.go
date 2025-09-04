@@ -837,3 +837,229 @@ func TestParseContentRange(t *testing.T) {
 		}
 	}
 }
+
+// ─────────────────────────────── Initial-Range tests ───────────────────────────────
+
+// TestRangeInitial_ZeroToN_NoCuts_Succeeds verifies that when the *initial* request
+// specifies a Range from 0..N, the transport delivers exactly that slice without
+// any failures or resumes.
+func TestRangeInitial_ZeroToN_NoCuts_Succeeds(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-0-n"
+	payload := bytes.Repeat([]byte("0123456789"), 1024) // 10,240 bytes
+	N := int64(2047)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{-1}})
+
+	// Act: initial request is a Range request
+	client := newClient(ft, 3)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes=0-"+strconv.FormatInt(N, 10))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[0 : N+1]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_MidSpan_NoCuts_Succeeds verifies a Range N..M (mid-file)
+// succeeds without any resumes and matches the exact slice.
+func TestRangeInitial_MidSpan_NoCuts_Succeeds(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-n-m"
+	payload := bytes.Repeat([]byte("ABCDEFGH"), 2048) // 16,384 bytes
+	N := int64(500)
+	M := int64(3499)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{-1}})
+
+	// Act
+	client := newClient(ft, 3)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes="+strconv.FormatInt(N, 10)+"-"+strconv.FormatInt(M, 10))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[N : M+1]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_FromNToEnd_NoCuts_Succeeds verifies a Range N..end request
+// ("bytes=N-") succeeds and returns the tail of the object.
+func TestRangeInitial_FromNToEnd_NoCuts_Succeeds(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-n-end"
+	payload := bytes.Repeat([]byte("xyz"), 5000) // 15,000 bytes
+	N := int64(2500)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{-1}})
+
+	// Act
+	client := newClient(ft, 3)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes="+strconv.FormatInt(N, 10)+"-")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[N:]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_ZeroToN_WithCut_Resumes verifies that a Range 0..N with a
+// mid-stream cut resumes correctly and still yields the exact slice.
+func TestRangeInitial_ZeroToN_WithCut_Resumes(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-0-n-cut"
+	payload := bytes.Repeat([]byte("Q"), 9000)
+	N := int64(4095)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{512, -1}}) // cut during initial segment
+
+	// Act
+	client := newClient(ft, 4)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes=0-"+strconv.FormatInt(N, 10))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[:N+1]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_MidSpan_WithMultipleCuts_Resumes verifies a Range N..M with
+// multiple failures is properly reassembled within the retry budget.
+func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-n-m-cuts"
+	payload := bytes.Repeat([]byte{0xAA, 0xBB, 0xCC, 0xDD}, 5000) // 20,000 bytes
+	N := int64(1000)
+	M := int64(9999)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{300, 400, -1}}) // two cuts, then ok
+
+	// Act
+	client := newClient(ft, 5)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes="+strconv.FormatInt(N, 10)+"-"+strconv.FormatInt(M, 10))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[N : M+1]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_FromNToEnd_WithCut_Resumes verifies a Range N..end request
+// resumes correctly after a mid-stream failure and returns the tail of the object.
+func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
+	// Arrange
+	url := "https://example.com/range-n-end-cut"
+	payload := bytes.Repeat([]byte("tail"), 6000) // 24,000 bytes
+	N := int64(7777)
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{1024, -1}})
+
+	// Act
+	client := newClient(ft, 3)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes="+strconv.FormatInt(N, 10)+"-")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Assert
+	want := payload[N:]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload mismatch: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestRangeInitial_ResumeHeaderStart_Correct asserts that the resume request's
+// Range header starts exactly at initialStart + bytesDelivered.
+func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
+	// Arrange: Range 0..2047 with a cut after 512 bytes on initial segment.
+	url := "https://example.com/range-header-check"
+	payload := bytes.Repeat([]byte("H"), 4096)
+	N := int64(2047)
+	cut := 512
+	ft := newFakeTransport()
+	ft.add(url, payload, &flakePlan{CutAfter: []int{cut, -1}})
+
+	client := newClient(ft, 3)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes=0-"+strconv.FormatInt(N, 10))
+
+	// Act: perform the request and read to completion (forcing one resume).
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	_, _ = io.ReadAll(resp.Body)
+
+	// Assert: check second segment's Range header.
+	hs := ft.segmentHeaders(url)
+	if len(hs) < 2 {
+		t.Fatalf("expected at least 2 segments (initial + resume), got %d", len(hs))
+	}
+	resumeRange := hs[1].Get("Range")
+	want := "bytes=" + strconv.FormatInt(int64(cut), 10) + "-" + strconv.FormatInt(N, 10)
+	if resumeRange != want {
+		t.Fatalf("resume Range header = %q, want %q", resumeRange, want)
+	}
+}
