@@ -394,6 +394,12 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -422,6 +428,12 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -449,6 +461,12 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -473,6 +491,12 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -497,6 +521,12 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -522,6 +552,12 @@ func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	buf := make([]byte, 1<<20)
 	_, rerr := resp.Body.Read(buf)
 	if rerr == nil {
@@ -551,6 +587,12 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -579,6 +621,12 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -604,6 +652,12 @@ func TestIfRange_LastModified_Matches_AllowsResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -632,6 +686,12 @@ func TestIfRange_LastModified_ChangedOnResume_RejectsResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -657,6 +717,12 @@ func TestIfRange_RequiredButUnavailable_MissingRejected(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert
@@ -687,6 +753,12 @@ func TestIfRange_WeakETag_Present_UsesLastModified_AllowsResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -715,6 +787,12 @@ func TestGzipContentEncoding_DisablesResume(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200 (server advertises total)
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, rerr := io.ReadAll(resp.Body)
 
 	// Assert: we see an error because no resume was attempted under compression.
@@ -751,6 +829,12 @@ func TestResumeHeaders_ScrubbedAndIdentityEncoding(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for initial 200
+	if resp.ContentLength != int64(len(payload)) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, len(payload))
+	}
+
 	_, _ = io.ReadAll(resp.Body)
 
 	// Assert: fetch recorded headers for each segment.
@@ -809,6 +893,12 @@ func TestRangeInitial_ZeroToN_NoCuts_Succeeds(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (0..N inclusive)
+	if resp.ContentLength != (N + 1) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, N+1)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -841,6 +931,13 @@ func TestRangeInitial_MidSpan_NoCuts_Succeeds(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (N..M inclusive)
+	wantCL := (M - N + 1)
+	if resp.ContentLength != wantCL {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, wantCL)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -872,6 +969,13 @@ func TestRangeInitial_FromNToEnd_NoCuts_Succeeds(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (N..end inclusive)
+	wantCL := int64(len(payload)) - N
+	if resp.ContentLength != wantCL {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, wantCL)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -903,6 +1007,12 @@ func TestRangeInitial_ZeroToN_WithCut_Resumes(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (0..N inclusive)
+	if resp.ContentLength != (N + 1) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, N+1)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -935,6 +1045,13 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (N..M inclusive)
+	wantCL := (M - N + 1)
+	if resp.ContentLength != wantCL {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, wantCL)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -966,6 +1083,13 @@ func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (N..end inclusive)
+	wantCL := int64(len(payload)) - N
+	if resp.ContentLength != wantCL {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, wantCL)
+	}
+
 	got, err := io.ReadAll(resp.Body)
 	if err != nil && err != io.EOF {
 		t.Fatalf("read: %v", err)
@@ -999,6 +1123,12 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+
+	// Assert Content-Length for 206 (0..N inclusive)
+	if resp.ContentLength != (N + 1) {
+		t.Errorf("ContentLength = %d, want %d", resp.ContentLength, N+1)
+	}
+
 	_, _ = io.ReadAll(resp.Body)
 
 	// Assert: check second segment's Range header.
