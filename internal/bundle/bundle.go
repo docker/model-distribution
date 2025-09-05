@@ -12,6 +12,7 @@ type Bundle struct {
 	mmprojPath    string
 	ggufFile      string // path to GGUF file (first shard when model is split among files)
 	runtimeConfig types.Config
+	templatePath  string
 }
 
 // RootDir return the path to the bundle root directory

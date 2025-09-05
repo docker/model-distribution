@@ -23,6 +23,8 @@ const (
 	// MediaTypeMultimodalProjector indicates a Multimodal projector file
 	MediaTypeMultimodalProjector = types.MediaType("application/vnd.docker.ai.mmproj")
 
+	MediaTypeTemplate = types.MediaType("application/vnd.docker.ai.template")
+
 	FormatGGUF = Format("gguf")
 )
 

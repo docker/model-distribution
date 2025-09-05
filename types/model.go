@@ -11,6 +11,7 @@ type Model interface {
 	Config() (Config, error)
 	Tags() []string
 	Descriptor() (Descriptor, error)
+	TemplatePath() (string, error)
 }
 
 type ModelArtifact interface {
@@ -23,6 +24,7 @@ type ModelArtifact interface {
 type ModelBundle interface {
 	RootDir() string
 	GGUFPath() string
+	TemplatePath() string
 	MMPROJPath() string
 	RuntimeConfig() Config
 }
