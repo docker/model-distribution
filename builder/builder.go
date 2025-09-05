@@ -27,6 +27,12 @@ func FromGGUF(path string) (*Builder, error) {
 	}, nil
 }
 
+func FromModel(mdl types.ModelArtifact) (*Builder, error) {
+	return &Builder{
+		model: mdl,
+	}, nil
+}
+
 // WithLicense adds a license file to the artifact
 func (b *Builder) WithLicense(path string) (*Builder, error) {
 	licenseLayer, err := partial.NewLayer(path, types.MediaTypeLicense)
@@ -52,6 +58,16 @@ func (b *Builder) WithMultimodalProjector(path string) (*Builder, error) {
 	}
 	return &Builder{
 		model: mutate.AppendLayers(b.model, mmprojLayer),
+	}, nil
+}
+
+func (b *Builder) WithChatTemplateFile(path string) (*Builder, error) {
+	templateLayer, err := partial.NewLayer(path, types.MediaTypeChatTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("mmproj layer from %q: %w", path, err)
+	}
+	return &Builder{
+		model: mutate.AppendLayers(b.model, templateLayer),
 	}, nil
 }
 

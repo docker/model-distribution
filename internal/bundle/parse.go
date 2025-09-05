@@ -22,6 +22,10 @@ func Parse(rootDir string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
+	templatePath, err := findChatTemplateFile(rootDir)
+	if err != nil {
+		return nil, err
+	}
 	cfg, err := parseRuntimeConfig(rootDir)
 	if err != nil {
 		return nil, err
@@ -31,6 +35,7 @@ func Parse(rootDir string) (*Bundle, error) {
 		mmprojPath:    mmprojPath,
 		ggufFile:      ggufPath,
 		runtimeConfig: cfg,
+		templatePath:  templatePath,
 	}, nil
 }
 
@@ -70,4 +75,18 @@ func findMultiModalProjectorFile(rootDir string) (string, error) {
 		return "", fmt.Errorf("found multiple .mmproj files, but only 1 is supported")
 	}
 	return filepath.Base(mmprojPaths[0]), nil
+}
+
+func findChatTemplateFile(rootDir string) (string, error) {
+	templatePaths, err := filepath.Glob(filepath.Join(rootDir, "[^.]*.jinja"))
+	if err != nil {
+		return "", err
+	}
+	if len(templatePaths) == 0 {
+		return "", nil
+	}
+	if len(templatePaths) > 1 {
+		return "", fmt.Errorf("found multiple template files, but only 1 is supported")
+	}
+	return filepath.Base(templatePaths[0]), nil
 }
