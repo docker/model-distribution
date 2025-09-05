@@ -74,10 +74,16 @@ func NewClient(opts ...ClientOption) *Client {
 }
 
 func (c *Client) Model(ctx context.Context, reference string) (types.ModelArtifact, error) {
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
+	// Normalize the reference first
+	normalizedRef, err := Normalize(reference)
 	if err != nil {
 		return nil, NewReferenceError(reference, err)
+	}
+	
+	// Parse the normalized reference
+	ref, err := name.ParseReference(normalizedRef)
+	if err != nil {
+		return nil, NewReferenceError(normalizedRef, err)
 	}
 
 	// Set up authentication options
@@ -114,10 +120,16 @@ func (c *Client) Model(ctx context.Context, reference string) (types.ModelArtifa
 }
 
 func (c *Client) BlobURL(reference string, digest v1.Hash) (string, error) {
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
+	// Normalize the reference first
+	normalizedRef, err := Normalize(reference)
 	if err != nil {
 		return "", NewReferenceError(reference, err)
+	}
+	
+	// Parse the normalized reference
+	ref, err := name.ParseReference(normalizedRef)
+	if err != nil {
+		return "", NewReferenceError(normalizedRef, err)
 	}
 
 	return fmt.Sprintf("%s://%s/v2/%s/blobs/%s",
@@ -128,10 +140,16 @@ func (c *Client) BlobURL(reference string, digest v1.Hash) (string, error) {
 }
 
 func (c *Client) BearerToken(ctx context.Context, reference string) (string, error) {
-	// Parse the reference
-	ref, err := name.ParseReference(reference)
+	// Normalize the reference first
+	normalizedRef, err := Normalize(reference)
 	if err != nil {
 		return "", NewReferenceError(reference, err)
+	}
+	
+	// Parse the normalized reference
+	ref, err := name.ParseReference(normalizedRef)
+	if err != nil {
+		return "", NewReferenceError(normalizedRef, err)
 	}
 
 	var auth authn.Authenticator
@@ -165,9 +183,15 @@ type Target struct {
 }
 
 func (c *Client) NewTarget(tag string) (*Target, error) {
-	ref, err := name.NewTag(tag)
+	// Normalize the tag first
+	normalizedTag, err := Normalize(tag)
 	if err != nil {
 		return nil, fmt.Errorf("invalid tag: %q: %w", tag, err)
+	}
+	
+	ref, err := name.NewTag(normalizedTag)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tag: %q: %w", normalizedTag, err)
 	}
 	return &Target{
 		reference: ref,
