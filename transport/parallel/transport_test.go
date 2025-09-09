@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // ───────────────────────── Test Harness Types & Utilities ─────────────────────────
@@ -102,7 +104,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Log the request (clone it to avoid races).
 	reqCopy := *req
 	if req.Header != nil {
-		reqCopy.Header = cloneHeader(req.Header)
+		reqCopy.Header = common.CloneHeader(req.Header)
 	}
 	ft.requestLog = append(ft.requestLog, reqCopy)
 
@@ -182,7 +184,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if plan == nil || !plan.NoRangeSupport {
 			h.Set("Accept-Ranges", "bytes")
 		}
-		
+
 		contentLength := total
 		if plan != nil && plan.NoContentLength {
 			contentLength = -1
@@ -615,7 +617,7 @@ func TestWrongRangeResponse_HandlesError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error during GET due to wrong ranges")
 	}
-	
+
 	if !strings.Contains(err.Error(), "server returned range") {
 		t.Errorf("expected range error, got: %v", err)
 	} else {
@@ -632,7 +634,7 @@ func TestConcurrencyLimits(t *testing.T) {
 
 	// Set low concurrency limit.
 	limits := map[string]uint{"example.com": 2}
-	client := newClient(ft, 
+	client := newClient(ft,
 		WithMaxConcurrentPerHost(limits),
 		WithMaxConcurrentPerRequest(8),
 		WithMinChunkSize(1024))
@@ -650,7 +652,7 @@ func TestConcurrencyLimits(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-	
+
 	// With concurrency limit of 2 and slow chunks, this should take some time.
 	// This is a rough test - in practice we'd need more sophisticated timing verification.
 	if elapsed < 100*time.Millisecond {
@@ -770,7 +772,7 @@ func TestETagValidation_Success(t *testing.T) {
 	}
 }
 
-// TestWeakETag_FallsBackToLastModified verifies that weak ETags are ignored 
+// TestWeakETag_FallsBackToLastModified verifies that weak ETags are ignored
 // and Last-Modified is used instead.
 func TestWeakETag_FallsBackToLastModified(t *testing.T) {
 	url := "https://example.com/weak-etag-test"
@@ -798,7 +800,7 @@ func TestWeakETag_FallsBackToLastModified(t *testing.T) {
 	log := ft.getRequestLog()
 	lastModifiedCount := 0
 	expectedLM := time.Unix(1_700_000_000, 0).UTC().Format(http.TimeFormat)
-	
+
 	for _, req := range log {
 		if req.Method == http.MethodGet && req.Header.Get("Range") != "" {
 			if ifRange := req.Header.Get("If-Range"); ifRange == expectedLM {
@@ -825,7 +827,7 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 
 	client := newClient(ft, WithMaxConcurrentPerRequest(4), WithMinChunkSize(1024))
 	_, err := client.Get(url)
-	
+
 	// Should get an error due to ETag mismatch.
 	if err == nil {
 		t.Fatal("expected error due to ETag change, got nil")
@@ -881,7 +883,7 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 	ft.add(url, payload, &testPlan{CustomETag: `"scrub-etag"`})
 
 	client := newClient(ft, WithMaxConcurrentPerRequest(4), WithMinChunkSize(1024))
-	
+
 	// Create request with conditional headers that should be scrubbed.
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -906,20 +908,20 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 	// Verify conditional headers were scrubbed from range requests.
 	log := ft.getRequestLog()
 	conditionalHeaders := []string{"If-None-Match", "If-Modified-Since", "If-Match", "If-Unmodified-Since"}
-	
+
 	rangeRequestCount := 0
 	for _, req := range log {
 		if req.Method == http.MethodGet && req.Header.Get("Range") != "" {
 			rangeRequestCount++
 			rangeHeader := req.Header.Get("Range")
 			t.Logf("Range request %d: Range=%s, If-Range=%s", rangeRequestCount, rangeHeader, req.Header.Get("If-Range"))
-			
+
 			for _, header := range conditionalHeaders {
 				if value := req.Header.Get(header); value != "" {
 					t.Errorf("expected %s header to be scrubbed from range request, got: %s", header, value)
 				}
 			}
-			
+
 			// Verify If-Range is present for chunk requests (not the header request bytes=0-0).
 			if rangeHeader != "bytes=0-0" {
 				if ifRange := req.Header.Get("If-Range"); ifRange == "" {
@@ -928,7 +930,7 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if rangeRequestCount == 0 {
 		t.Error("no range requests found - parallel download may not have been triggered")
 	}

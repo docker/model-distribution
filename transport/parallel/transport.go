@@ -32,6 +32,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // Option configures a ParallelTransport.
@@ -152,7 +154,7 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	defer headResp.Body.Close()
 
 	// Check if range requests are supported.
-	if !supportsRange(headResp.Header) {
+	if !common.SupportsRange(headResp.Header) {
 		return false, nil, nil
 	}
 
@@ -166,7 +168,7 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	if totalSize <= 0 {
 		// Try to parse from Content-Range if present (206 response).
 		if headResp.StatusCode == http.StatusPartialContent {
-			if _, _, total, ok := parseContentRange(headResp.Header.Get("Content-Range")); ok && total > 0 {
+			if _, _, total, ok := common.ParseContentRange(headResp.Header.Get("Content-Range")); ok && total > 0 {
 				totalSize = total
 			} else {
 				return false, nil, nil
@@ -184,8 +186,8 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	info := &parallelInfo{
 		totalSize: totalSize,
 	}
-	
-	if et := headResp.Header.Get("ETag"); et != "" && !isWeakETag(et) {
+
+	if et := headResp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
 		info.etag = et
 	} else if lm := headResp.Header.Get("Last-Modified"); lm != "" {
 		info.lastModified = lm
@@ -198,7 +200,7 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 // multiple concurrent byte-range requests.
 func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallelInfo) (*http.Response, error) {
 	totalSize := pInfo.totalSize
-	
+
 	// Calculate chunk size and number of chunks.
 	numChunks := int(pt.maxConcurrentPerRequest)
 	if totalSize < int64(numChunks)*pt.minChunkSize {
@@ -244,7 +246,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 	// Download chunks concurrently.
 	var wg sync.WaitGroup
 	errCh := make(chan error, numChunks)
-	
+
 	for i, ch := range chunks {
 		wg.Add(1)
 		go func(i int, ch *chunk) {
@@ -290,7 +292,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		Proto:         headerResp.Proto,
 		ProtoMajor:    headerResp.ProtoMajor,
 		ProtoMinor:    headerResp.ProtoMinor,
-		Header:        cloneHeader(headerResp.Header),
+		Header:        common.CloneHeader(headerResp.Header),
 		Body:          body,
 		ContentLength: totalSize,
 		Request:       req,
@@ -307,12 +309,12 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 func (pt *ParallelTransport) getResponseHeaders(req *http.Request) (*http.Response, error) {
 	// Request just the first byte to get headers.
 	headerReq := req.Clone(req.Context())
-	headerReq.Header = cloneHeader(req.Header)
+	headerReq.Header = common.CloneHeader(req.Header)
 	headerReq.Header.Set("Range", "bytes=0-0")
 	headerReq.Header.Set("Accept-Encoding", "identity")
 
 	// Remove conditional headers that could conflict with Range logic.
-	scrubConditionalHeaders(headerReq.Header)
+	common.ScrubConditionalHeaders(headerReq.Header)
 
 	resp, err := pt.base.RoundTrip(headerReq)
 	if err != nil {
@@ -336,7 +338,7 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 
 	// Create range request.
 	rangeReq := origReq.Clone(origReq.Context())
-	rangeReq.Header = cloneHeader(origReq.Header)
+	rangeReq.Header = common.CloneHeader(origReq.Header)
 	rangeReq.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", chunk.start, chunk.end))
 
 	// Prevent compression which would interfere with byte ranges.
@@ -350,7 +352,7 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 	}
 
 	// Remove conditional headers that could conflict with If-Range.
-	scrubConditionalHeaders(rangeReq.Header)
+	common.ScrubConditionalHeaders(rangeReq.Header)
 
 	// Perform request.
 	resp, err := pt.base.RoundTrip(rangeReq)
@@ -370,7 +372,7 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 	}
 
 	// Verify the range matches what we requested.
-	if start, end, _, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
+	if start, end, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
 		if start != chunk.start || end != chunk.end {
 			return fmt.Errorf("server returned range %d-%d, requested %d-%d", start, end, chunk.start, chunk.end)
 		}
@@ -392,7 +394,7 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 // getSemaphore returns the semaphore for the given host, creating it if needed.
 func (pt *ParallelTransport) getSemaphore(host string) *semaphore {
 	canonicalHost := canonicalizeHost(host)
-	
+
 	pt.semMu.RLock()
 	if sem, exists := pt.semaphores[canonicalHost]; exists {
 		pt.semMu.RUnlock()
@@ -402,7 +404,7 @@ func (pt *ParallelTransport) getSemaphore(host string) *semaphore {
 
 	pt.semMu.Lock()
 	defer pt.semMu.Unlock()
-	
+
 	// Double-check after acquiring write lock.
 	if sem, exists := pt.semaphores[canonicalHost]; exists {
 		return sem
@@ -559,76 +561,4 @@ func (s *semaphore) acquire(ctx context.Context) error {
 // release releases a semaphore slot.
 func (s *semaphore) release() {
 	<-s.ch
-}
-
-// supportsRange determines whether an HTTP response indicates support for range requests.
-func supportsRange(h http.Header) bool {
-	ar := strings.ToLower(h.Get("Accept-Ranges"))
-	for _, part := range strings.Split(ar, ",") {
-		if strings.TrimSpace(part) == "bytes" {
-			return true
-		}
-	}
-	return false
-}
-
-// parseContentRange parses "Content-Range: bytes start-end/total".
-// It returns (start, end, total, ok). When total is unknown, total == -1.
-func parseContentRange(h string) (int64, int64, int64, bool) {
-	if h == "" {
-		return 0, -1, -1, false
-	}
-	h = strings.ToLower(strings.TrimSpace(h))
-	if !strings.HasPrefix(h, "bytes ") {
-		return 0, -1, -1, false
-	}
-	body := strings.TrimSpace(h[len("bytes "):])
-	seTotal := strings.SplitN(body, "/", 2)
-	if len(seTotal) != 2 {
-		return 0, -1, -1, false
-	}
-	se := strings.SplitN(strings.TrimSpace(seTotal[0]), "-", 2)
-	if len(se) != 2 {
-		return 0, -1, -1, false
-	}
-	start, err1 := strconv.ParseInt(strings.TrimSpace(se[0]), 10, 64)
-	end, err2 := strconv.ParseInt(strings.TrimSpace(se[1]), 10, 64)
-	totalStr := strings.TrimSpace(seTotal[1])
-	var total int64 = -1
-	var err3 error
-	if totalStr != "*" {
-		total, err3 = strconv.ParseInt(totalStr, 10, 64)
-	}
-	if err1 != nil || err2 != nil || (err3 != nil && totalStr != "*") {
-		return 0, -1, -1, false
-	}
-	return start, end, total, true
-}
-
-// isWeakETag reports whether the ETag is a weak validator (W/"...") which must
-// not be used with If-Range per RFC 7232 §2.1.
-func isWeakETag(etag string) bool {
-	etag = strings.TrimSpace(etag)
-	return strings.HasPrefix(etag, "W/") || strings.HasPrefix(etag, "w/")
-}
-
-// scrubConditionalHeaders removes conditional headers we do not want to forward
-// on range requests, because they can alter semantics or conflict with If-Range logic.
-func scrubConditionalHeaders(h http.Header) {
-	h.Del("If-None-Match")
-	h.Del("If-Modified-Since")
-	h.Del("If-Match")
-	h.Del("If-Unmodified-Since")
-	// We set Range/If-Range explicitly elsewhere.
-}
-
-// cloneHeader makes a deep copy of an http.Header map.
-func cloneHeader(h http.Header) http.Header {
-	out := make(http.Header, len(h))
-	for k, vv := range h {
-		cp := make([]string, len(vv))
-		copy(cp, vv)
-		out[k] = cp
-	}
-	return out
 }

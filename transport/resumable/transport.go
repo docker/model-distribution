@@ -32,10 +32,10 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // Option configures a ResumableTransport.
@@ -129,7 +129,7 @@ func isResumable(req *http.Request, resp *http.Response) bool {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return false
 	}
-	if !supportsRange(resp.Header) {
+	if !common.SupportsRange(resp.Header) {
 		return false
 	}
 	// Disallow when the response was auto-decompressed or has a Content-Encoding.
@@ -137,18 +137,6 @@ func isResumable(req *http.Request, resp *http.Response) bool {
 		return false
 	}
 	return true
-}
-
-// supportsRange determines whether or not an HTTP response indicates support
-// for range requests.
-func supportsRange(h http.Header) bool {
-	ar := strings.ToLower(h.Get("Accept-Ranges"))
-	for _, part := range strings.Split(ar, ",") {
-		if strings.TrimSpace(part) == "bytes" {
-			return true
-		}
-	}
-	return false
 }
 
 // resumableBody wraps a Response.Body to add transparent resume support.
@@ -203,7 +191,7 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 	}
 
 	// Extract starting offsets from request Range if present (single-range only).
-	if start, end, ok := parseSingleRange(rb.originalRangeSpec); ok {
+	if start, end, ok := common.ParseSingleRange(rb.originalRangeSpec); ok {
 		rb.initialStart = start
 		if end >= 0 {
 			rb.initialEnd = &end
@@ -212,7 +200,7 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 
 	// Refine offsets from Content-Range header if response was 206.
 	if resp.StatusCode == http.StatusPartialContent {
-		if s, e, total, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
+		if s, e, total, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
 			rb.initialStart = s
 			if e >= 0 {
 				rb.initialEnd = &e
@@ -227,7 +215,7 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 	}
 
 	// Capture validators for If-Range to ensure consistency across resumes.
-	if et := resp.Header.Get("ETag"); et != "" && !isWeakETag(et) {
+	if et := resp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
 		rb.etag = et
 	} else if lm := resp.Header.Get("Last-Modified"); lm != "" {
 		rb.lastModified = lm
@@ -339,7 +327,7 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 		switch resp.StatusCode {
 		case http.StatusPartialContent:
 			// Validate server honored our starting offset precisely.
-			s, _, _, ok := parseContentRange(resp.Header.Get("Content-Range"))
+			s, _, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range"))
 			if !ok || s != start {
 				_ = resp.Body.Close()
 				continue // try again; mismatched range
@@ -380,7 +368,7 @@ func (rb *resumableBody) swapResponse(resp *http.Response) {
 	rb.rc = resp.Body
 
 	// Persist validators from the server if they are strong.
-	if et := resp.Header.Get("ETag"); et != "" && !isWeakETag(et) {
+	if et := resp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
 		rb.etag = et
 	}
 	if lm := resp.Header.Get("Last-Modified"); lm != "" {
@@ -388,7 +376,7 @@ func (rb *resumableBody) swapResponse(resp *http.Response) {
 	}
 
 	// Merge any updated size info from the Content-Range.
-	if s, e, total, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
+	if s, e, total, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
 		_ = s // start is validated by caller
 		if e >= 0 {
 			rb.initialEnd = &e
@@ -406,12 +394,12 @@ func (rb *resumableBody) cloneBaseRequest(rangeVal string) *http.Request {
 	req := rb.origReq.Clone(rb.ctx)
 	req.Body = nil
 	req.ContentLength = 0
-	req.Header = cloneHeader(rb.origReq.Header)
+	req.Header = common.CloneHeader(rb.origReq.Header)
 
 	// Ensure we control the Range validator set.
 	req.Header.Set("Range", rangeVal)
 	// Remove conditional headers that could conflict with If-Range semantics.
-	scrubConditionalHeaders(req.Header)
+	common.ScrubConditionalHeaders(req.Header)
 
 	if rb.etag != "" {
 		req.Header.Set("If-Range", rb.etag)
@@ -424,28 +412,6 @@ func (rb *resumableBody) cloneBaseRequest(rangeVal string) *http.Request {
 	// Prevent transparent decompression on resumed requests.
 	req.Header.Set("Accept-Encoding", "identity")
 	return req
-}
-
-// cloneHeader makes a deep copy of an http.Header map.
-func cloneHeader(h http.Header) http.Header {
-	out := make(http.Header, len(h))
-	for k, vv := range h {
-		cp := make([]string, len(vv))
-		copy(cp, vv)
-		out[k] = cp
-	}
-	return out
-}
-
-// scrubConditionalHeaders removes conditional headers we do not want to forward
-// on resumed Range requests, because they can alter semantics or conflict with
-// If-Range logic.
-func scrubConditionalHeaders(h http.Header) {
-	h.Del("If-None-Match")
-	h.Del("If-Modified-Since")
-	h.Del("If-Match")
-	h.Del("If-Unmodified-Since")
-	// We overwrite Range/If-Range explicitly elsewhere.
 }
 
 // buildRangeHeader constructs a "Range" header value for a given start and
@@ -491,87 +457,4 @@ func (rb *resumableBody) rangeIsComplete(absoluteOffset int64) bool {
 		}
 	}
 	return false
-}
-
-// isWeakETag reports whether the ETag is a weak validator (W/"...") which must
-// not be used with If-Range per RFC 7232 §2.1.
-func isWeakETag(etag string) bool {
-	etag = strings.TrimSpace(etag)
-	return strings.HasPrefix(etag, "W/") || strings.HasPrefix(etag, "w/")
-}
-
-// ─────────────────────────── Helpers: header parsing ──────────────────────────
-
-// parseSingleRange parses a single "Range: bytes=start-end" header.
-// It returns (start, end, ok). When end is omitted, end == -1.
-//
-// Notes:
-//   - Only absolute-start forms are supported (no suffix ranges "-N").
-//   - Multi-range specifications (comma separated) return ok == false.
-func parseSingleRange(h string) (int64, int64, bool) {
-	if h == "" {
-		return 0, -1, false
-	}
-	h = strings.TrimSpace(h)
-	if !strings.HasPrefix(strings.ToLower(h), "bytes=") {
-		return 0, -1, false
-	}
-	spec := strings.TrimSpace(h[len("bytes="):])
-	if strings.Contains(spec, ",") {
-		return 0, -1, false
-	}
-	parts := strings.SplitN(spec, "-", 2)
-	if len(parts) != 2 {
-		return 0, -1, false
-	}
-	if parts[0] == "" {
-		// Suffix form is not supported here.
-		return 0, -1, false
-	}
-	start, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
-	if err != nil || start < 0 {
-		return 0, -1, false
-	}
-	end := int64(-1)
-	if strings.TrimSpace(parts[1]) != "" {
-		e, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-		if err != nil || e < start {
-			return 0, -1, false
-		}
-		end = e
-	}
-	return start, end, true
-}
-
-// parseContentRange parses "Content-Range: bytes start-end/total".
-// It returns (start, end, total, ok). When total is unknown, total == -1.
-func parseContentRange(h string) (int64, int64, int64, bool) {
-	if h == "" {
-		return 0, -1, -1, false
-	}
-	h = strings.ToLower(strings.TrimSpace(h))
-	if !strings.HasPrefix(h, "bytes ") {
-		return 0, -1, -1, false
-	}
-	body := strings.TrimSpace(h[len("bytes "):])
-	seTotal := strings.SplitN(body, "/", 2)
-	if len(seTotal) != 2 {
-		return 0, -1, -1, false
-	}
-	se := strings.SplitN(strings.TrimSpace(seTotal[0]), "-", 2)
-	if len(se) != 2 {
-		return 0, -1, -1, false
-	}
-	start, err1 := strconv.ParseInt(strings.TrimSpace(se[0]), 10, 64)
-	end, err2 := strconv.ParseInt(strings.TrimSpace(se[1]), 10, 64)
-	totalStr := strings.TrimSpace(seTotal[1])
-	var total int64 = -1
-	var err3 error
-	if totalStr != "*" {
-		total, err3 = strconv.ParseInt(totalStr, 10, 64)
-	}
-	if err1 != nil || err2 != nil || (err3 != nil && totalStr != "*") {
-		return 0, -1, -1, false
-	}
-	return start, end, total, true
 }

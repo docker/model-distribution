@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // ───────────────────────── Test Harness Types & Utilities ─────────────────────────
@@ -128,7 +130,7 @@ func (ft *fakeTransport) segmentHeaders(url string) []http.Header {
 	hs := ft.lastReqHeaders[url]
 	out := make([]http.Header, len(hs))
 	for i := range hs {
-		out[i] = cloneHeader(hs[i])
+		out[i] = common.CloneHeader(hs[i])
 	}
 	return out
 }
@@ -140,7 +142,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Record the headers we received for this URL/segment for later assertions.
 	rurl := req.URL.String()
 	ft.mu.Lock()
-	ft.lastReqHeaders[rurl] = append(ft.lastReqHeaders[rurl], cloneHeader(req.Header))
+	ft.lastReqHeaders[rurl] = append(ft.lastReqHeaders[rurl], common.CloneHeader(req.Header))
 
 	data, ok := ft.resources[rurl]
 	plan := ft.plans[rurl]
@@ -199,7 +201,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				Status:        "200 OK",
 				StatusCode:    http.StatusOK,
-				Header:        cloneHeader(http.Header{}),
+				Header:        common.CloneHeader(http.Header{}),
 				ContentLength: total,
 				Body:          makeBody(data, cutAfter),
 				Request:       req,
@@ -266,7 +268,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// If the advertised ETag is weak, treat it as unusable for If-Range and
 		// require Last-Modified instead (aligns with RFC 7232/7233 and client logic).
 		expected := curETag
-		if expected == "" || isWeakETag(expected) {
+		if expected == "" || common.IsWeakETag(expected) {
 			expected = curLM
 		}
 		ir := req.Header.Get("If-Range")
@@ -1144,52 +1146,3 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 }
 
 // ─────────────────────────────── Parser tests ───────────────────────────────
-
-// TestParseSingleRange exercises valid and invalid single-range specs.
-func TestParseSingleRange(t *testing.T) {
-	cases := []struct {
-		in         string
-		start, end int64
-		ok         bool
-	}{
-		{"", 0, -1, false},
-		{"bytes=0-99", 0, 99, true},
-		{"bytes=0-", 0, -1, true},
-		{"bytes=5-5", 5, 5, true},
-		{"BYTES=7-9", 7, 9, true},
-		{"bytes=10-5", 0, -1, false}, // end before start
-		{"bytes=-100", 0, -1, false}, // suffix not supported
-		{"items=0-10", 0, -1, false},
-		{"bytes=0-1,3-5", 0, -1, false}, // multi-range unsupported
-	}
-	for _, tc := range cases {
-		start, end, ok := parseSingleRange(tc.in)
-		if start != tc.start || end != tc.end || ok != tc.ok {
-			t.Errorf("parseSingleRange(%q) = (%d,%d,%v), want (%d,%d,%v)", tc.in, start, end, ok, tc.start, tc.end, tc.ok)
-		}
-	}
-}
-
-// TestParseContentRange exercises valid and invalid Content-Range headers.
-func TestParseContentRange(t *testing.T) {
-	cases := []struct {
-		in         string
-		start, end int64
-		total      int64
-		ok         bool
-	}{
-		{"", 0, -1, -1, false},
-		{"bytes 0-99/200", 0, 99, 200, true},
-		{"BYTES 1-1/2", 1, 1, 2, true},
-		{"bytes 0-0/*", 0, 0, -1, true},
-		{"items 0-1/2", 0, -1, -1, false},
-		{"bytes 0-99/abc", 0, -1, -1, false},
-		{"bytes 5-4/10", 5, 4, 10, true}, // parser accepts; semantic check happens elsewhere
-	}
-	for _, tc := range cases {
-		start, end, total, ok := parseContentRange(tc.in)
-		if start != tc.start || end != tc.end || total != tc.total || ok != tc.ok {
-			t.Errorf("parseContentRange(%q) = (%d,%d,%d,%v), want (%d,%d,%d,%v)", tc.in, start, end, total, ok, tc.start, tc.end, tc.total, tc.ok)
-		}
-	}
-}
