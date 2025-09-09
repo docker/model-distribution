@@ -540,8 +540,8 @@ type semaphore struct {
 // If capacity is 0 or negative, the semaphore allows unlimited concurrency.
 func newSemaphore(capacity int) *semaphore {
 	if capacity <= 0 {
-		// Unlimited semaphore - use a large buffer.
-		capacity = 10000
+		// Unlimited semaphore - nil channel means no limits.
+		return &semaphore{}
 	}
 	return &semaphore{
 		ch: make(chan struct{}, capacity),
@@ -550,6 +550,10 @@ func newSemaphore(capacity int) *semaphore {
 
 // acquire acquires a semaphore slot, blocking until one is available or context is canceled.
 func (s *semaphore) acquire(ctx context.Context) error {
+	if s.ch == nil {
+		// Unlimited semaphore - no need to acquire.
+		return nil
+	}
 	select {
 	case s.ch <- struct{}{}:
 		return nil
@@ -560,5 +564,9 @@ func (s *semaphore) acquire(ctx context.Context) error {
 
 // release releases a semaphore slot.
 func (s *semaphore) release() {
+	if s.ch == nil {
+		// Unlimited semaphore - no need to release.
+		return
+	}
 	<-s.ch
 }
