@@ -43,7 +43,7 @@ type Option func(*ParallelTransport)
 // Default concurrency limits are applied if not specified.
 func WithMaxConcurrentPerHost(limits map[string]uint) Option {
 	return func(pt *ParallelTransport) {
-		pt.maxConcurrentPerHost = make(map[string]uint)
+		pt.maxConcurrentPerHost = make(map[string]uint, len(limits))
 		for host, limit := range limits {
 			pt.maxConcurrentPerHost[host] = limit
 		}
@@ -132,8 +132,11 @@ func (pt *ParallelTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 // parallelInfo holds information needed for parallel downloads.
 type parallelInfo struct {
-	totalSize    int64
-	etag         string
+	// totalSize is the total size of the resource in bytes.
+	totalSize int64
+	// etag is the strong ETag validator from the HEAD response, used for If-Range.
+	etag string
+	// lastModified is the Last-Modified header value, used as fallback validator for If-Range.
 	lastModified string
 }
 
@@ -435,8 +438,11 @@ func canonicalizeHost(host string) string {
 
 // chunk represents a byte range chunk being downloaded to a temporary file.
 type chunk struct {
-	start    int64
-	end      int64
+	// start is the inclusive starting byte offset for this chunk.
+	start int64
+	// end is the inclusive ending byte offset for this chunk.
+	end int64
+	// tempFile is the temporary file where this chunk's data is stored.
 	tempFile *os.File
 }
 
@@ -459,12 +465,18 @@ func (c *chunk) cleanup() {
 
 // stitchedBody implements io.ReadCloser by reading from multiple chunk files in sequence.
 type stitchedBody struct {
-	chunks     []*chunk
-	totalSize  int64
+	// chunks is the ordered list of chunk files to read from.
+	chunks []*chunk
+	// totalSize is the expected total number of bytes across all chunks.
+	totalSize int64
+	// currentIdx is the index of the chunk currently being read from.
 	currentIdx int
-	bytesRead  int64
-	closed     bool
-	mu         sync.Mutex
+	// bytesRead is the total number of bytes delivered to callers so far.
+	bytesRead int64
+	// closed indicates whether Close() has been called.
+	closed bool
+	// mu protects all fields from concurrent access.
+	mu sync.Mutex
 }
 
 // Read reads data by stitching together chunks in order.
@@ -533,6 +545,8 @@ func (sb *stitchedBody) Close() error {
 
 // semaphore implements a counting semaphore for limiting concurrency.
 type semaphore struct {
+	// ch is the buffered channel used to limit concurrent operations.
+	// If nil, no limits are enforced (unlimited concurrency).
 	ch chan struct{}
 }
 
