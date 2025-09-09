@@ -18,17 +18,6 @@ func SupportsRange(h http.Header) bool {
 	return false
 }
 
-// CloneHeader makes a deep copy of an http.Header map.
-func CloneHeader(h http.Header) http.Header {
-	out := make(http.Header, len(h))
-	for k, vv := range h {
-		cp := make([]string, len(vv))
-		copy(cp, vv)
-		out[k] = cp
-	}
-	return out
-}
-
 // ScrubConditionalHeaders removes conditional headers we do not want to forward
 // on range requests, because they can alter semantics or conflict with If-Range logic.
 func ScrubConditionalHeaders(h http.Header) {

@@ -292,7 +292,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		Proto:         headerResp.Proto,
 		ProtoMajor:    headerResp.ProtoMajor,
 		ProtoMinor:    headerResp.ProtoMinor,
-		Header:        common.CloneHeader(headerResp.Header),
+		Header:        headerResp.Header.Clone(),
 		Body:          body,
 		ContentLength: totalSize,
 		Request:       req,
@@ -309,7 +309,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 func (pt *ParallelTransport) getResponseHeaders(req *http.Request) (*http.Response, error) {
 	// Request just the first byte to get headers.
 	headerReq := req.Clone(req.Context())
-	headerReq.Header = common.CloneHeader(req.Header)
+	headerReq.Header = req.Header.Clone()
 	headerReq.Header.Set("Range", "bytes=0-0")
 	headerReq.Header.Set("Accept-Encoding", "identity")
 
@@ -338,7 +338,7 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 
 	// Create range request.
 	rangeReq := origReq.Clone(origReq.Context())
-	rangeReq.Header = common.CloneHeader(origReq.Header)
+	rangeReq.Header = origReq.Header.Clone()
 	rangeReq.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", chunk.start, chunk.end))
 
 	// Prevent compression which would interfere with byte ranges.

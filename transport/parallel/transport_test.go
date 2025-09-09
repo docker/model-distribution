@@ -9,8 +9,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // ───────────────────────── Test Harness Types & Utilities ─────────────────────────
@@ -104,7 +102,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Log the request (clone it to avoid races).
 	reqCopy := *req
 	if req.Header != nil {
-		reqCopy.Header = common.CloneHeader(req.Header)
+		reqCopy.Header = req.Header.Clone()
 	}
 	ft.requestLog = append(ft.requestLog, reqCopy)
 

@@ -394,7 +394,7 @@ func (rb *resumableBody) cloneBaseRequest(rangeVal string) *http.Request {
 	req := rb.origReq.Clone(rb.ctx)
 	req.Body = nil
 	req.ContentLength = 0
-	req.Header = common.CloneHeader(rb.origReq.Header)
+	req.Header = rb.origReq.Header.Clone()
 
 	// Ensure we control the Range validator set.
 	req.Header.Set("Range", rangeVal)

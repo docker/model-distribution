@@ -130,7 +130,7 @@ func (ft *fakeTransport) segmentHeaders(url string) []http.Header {
 	hs := ft.lastReqHeaders[url]
 	out := make([]http.Header, len(hs))
 	for i := range hs {
-		out[i] = common.CloneHeader(hs[i])
+		out[i] = hs[i].Clone()
 	}
 	return out
 }
@@ -142,7 +142,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Record the headers we received for this URL/segment for later assertions.
 	rurl := req.URL.String()
 	ft.mu.Lock()
-	ft.lastReqHeaders[rurl] = append(ft.lastReqHeaders[rurl], common.CloneHeader(req.Header))
+	ft.lastReqHeaders[rurl] = append(ft.lastReqHeaders[rurl], req.Header.Clone())
 
 	data, ok := ft.resources[rurl]
 	plan := ft.plans[rurl]
@@ -201,7 +201,7 @@ func (ft *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				Status:        "200 OK",
 				StatusCode:    http.StatusOK,
-				Header:        common.CloneHeader(http.Header{}),
+				Header:        http.Header{}.Clone(),
 				ContentLength: total,
 				Body:          makeBody(data, cutAfter),
 				Request:       req,

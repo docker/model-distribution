@@ -152,47 +152,6 @@ func TestIsWeakETag(t *testing.T) {
 	}
 }
 
-// TestCloneHeader tests header cloning.
-func TestCloneHeader(t *testing.T) {
-	original := http.Header{
-		"Content-Type":  []string{"application/json"},
-		"Authorization": []string{"Bearer token"},
-		"X-Custom":      []string{"value1", "value2"},
-	}
-
-	cloned := CloneHeader(original)
-
-	// Verify all values are copied.
-	for key, values := range original {
-		clonedValues, exists := cloned[key]
-		if !exists {
-			t.Errorf("key %s not found in cloned header", key)
-			continue
-		}
-		if len(clonedValues) != len(values) {
-			t.Errorf("key %s: cloned has %d values, original has %d", key, len(clonedValues), len(values))
-			continue
-		}
-		for i, val := range values {
-			if clonedValues[i] != val {
-				t.Errorf("key %s[%d]: cloned = %q, original = %q", key, i, clonedValues[i], val)
-			}
-		}
-	}
-
-	// Verify independence - modifying clone shouldn't affect original.
-	cloned.Set("New-Header", "new-value")
-	if original.Get("New-Header") != "" {
-		t.Error("modifying cloned header affected original")
-	}
-
-	// Verify modifying existing header values.
-	cloned["Content-Type"][0] = "modified"
-	if original["Content-Type"][0] == "modified" {
-		t.Error("modifying cloned header slice affected original")
-	}
-}
-
 // TestScrubConditionalHeaders tests conditional header removal.
 func TestScrubConditionalHeaders(t *testing.T) {
 	headers := http.Header{
