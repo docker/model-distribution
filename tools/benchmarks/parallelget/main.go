@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -132,7 +133,16 @@ func benchmarkNonParallel(url string, outputFile *os.File) (time.Duration, int64
 		return 0, 0, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	written, err := io.Copy(outputFile, resp.Body)
+	// Create progress writer with content length if available
+	contentLength := resp.ContentLength
+	if contentLength <= 0 {
+		contentLength = -1 // Unknown size
+	}
+	progressWriter := newProgressWriter(outputFile, contentLength, "  Progress")
+
+	written, err := io.Copy(progressWriter, resp.Body)
+	progressWriter.finish() // Ensure final progress is shown
+
 	if err != nil {
 		return 0, 0, err
 	}
@@ -145,6 +155,7 @@ func benchmarkParallel(url string, outputFile *os.File) (time.Duration, int64, e
 	// Create parallel transport with configuration
 	parallelTransport := parallel.New(
 		http.DefaultTransport,
+		parallel.WithMaxConcurrentPerHost(map[string]uint{"": 0}),
 		parallel.WithMinChunkSize(minChunkSize),
 		parallel.WithMaxConcurrentPerRequest(maxConcurrent),
 	)
@@ -165,7 +176,16 @@ func benchmarkParallel(url string, outputFile *os.File) (time.Duration, int64, e
 		return 0, 0, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	written, err := io.Copy(outputFile, resp.Body)
+	// Create progress writer with content length if available
+	contentLength := resp.ContentLength
+	if contentLength <= 0 {
+		contentLength = -1 // Unknown size
+	}
+	progressWriter := newProgressWriter(outputFile, contentLength, "  Progress")
+
+	written, err := io.Copy(progressWriter, resp.Body)
+	progressWriter.finish() // Ensure final progress is shown
+
 	if err != nil {
 		return 0, 0, err
 	}
@@ -233,4 +253,80 @@ func validateResponses(file1, file2 *os.File) error {
 	}
 
 	return nil
+}
+
+// progressWriter wraps an io.Writer and provides progress updates during writes
+type progressWriter struct {
+	writer     io.Writer
+	total      int64
+	written    int64
+	lastUpdate time.Time
+	label      string
+	finished   bool
+	mu         sync.Mutex
+}
+
+func newProgressWriter(writer io.Writer, total int64, label string) *progressWriter {
+	return &progressWriter{
+		writer:     writer,
+		total:      total,
+		label:      label,
+		lastUpdate: time.Now(),
+	}
+}
+
+func (pw *progressWriter) Write(data []byte) (int, error) {
+	n, err := pw.writer.Write(data)
+	if n > 0 {
+		pw.mu.Lock()
+		pw.written += int64(n)
+		now := time.Now()
+
+		// Update progress every 100ms (but not on completion - let finish() handle that)
+		if now.Sub(pw.lastUpdate) >= 100*time.Millisecond && (pw.total < 0 || pw.written < pw.total) {
+			pw.printProgress()
+			pw.lastUpdate = now
+		}
+		pw.mu.Unlock()
+	}
+	return n, err
+}
+
+func (pw *progressWriter) printProgress() {
+	if pw.finished {
+		return
+	}
+
+	if pw.total < 0 {
+		// Unknown total size - just show bytes transferred
+		fmt.Printf("\r%s: %d bytes", pw.label, pw.written)
+		return
+	}
+
+	percent := float64(pw.written) / float64(pw.total) * 100
+	if percent > 100 {
+		percent = 100
+	}
+
+	// Create simple progress bar
+	barWidth := 30
+	filled := int(percent / 100 * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+
+	fmt.Printf("\r%s: [%s] %.1f%% (%d/%d bytes)",
+		pw.label, bar, percent, pw.written, pw.total)
+}
+
+func (pw *progressWriter) finish() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if !pw.finished {
+		pw.printProgress()
+		fmt.Println() // New line after progress is complete
+		pw.finished = true
+	}
 }

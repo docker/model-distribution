@@ -8,6 +8,7 @@ A command-line benchmarking tool that compares the performance of standard HTTP 
 - **Response Validation**: Ensures both downloads produce identical results (byte-for-byte comparison)
 - **Configurable Parameters**: Adjustable chunk size and concurrency settings
 - **Detailed Metrics**: Reports download speeds, timing differences, and performance improvements
+- **Dynamic Progress Display**: Shows real-time progress bars during downloads with percentage and byte counts
 - **Clean Output**: User-friendly performance summary with emojis and clear formatting
 
 ## Usage
@@ -66,8 +67,10 @@ Benchmarking HTTP GET performance for: https://example.com/large-file.zip
 Configuration: chunk-size=1048576 bytes, max-concurrent=4
 
 Running non-parallel benchmark...
+  Progress: [██████████████████████████████] 100.0% (10485760/10485760 bytes)
 ✓ Non-parallel: 10485760 bytes in 2.1s (4.76 MB/s)
 Running parallel benchmark...
+  Progress: [██████████████████████████████] 100.0% (10485760/10485760 bytes)
 ✓ Parallel: 10485760 bytes in 650ms (15.38 MB/s)
 Validating response consistency...
 ✓ Responses match perfectly
