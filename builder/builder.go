@@ -61,8 +61,8 @@ func (b *Builder) WithMultimodalProjector(path string) (*Builder, error) {
 	}, nil
 }
 
-func (b *Builder) WithTemplateFile(path string) (*Builder, error) {
-	templateLayer, err := partial.NewLayer(path, types.MediaTypeTemplate)
+func (b *Builder) WithChatTemplateFile(path string) (*Builder, error) {
+	templateLayer, err := partial.NewLayer(path, types.MediaTypeChatTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("mmproj layer from %q: %w", path, err)
 	}

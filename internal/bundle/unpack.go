@@ -84,7 +84,7 @@ func unpackMultiModalProjector(bundle *Bundle, mdl types.Model) error {
 }
 
 func unpackTemplate(bundle *Bundle, mdl types.Model) error {
-	path, err := mdl.TemplatePath()
+	path, err := mdl.ChatTemplatePath()
 	if err != nil {
 		return nil // no such file
 	}

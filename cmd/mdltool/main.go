@@ -277,7 +277,7 @@ func cmdPackage(args []string) int {
 
 	if template != "" {
 		fmt.Println("Adding multimodal projector file:", mmproj)
-		builder, err = builder.WithTemplateFile(template)
+		builder, err = builder.WithChatTemplateFile(template)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding template layer for %s: %v\n", mmproj, err)
 			return 1

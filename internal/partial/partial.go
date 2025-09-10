@@ -84,17 +84,17 @@ func MMPROJPath(i WithLayers) (string, error) {
 	return paths[0], err
 }
 
-func TemplatePath(i WithLayers) (string, error) {
-	paths, err := layerPathsByMediaType(i, types.MediaTypeTemplate)
+func ChatTemplatePath(i WithLayers) (string, error) {
+	paths, err := layerPathsByMediaType(i, types.MediaTypeChatTemplate)
 	if err != nil {
 		return "", fmt.Errorf("get mmproj layer paths: %w", err)
 	}
 	if len(paths) == 0 {
-		return "", fmt.Errorf("model does not contain any layer of type %q", types.MediaTypeTemplate)
+		return "", fmt.Errorf("model does not contain any layer of type %q", types.MediaTypeChatTemplate)
 	}
 	if len(paths) > 1 {
 		return "", fmt.Errorf("found %d files of type %q, expected exactly 1",
-			len(paths), types.MediaTypeTemplate)
+			len(paths), types.MediaTypeChatTemplate)
 	}
 	return paths[0], err
 }

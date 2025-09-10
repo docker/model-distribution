@@ -22,7 +22,7 @@ func Parse(rootDir string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	templatePath, err := findTemplateFile(rootDir)
+	templatePath, err := findChatTemplateFile(rootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func findMultiModalProjectorFile(rootDir string) (string, error) {
 	return filepath.Base(mmprojPaths[0]), nil
 }
 
-func findTemplateFile(rootDir string) (string, error) {
+func findChatTemplateFile(rootDir string) (string, error) {
 	templatePaths, err := filepath.Glob(filepath.Join(rootDir, "[^.]*.jinja"))
 	if err != nil {
 		return "", err

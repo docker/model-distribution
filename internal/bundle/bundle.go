@@ -37,6 +37,14 @@ func (b *Bundle) MMPROJPath() string {
 	return filepath.Join(b.dir, b.mmprojPath)
 }
 
+// ChatTemplatePath return the path to a Jinja chat template file "" if none is present.
+func (b *Bundle) ChatTemplatePath() string {
+	if b.templatePath == "" {
+		return ""
+	}
+	return filepath.Join(b.dir, b.templatePath)
+}
+
 // RuntimeConfig returns config that should be respected by the backend at runtime.
 func (b *Bundle) RuntimeConfig() types.Config {
 	return b.runtimeConfig
