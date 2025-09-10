@@ -14,14 +14,32 @@ import (
 // and writes always append to the end. The type maintains separate read and write
 // positions internally.
 type FIFO struct {
-	file        *os.File
-	mu          sync.Mutex
-	cond        *sync.Cond // Condition variable for signaling data availability
-	readPos     int64      // Current read position in the file
-	writePos    int64      // Current write position in the file (always at end)
-	closed      bool
-	writeClosed bool  // True when no more writes will happen
-	writeErr    error // Last write error (persistent)
+	// file is the underlying temporary file used for storage.
+	file *os.File
+	
+	// mu protects all fields and synchronizes access to the FIFO.
+	mu sync.Mutex
+	
+	// cond is used to signal waiting readers when new data becomes available
+	// or when the write side is closed.
+	cond *sync.Cond
+	
+	// readPos tracks the current read position within the file.
+	readPos int64
+	
+	// writePos tracks the current write position within the file (always at EOF).
+	writePos int64
+	
+	// closed indicates whether Close() has been called, making the FIFO unusable.
+	closed bool
+	
+	// writeClosed indicates whether CloseWrite() has been called, meaning no more
+	// writes will occur but reads can continue until all data is consumed.
+	writeClosed bool
+	
+	// writeErr holds any persistent write error that should be returned to future
+	// write operations.
+	writeErr error
 }
 
 // NewFIFO creates a new FIFO backed by a temporary file.
@@ -46,15 +64,17 @@ func NewFIFO() (*FIFO, error) {
 // Write implements io.Writer. Writes always append to the end of the file.
 // Write is safe for concurrent use with Read.
 func (f *FIFO) Write(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	// Check if FIFO is closed for writing, even for empty writes
 	if f.closed || f.writeClosed {
 		return 0, fmt.Errorf("write to closed FIFO")
+	}
+
+	// Handle empty write case after checking closed state
+	if len(p) == 0 {
+		return 0, nil
 	}
 
 	// Return persistent write error if we have one
@@ -69,15 +89,17 @@ func (f *FIFO) Write(p []byte) (int, error) {
 		return 0, f.writeErr
 	}
 
-	// Write the data
+	// Write the data to the file
 	n, err := f.file.Write(p)
 	if n > 0 {
+		// Update our write position to track how much data we've written
 		f.writePos += int64(n)
-		// Signal waiting readers that data is available
+		// Signal all waiting readers that new data is available
 		f.cond.Broadcast()
 	}
 
 	if err != nil {
+		// Store the error for future write attempts
 		f.writeErr = fmt.Errorf("write failed: %w", err)
 		return n, f.writeErr
 	}
@@ -98,24 +120,29 @@ func (f *FIFO) Read(p []byte) (int, error) {
 
 	for {
 		if f.closed {
-			// If closed, we can't read from file anymore since it's closed
-			// Return EOF immediately
+			// FIFO has been fully closed - file is closed and cleaned up
+			// Return EOF immediately since no more data can be read
 			return 0, io.EOF
 		}
 
-		// Check if there's data available to read
+		// Calculate how much unread data is available
 		availableBytes := f.writePos - f.readPos
 		if availableBytes > 0 {
+			// Data is available - read it immediately
 			return f.readFromFile(p)
 		}
 
-		// No data available - check if write side is closed
+		// No data currently available - check if writes are finished
 		if f.writeClosed {
-			// No more data will be written and no data available - return EOF
+			// Write side is closed and no data available - return EOF
 			return 0, io.EOF
 		}
 
-		// No data available and not closed - wait for signal
+		// No data available and writes are still possible - wait for more data
+		// The condition variable will be signaled when:
+		// - New data is written (f.cond.Broadcast() in Write)
+		// - Write side is closed (f.cond.Broadcast() in CloseWrite)
+		// - FIFO is fully closed (f.cond.Broadcast() in Close)
 		f.cond.Wait()
 	}
 }
@@ -202,9 +229,3 @@ func (f *FIFO) CloseWrite() {
 	f.cond.Broadcast()
 }
 
-// Stat returns information about the current state of the FIFO.
-func (f *FIFO) Stat() (readPos, writePos int64, closed bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.readPos, f.writePos, f.closed
-}
