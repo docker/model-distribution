@@ -611,7 +611,14 @@ func TestWrongRangeResponse_HandlesError(t *testing.T) {
 	ft.add(url, payload, &testPlan{WrongRangeResponse: true})
 
 	client := newClient(ft, WithMaxConcurrentPerRequest(4), WithMinChunkSize(1024))
-	_, err := client.Get(url)
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("GET request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read from the response to trigger chunk download and error detection
+	_, err = io.ReadAll(resp.Body)
 	if err == nil {
 		t.Fatalf("expected error during GET due to wrong ranges")
 	}
@@ -824,8 +831,14 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 	})
 
 	client := newClient(ft, WithMaxConcurrentPerRequest(4), WithMinChunkSize(1024))
-	_, err := client.Get(url)
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("GET request failed: %v", err)
+	}
+	defer resp.Body.Close()
 
+	// Read from the response to trigger chunk download and error detection
+	_, err = io.ReadAll(resp.Body)
 	// Should get an error due to ETag mismatch.
 	if err == nil {
 		t.Fatal("expected error due to ETag change, got nil")

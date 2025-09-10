@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/docker/model-distribution/transport/internal/bufferfile"
 	"github.com/docker/model-distribution/transport/internal/common"
 )
 
@@ -229,47 +230,37 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		}
 		end := start + size - 1
 
-		tempFile, err := os.CreateTemp(pt.tempDir, "parallel-chunk-*.tmp")
+		fifo, err := bufferfile.NewFIFO()
 		if err != nil {
-			// Clean up any created files.
+			// Clean up any created FIFOs.
 			for j := 0; j < i; j++ {
 				chunks[j].cleanup()
 			}
-			return nil, fmt.Errorf("parallel: failed to create temp file: %w", err)
+			return nil, fmt.Errorf("parallel: failed to create FIFO: %w", err)
 		}
 
-		chunks[i] = &chunk{
-			start:    start,
-			end:      end,
-			tempFile: tempFile,
+		chunk := &chunk{
+			start: start,
+			end:   end,
+			fifo:  fifo,
+			state: chunkNotStarted,
 		}
+		chunks[i] = chunk
 		start = end + 1
 	}
 
-	// Download chunks concurrently.
-	var wg sync.WaitGroup
-	errCh := make(chan error, numChunks)
-
+	// Start downloading chunks concurrently (don't wait for completion).
 	for i, ch := range chunks {
-		wg.Add(1)
 		go func(i int, ch *chunk) {
-			defer wg.Done()
+			ch.setSimpleState(chunkDownloading, nil)
 			if err := pt.downloadChunk(req, ch, sem, pInfo); err != nil {
-				errCh <- fmt.Errorf("chunk %d: %w", i, err)
+				ch.setSimpleState(chunkFailed, fmt.Errorf("chunk %d: %w", i, err))
+				ch.fifo.Close() // Close FIFO on error to interrupt readers
+			} else {
+				ch.setSimpleState(chunkCompleted, nil)
+				ch.fifo.CloseWrite() // Close write side to signal no more writes (EOF when all data read)
 			}
 		}(i, ch)
-	}
-
-	wg.Wait()
-	close(errCh)
-
-	// Check for errors.
-	if err := <-errCh; err != nil {
-		// Clean up all chunks on error.
-		for _, ch := range chunks {
-			ch.cleanup()
-		}
-		return nil, err
 	}
 
 	// Get proper response headers by doing a small range request.
@@ -286,6 +277,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 	body := &stitchedBody{
 		chunks:    chunks,
 		totalSize: totalSize,
+		ctx:       req.Context(),
 	}
 
 	// Create response using the header response as template.
@@ -381,14 +373,23 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 		}
 	}
 
-	// Copy response body to temp file.
-	if _, err := io.Copy(chunk.tempFile, resp.Body); err != nil {
-		return fmt.Errorf("failed to write chunk data: %w", err)
-	}
+	// Copy response body to temp file with progress signaling.
+	buf := make([]byte, 32*1024) // 32KB buffer
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			// Write to FIFO
+			if _, writeErr := chunk.fifo.Write(buf[:n]); writeErr != nil {
+				return fmt.Errorf("failed to write chunk data: %w", writeErr)
+			}
+		}
 
-	// Seek back to start for reading.
-	if _, err := chunk.tempFile.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek temp file: %w", err)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read chunk data: %w", err)
+		}
 	}
 
 	return nil
@@ -436,31 +437,98 @@ func canonicalizeHost(host string) string {
 	return strings.ToLower(host)
 }
 
+// chunkState represents the current state of a chunk download.
+type chunkState int
+
+const (
+	chunkNotStarted chunkState = iota
+	chunkDownloading
+	chunkCompleted
+	chunkFailed
+)
+
 // chunk represents a byte range chunk being downloaded to a temporary file.
 type chunk struct {
 	// start is the inclusive starting byte offset for this chunk.
 	start int64
 	// end is the inclusive ending byte offset for this chunk.
 	end int64
-	// tempFile is the temporary file where this chunk's data is stored.
-	tempFile *os.File
+	// fifo is the FIFO buffer where this chunk's data is stored.
+	fifo *bufferfile.FIFO
+	// state tracks the current download state of this chunk.
+	state chunkState
+	// err holds any error that occurred during download.
+	err error
+	// mu protects state and err fields.
+	mu sync.Mutex
 }
 
-// close closes the temporary file handle.
+// close closes the FIFO handle.
 func (c *chunk) close() error {
-	if c.tempFile == nil {
+	if c.fifo == nil {
 		return nil
 	}
-	return c.tempFile.Close()
+	return c.fifo.Close()
 }
 
-// cleanup closes and removes the temporary file.
+// cleanup closes and removes the FIFO.
 func (c *chunk) cleanup() {
-	if c.tempFile != nil {
-		c.tempFile.Close()
-		os.Remove(c.tempFile.Name())
-		c.tempFile = nil
+	if c.fifo != nil {
+		c.fifo.Close()
+		c.fifo = nil
 	}
+}
+
+// setSimpleState updates the chunk state. No condition signaling needed since FIFO handles coordination.
+func (c *chunk) setSimpleState(state chunkState, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.state = state
+	c.err = err
+}
+
+// readAvailable reads up to len(p) bytes from the chunk, blocking until data is available.
+// Returns the number of bytes read and any error. Returns io.EOF when chunk is complete
+// and all data has been read.
+func (c *chunk) readAvailable(p []byte, ctx context.Context) (int, error) {
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+	}
+
+	// Check if chunk failed first
+	c.mu.Lock()
+	if c.state == chunkFailed && c.err != nil {
+		err := c.err
+		c.mu.Unlock()
+		return 0, err
+	}
+	c.mu.Unlock()
+
+	// Try to read from FIFO
+	n, err := c.fifo.Read(p)
+
+	// If we got data, return it
+	if n > 0 {
+		return n, nil
+	}
+
+	// If FIFO is closed or returned EOF, check chunk state
+	if err == io.EOF {
+		// If chunk is completed and FIFO EOF, we're truly done
+		c.mu.Lock()
+		if c.state == chunkCompleted {
+			c.mu.Unlock()
+			return 0, io.EOF
+		}
+		c.mu.Unlock()
+		// If chunk not completed but FIFO EOF, there might be an error
+		// Fall through to return the EOF
+	}
+
+	return n, err
 }
 
 // stitchedBody implements io.ReadCloser by reading from multiple chunk files in sequence.
@@ -475,6 +543,8 @@ type stitchedBody struct {
 	bytesRead int64
 	// closed indicates whether Close() has been called.
 	closed bool
+	// ctx is the request context for cancellation.
+	ctx context.Context
 	// mu protects all fields from concurrent access.
 	mu sync.Mutex
 }
@@ -495,20 +565,35 @@ func (sb *stitchedBody) Read(p []byte) (int, error) {
 	totalRead := 0
 	for len(p) > 0 && sb.currentIdx < len(sb.chunks) {
 		ch := sb.chunks[sb.currentIdx]
-		if ch.tempFile == nil {
-			return totalRead, errors.New("stitchedBody: chunk file is nil")
+
+		// Unlock while reading from chunk (chunk handles its own locking)
+		sb.mu.Unlock()
+
+		// Read available data from current chunk
+		n, err := ch.readAvailable(p, sb.ctx)
+
+		// Re-lock to update state
+		sb.mu.Lock()
+
+		if sb.closed {
+			return totalRead, errors.New("stitchedBody: read from closed body")
 		}
 
-		n, err := ch.tempFile.Read(p)
-		totalRead += n
-		sb.bytesRead += int64(n)
-		p = p[n:]
+		if n > 0 {
+			totalRead += n
+			sb.bytesRead += int64(n)
+			p = p[n:]
+		}
 
 		if err == io.EOF {
-			// Move to next chunk.
+			// Current chunk is complete, move to next
 			sb.currentIdx++
 		} else if err != nil {
-			return totalRead, fmt.Errorf("stitchedBody: chunk read error: %w", err)
+			return totalRead, fmt.Errorf("stitchedBody: chunk %d error: %w", sb.currentIdx, err)
+		} else if n == 0 {
+			// No error but no data read - this shouldn't happen with readAvailable
+			// but handle it to avoid infinite loops
+			return totalRead, fmt.Errorf("stitchedBody: chunk %d read 0 bytes without error or EOF", sb.currentIdx)
 		}
 	}
 
