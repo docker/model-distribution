@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -116,6 +117,9 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// benchmarkNonParallel performs a standard HTTP GET request using the default transport
+// and measures the time taken to download the entire response body.
+// The response is written to outputFile and progress is displayed during the download.
 func benchmarkNonParallel(url string, outputFile *os.File) (time.Duration, int64, error) {
 	client := &http.Client{
 		Transport: http.DefaultTransport,
@@ -151,6 +155,10 @@ func benchmarkNonParallel(url string, outputFile *os.File) (time.Duration, int64
 	return duration, written, nil
 }
 
+// benchmarkParallel performs an HTTP GET request using the parallel transport
+// and measures the time taken to download the entire response body.
+// The parallel transport uses byte-range requests to download chunks concurrently.
+// The response is written to outputFile and progress is displayed during the download.
 func benchmarkParallel(url string, outputFile *os.File) (time.Duration, int64, error) {
 	// Create parallel transport with configuration
 	parallelTransport := parallel.New(
@@ -195,7 +203,7 @@ func benchmarkParallel(url string, outputFile *os.File) (time.Duration, int64, e
 }
 
 func validateResponses(file1, file2 *os.File) error {
-	// Get file sizes
+	// Get file sizes first for quick comparison
 	stat1, err := file1.Stat()
 	if err != nil {
 		return fmt.Errorf("failed to stat non-parallel file: %w", err)
@@ -206,66 +214,69 @@ func validateResponses(file1, file2 *os.File) error {
 		return fmt.Errorf("failed to stat parallel file: %w", err)
 	}
 
+	// Compare file sizes - if they differ, no need to compute hashes
 	if stat1.Size() != stat2.Size() {
 		return fmt.Errorf("file sizes differ: non-parallel=%d bytes, parallel=%d bytes",
 			stat1.Size(), stat2.Size())
 	}
 
-	// Compare file contents
-	if _, err := file1.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek non-parallel file: %w", err)
+	// Compute SHA-256 hash for first file
+	hash1, err := computeFileHash(file1)
+	if err != nil {
+		return fmt.Errorf("failed to compute hash for non-parallel file: %w", err)
 	}
 
-	if _, err := file2.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek parallel file: %w", err)
+	// Compute SHA-256 hash for second file
+	hash2, err := computeFileHash(file2)
+	if err != nil {
+		return fmt.Errorf("failed to compute hash for parallel file: %w", err)
 	}
 
-	const bufSize = 64 * 1024 // 64KB buffer
-	buf1 := make([]byte, bufSize)
-	buf2 := make([]byte, bufSize)
-
-	offset := int64(0)
-	for {
-		n1, err1 := file1.Read(buf1)
-		n2, err2 := file2.Read(buf2)
-
-		if n1 != n2 {
-			return fmt.Errorf("read size mismatch at offset %d: non-parallel=%d, parallel=%d", offset, n1, n2)
-		}
-
-		if n1 > 0 && !bytes.Equal(buf1[:n1], buf2[:n1]) {
-			return fmt.Errorf("content mismatch starting at offset %d", offset)
-		}
-
-		offset += int64(n1)
-
-		if err1 == io.EOF && err2 == io.EOF {
-			break
-		}
-
-		if err1 != nil {
-			return fmt.Errorf("error reading non-parallel file: %w", err1)
-		}
-
-		if err2 != nil {
-			return fmt.Errorf("error reading parallel file: %w", err2)
-		}
+	// Compare the hashes
+	if !bytes.Equal(hash1, hash2) {
+		return fmt.Errorf("file contents differ: SHA-256 hashes do not match")
 	}
 
 	return nil
 }
 
-// progressWriter wraps an io.Writer and provides progress updates during writes
-type progressWriter struct {
-	writer     io.Writer
-	total      int64
-	written    int64
-	lastUpdate time.Time
-	label      string
-	finished   bool
-	mu         sync.Mutex
+// computeFileHash computes the SHA-256 hash of a file's contents.
+// The file is read from the beginning using a single io.Copy operation for efficiency.
+func computeFileHash(file *os.File) ([]byte, error) {
+	// Seek to beginning of file
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to beginning: %w", err)
+	}
+
+	// Create SHA-256 hasher
+	hasher := sha256.New()
+
+	// Copy entire file content to hasher in a single operation
+	_, err := io.Copy(hasher, file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file for hashing: %w", err)
+	}
+
+	// Return the computed hash
+	return hasher.Sum(nil), nil
 }
 
+// progressWriter wraps an io.Writer and provides progress updates during writes.
+// It displays a progress bar with percentage completion and transfer rates,
+// updating the display at regular intervals to avoid excessive output.
+type progressWriter struct {
+	writer     io.Writer   // The underlying writer to write data to
+	total      int64       // Total expected bytes (-1 if unknown)
+	written    int64       // Number of bytes written so far
+	lastUpdate time.Time   // Last time the progress display was updated
+	label      string      // Label to display with the progress bar
+	finished   bool        // Whether the progress display has been finalized
+	mu         sync.Mutex  // Protects concurrent access to progress state
+}
+
+// newProgressWriter creates a new progress writer that wraps the given writer.
+// The total parameter specifies the expected number of bytes (use -1 if unknown).
+// The label parameter is displayed alongside the progress bar.
 func newProgressWriter(writer io.Writer, total int64, label string) *progressWriter {
 	return &progressWriter{
 		writer:     writer,
@@ -275,14 +286,19 @@ func newProgressWriter(writer io.Writer, total int64, label string) *progressWri
 	}
 }
 
+// Write implements io.Writer, writing data to the underlying writer and updating progress.
+// Progress is displayed at most every 100ms to avoid overwhelming the terminal with updates.
+// The final progress update is handled by the finish() method to ensure clean display.
 func (pw *progressWriter) Write(data []byte) (int, error) {
+	// Write data to the underlying writer first
 	n, err := pw.writer.Write(data)
 	if n > 0 {
 		pw.mu.Lock()
 		pw.written += int64(n)
 		now := time.Now()
 
-		// Update progress every 100ms (but not on completion - let finish() handle that)
+		// Update progress every 100ms to balance responsiveness and performance
+		// Don't update on completion - let finish() handle the final display
 		if now.Sub(pw.lastUpdate) >= 100*time.Millisecond && (pw.total < 0 || pw.written < pw.total) {
 			pw.printProgress()
 			pw.lastUpdate = now
@@ -292,6 +308,10 @@ func (pw *progressWriter) Write(data []byte) (int, error) {
 	return n, err
 }
 
+// printProgress displays the current progress to the terminal.
+// For files with known size, shows a progress bar with percentage and bytes.
+// For files with unknown size, shows only the bytes transferred.
+// Uses carriage return (\r) to overwrite the previous progress line.
 func (pw *progressWriter) printProgress() {
 	if pw.finished {
 		return
@@ -303,12 +323,13 @@ func (pw *progressWriter) printProgress() {
 		return
 	}
 
+	// Calculate percentage, capping at 100% to handle edge cases
 	percent := float64(pw.written) / float64(pw.total) * 100
 	if percent > 100 {
 		percent = 100
 	}
 
-	// Create simple progress bar
+	// Create a visual progress bar using filled and empty characters
 	barWidth := 30
 	filled := int(percent / 100 * float64(barWidth))
 	if filled > barWidth {
@@ -317,16 +338,23 @@ func (pw *progressWriter) printProgress() {
 
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
 
+	// Display progress bar with percentage and byte counts
 	fmt.Printf("\r%s: [%s] %.1f%% (%d/%d bytes)",
 		pw.label, bar, percent, pw.written, pw.total)
 }
 
+// finish completes the progress display by showing the final progress state
+// and adding a newline to move the cursor to the next line.
+// This ensures the progress bar doesn't interfere with subsequent output.
+// It's safe to call multiple times - subsequent calls are ignored.
 func (pw *progressWriter) finish() {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 	if !pw.finished {
+		// Display final progress state
 		pw.printProgress()
-		fmt.Println() // New line after progress is complete
+		// Move to next line to prevent interference with subsequent output
+		fmt.Println()
 		pw.finished = true
 	}
 }
