@@ -246,6 +246,37 @@ func (rb *resumableBody) Read(p []byte) (int, error) {
 	case err == nil:
 		return n, nil
 	case errors.Is(err, io.EOF):
+		// Only mark done if we have delivered all planned bytes (when
+		// knowable). If not complete, treat as an unexpected termination and
+		// attempt to resume.
+		if planned, ok := rb.plannedLength(); ok {
+			if rb.bytesRead < planned {
+				_ = rb.rc.Close()
+				rb.rc = nil
+				if rb.retriesUsed >= rb.tr.maxRetries {
+					return n, io.ErrUnexpectedEOF
+				}
+				if n > 0 {
+					// Return bytes now; resume on next Read.
+					return n, nil
+				}
+				if rerr := rb.resume(rb.bytesRead); rerr != nil {
+					return 0, rerr
+				}
+				n2, err2 := rb.rc.Read(p)
+				rb.bytesRead += int64(n2)
+				if err2 == nil {
+					return n2, nil
+				}
+				if errors.Is(err2, io.EOF) {
+					if planned2, ok2 := rb.plannedLength(); ok2 && rb.bytesRead < planned2 {
+						return n2, io.ErrUnexpectedEOF
+					}
+					rb.done = true
+				}
+				return n2, err2
+			}
+		}
 		rb.done = true
 		return n, io.EOF
 	default:
@@ -306,6 +337,12 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 	for attempt := 0; attempt < remaining; attempt++ {
 		if err := rb.ctx.Err(); err != nil {
 			return err
+		}
+
+		// For safety, do not attempt an unvalidated resume when neither a
+		// strong ETag nor Last-Modified validator is available.
+		if rb.etag == "" && rb.lastModified == "" {
+			return fmt.Errorf("resumable: cannot resume without validator")
 		}
 
 		start := rb.initialStart + absoluteOffset

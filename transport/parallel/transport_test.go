@@ -592,10 +592,14 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 	})
 
 	requestCount := 0
+	var mu sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
+		mu.Lock()
 		requestCount++
+		rc := requestCount
+		mu.Unlock()
 		// Change ETag after first request.
-		if requestCount > 1 && resp.Request.Header.Get("Range") != "" {
+		if rc > 1 && resp.Request.Header.Get("Range") != "" {
 			// Simulate resource change - return full content with new ETag.
 			resp.StatusCode = http.StatusOK
 			resp.Status = "200 OK"
@@ -671,7 +675,7 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 		ETag:          `"test"`,
 	})
 
-	// Track headers.
+	// Track headers and validate scrubbing for both HEAD and range GETs.
 	ft.RequestHook = func(req *http.Request) {
 		// For range requests made by parallel transport,
 		// conditional headers should be removed.
@@ -693,8 +697,19 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 					req.Method)
 			}
 		}
-		// Note: HEAD requests currently don't scrub conditional headers
-		// (potential bug).
+		// HEAD made by parallel transport should scrub conditional headers and
+		// force identity encoding.
+		if req.Method == http.MethodHead {
+			if req.Header.Get("If-Match") != "" ||
+				req.Header.Get("If-None-Match") != "" ||
+				req.Header.Get("If-Modified-Since") != "" ||
+				req.Header.Get("If-Unmodified-Since") != "" {
+				t.Error("HEAD request should have conditional headers scrubbed")
+			}
+			if ae := req.Header.Get("Accept-Encoding"); ae != "identity" {
+				t.Errorf("HEAD should set Accept-Encoding=identity, got %q", ae)
+			}
+		}
 		// If-Range should only be present on range requests with proper value.
 		if ifRange := req.Header.Get("If-Range"); ifRange != "" {
 			if req.Header.Get("Range") == "" {
@@ -727,4 +742,55 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 	}
 
 	testutil.AssertDataEquals(t, got, payload)
+}
+
+// TestRangeHeader_PassesThrough verifies that requests with an explicit
+// Range header are passed through without parallelization, and no HEAD
+// request is issued by the transport.
+func TestRangeHeader_PassesThrough(t *testing.T) {
+	url := "https://example.com/ranged"
+	payload := testutil.GenerateTestData(8192)
+
+	ft := testutil.NewFakeTransport()
+	ft.AddSimple(url, payload, true)
+
+	client := &http.Client{Transport: New(ft, WithMaxConcurrentPerRequest(4))}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Header.Set("Range", "bytes=1000-1999")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	want := payload[1000:2000]
+	testutil.AssertDataEquals(t, got, want)
+
+	// Ensure no HEAD was made and that only the user’s single GET with Range
+	// was sent (no extra parallel range requests).
+	reqs := ft.GetRequests()
+	var headCount, rangeGets int
+	for _, r := range reqs {
+		if r.Method == http.MethodHead {
+			headCount++
+		}
+		if r.Method == http.MethodGet && r.Header.Get("Range") != "" {
+			rangeGets++
+		}
+	}
+	if headCount != 0 {
+		t.Errorf("expected 0 HEAD requests, got %d", headCount)
+	}
+	if rangeGets != 1 {
+		t.Errorf("expected exactly 1 ranged GET, got %d", rangeGets)
+	}
 }

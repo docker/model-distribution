@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 
 	testutil "github.com/docker/model-distribution/transport/internal/testing"
@@ -74,18 +75,26 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 	failurePoints := []int{2000, 5000, 7500}
 	failureIndex := 0
 	requestCount := 0
+	var mu sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Method == http.MethodGet &&
 			failureIndex < len(failurePoints) {
 			// For non-range requests, inject failure.
 			if resp.Request.Header.Get("Range") == "" {
-				resp.Body = testutil.NewFlakyReader(payload, failurePoints[failureIndex])
+				mu.Lock()
+				idx := failureIndex
 				failureIndex++
+				mu.Unlock()
+				resp.Body = testutil.NewFlakyReader(payload, failurePoints[idx])
 			} else {
 				// For range requests, check which failure point we're at.
+				mu.Lock()
 				requestCount++
-				if requestCount <= len(failurePoints) &&
-					failureIndex < len(failurePoints) {
+				rc := requestCount
+				fi := failureIndex
+				mu.Unlock()
+				if rc <= len(failurePoints) &&
+					fi < len(failurePoints) {
 					// Parse range to determine data slice.
 					rangeHeader := resp.Request.Header.Get("Range")
 					if rangeHeader != "" {
@@ -96,12 +105,14 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 
 						// Apply next failure point relative to this
 						// range.
-						nextFailure := failurePoints[failureIndex] - start
+						nextFailure := failurePoints[fi] - start
 						if nextFailure > 0 &&
 							nextFailure < len(rangeData) {
 							resp.Body = testutil.NewFlakyReader(
 								rangeData, nextFailure)
+							mu.Lock()
 							failureIndex++
+							mu.Unlock()
 						}
 					}
 				}
@@ -204,9 +215,12 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 
 	// Return wrong range on resume.
 	resumeAttempted := false
+	var muResume sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") == "bytes=2500-" {
+			muResume.Lock()
 			resumeAttempted = true
+			muResume.Unlock()
 			// Return wrong start position.
 			resp.Header.Set("Content-Range", "bytes 3000-4999/5000")
 			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload[3000:], 0))
@@ -231,7 +245,10 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 		t.Error("expected error due to wrong range start")
 	}
 
-	if !resumeAttempted {
+	muResume.Lock()
+	attempted := resumeAttempted
+	muResume.Unlock()
+	if !attempted {
 		t.Error("resume was not attempted")
 	}
 }
@@ -329,12 +346,18 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 
 	// Simulate failure to trigger resume.
 	failCount := 0
+	var muFail sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
-		if resp.Request.Method == http.MethodGet && failCount == 0 {
-			failCount++
+		muFail.Lock()
+		fc := failCount
+		if resp.Request.Method == http.MethodGet && fc == 0 {
+			failCount = fc + 1
+			muFail.Unlock()
 			// First request fails after 3000 bytes.
 			resp.Body = testutil.NewFlakyReader(payload, 3000)
+			return
 		}
+		muFail.Unlock()
 	}
 
 	client := &http.Client{
@@ -536,23 +559,11 @@ func TestIfRange_RequiredButUnavailable_MissingRejected(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	got, err := io.ReadAll(resp.Body)
-	// The resumable transport now attempts resume even without validators
-	// It sends Range without If-Range, risking a 200 response
-	if err != nil {
-		t.Fatalf("read failed: %v", err)
-	}
-
-	testutil.AssertDataEquals(t, got, payload)
-
-	// Verify that resume was attempted without If-Range
-	headers := ft.GetRequestHeaders(url)
-	for _, h := range headers {
-		if h.Get("Range") != "" {
-			if h.Get("If-Range") != "" {
-				t.Error("unexpected If-Range header when no validator available")
-			}
-		}
+	_, err = io.ReadAll(resp.Body)
+	// Safer behavior: do not attempt resume without a validator. Expect an
+	// error to be surfaced when the initial stream fails and cannot resume.
+	if err == nil {
+		t.Error("expected error due to missing resume validator")
 	}
 }
 
@@ -716,13 +727,19 @@ func TestRangeRequest_Initial(t *testing.T) {
 
 	// Simulate failure on range request
 	failCount := 0
+	var muRange sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
-		if resp.Request.Header.Get("Range") == "bytes=1024-5119" && failCount == 0 {
-			failCount++
+		muRange.Lock()
+		fc := failCount
+		if resp.Request.Header.Get("Range") == "bytes=1024-5119" && fc == 0 {
+			failCount = fc + 1
+			muRange.Unlock()
 			// Fail after 2000 bytes of the range
 			rangeData := payload[1024:5120]
 			resp.Body = testutil.NewFlakyReader(rangeData, 2000)
+			return
 		}
+		muRange.Unlock()
 	}
 
 	// Create request with initial Range header
@@ -939,15 +956,23 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 
 	// Multiple failures on the range request
 	failCount := 0
+	var muCut sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
 		rangeHeader := resp.Request.Header.Get("Range")
-		if rangeHeader == "bytes=2000-5999" && failCount == 0 {
-			failCount++
+		muCut.Lock()
+		fc := failCount
+		if rangeHeader == "bytes=2000-5999" && fc == 0 {
+			failCount = fc + 1
+			muCut.Unlock()
 			resp.Body = testutil.NewFlakyReader(payload[2000:6000], 1000)
-		} else if rangeHeader == "bytes=3000-5999" && failCount == 1 {
-			failCount++
+			return
+		} else if rangeHeader == "bytes=3000-5999" && fc == 1 {
+			failCount = fc + 1
+			muCut.Unlock()
 			resp.Body = testutil.NewFlakyReader(payload[3000:6000], 1500)
+			return
 		}
+		muCut.Unlock()
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -999,11 +1024,17 @@ func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
 
 	// Fail the open-ended range request
 	failCount := 0
+	var muOpen sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
-		if resp.Request.Header.Get("Range") == "bytes=7000-" && failCount == 0 {
-			failCount++
+		muOpen.Lock()
+		fc := failCount
+		if resp.Request.Header.Get("Range") == "bytes=7000-" && fc == 0 {
+			failCount = fc + 1
+			muOpen.Unlock()
 			resp.Body = testutil.NewFlakyReader(payload[7000:], 1500)
+			return
 		}
+		muOpen.Unlock()
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -1060,12 +1091,18 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 
 	// Fail at exactly 1234 bytes
 	failCount := 0
+	var muHdr sync.Mutex
 	ft.ResponseHook = func(resp *http.Response) {
-		if resp.Request.Header.Get("Range") == "bytes=1000-2999" && failCount == 0 {
-			failCount++
+		muHdr.Lock()
+		fc := failCount
+		if resp.Request.Header.Get("Range") == "bytes=1000-2999" && fc == 0 {
+			failCount = fc + 1
+			muHdr.Unlock()
 			rangeData := payload[1000:3000]
 			resp.Body = testutil.NewFlakyReader(rangeData, 234) // Will have read 1234 total
+			return
 		}
+		muHdr.Unlock()
 	}
 
 	req, err := http.NewRequest("GET", url, nil)

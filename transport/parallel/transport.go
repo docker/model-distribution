@@ -126,6 +126,11 @@ func (pt *ParallelTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if req.Method != http.MethodGet {
 		return pt.base.RoundTrip(req)
 	}
+	// Respect caller-provided Range requests. We do not parallelize when the
+	// request already specifies a byte range, to preserve exact semantics.
+	if strings.TrimSpace(req.Header.Get("Range")) != "" {
+		return pt.base.RoundTrip(req)
+	}
 
 	// Check if parallelization is possible and worthwhile.
 	canParallelize, pInfo, err := pt.checkParallelizable(req)
@@ -152,6 +157,14 @@ type parallelInfo struct {
 	// lastModified is the Last-Modified header value, used as fallback
 	// validator for If-Range.
 	lastModified string
+	// header is a clone of the server headers (from HEAD) used to seed the
+	// final response headers without an extra GET probe.
+	header http.Header
+	// proto/protoMajor/protoMinor reflect the server protocol from the HEAD
+	// response for constructing the final response.
+	proto      string
+	protoMajor int
+	protoMinor int
 }
 
 // checkParallelizable performs a HEAD request to determine if the resource
@@ -162,6 +175,11 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	headReq.Method = http.MethodHead
 	headReq.Body = nil
 	headReq.ContentLength = 0
+	// Clone and sanitize headers to avoid conditional responses and implicit
+	// compression that could skew metadata.
+	headReq.Header = req.Header.Clone()
+	common.ScrubConditionalHeaders(headReq.Header)
+	headReq.Header.Set("Accept-Encoding", "identity")
 
 	// Perform HEAD request.
 	headResp, err := pt.base.RoundTrip(headReq)
@@ -169,6 +187,14 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 		return false, nil, err
 	}
 	defer headResp.Body.Close()
+
+	// Only proceed on 200 OK or 206 Partial Content. Anything else (e.g.,
+	// 304 Not Modified due to missed scrub, redirects, etc.) is treated as
+	// non-parallelizable for safety.
+	if headResp.StatusCode != http.StatusOK &&
+		headResp.StatusCode != http.StatusPartialContent {
+		return false, nil, nil
+	}
 
 	// Check if range requests are supported.
 	if !common.SupportsRange(headResp.Header) {
@@ -203,7 +229,11 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	// Capture validators for If-Range to ensure consistency across parallel
 	// requests.
 	info := &parallelInfo{
-		totalSize: totalSize,
+		totalSize:  totalSize,
+		header:     headResp.Header.Clone(),
+		proto:      headResp.Proto,
+		protoMajor: headResp.ProtoMajor,
+		protoMinor: headResp.ProtoMinor,
 	}
 
 	if et := headResp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
@@ -245,7 +275,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		}
 		end := start + size - 1
 
-		fifo, err := bufferfile.NewFIFO()
+		fifo, err := bufferfile.NewFIFOInDir(pt.tempDir)
 		if err != nil {
 			// Clean up any created FIFOs.
 			for j := 0; j < i; j++ {
@@ -280,17 +310,6 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		}(i, ch)
 	}
 
-	// Get proper response headers by doing a small range request.
-	headerResp, err := pt.getResponseHeaders(req)
-	if err != nil {
-		// Clean up chunks on error.
-		for _, ch := range chunks {
-			ch.cleanup()
-		}
-		return nil, fmt.Errorf(
-			"parallel: failed to get response headers: %w", err)
-	}
-
 	// Create stitched response.
 	body := &stitchedBody{
 		chunks:    chunks,
@@ -302,10 +321,10 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 	resp := &http.Response{
 		Status:        "200 OK",
 		StatusCode:    http.StatusOK,
-		Proto:         headerResp.Proto,
-		ProtoMajor:    headerResp.ProtoMajor,
-		ProtoMinor:    headerResp.ProtoMinor,
-		Header:        headerResp.Header.Clone(),
+		Proto:         pInfo.proto,
+		ProtoMajor:    pInfo.protoMajor,
+		ProtoMinor:    pInfo.protoMinor,
+		Header:        pInfo.header.Clone(),
 		Body:          body,
 		ContentLength: totalSize,
 		Request:       req,
@@ -314,29 +333,6 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 	// Override headers that we control.
 	resp.Header.Set("Content-Length", strconv.FormatInt(totalSize, 10))
 	resp.Header.Del("Content-Range") // Remove any partial content headers.
-
-	return resp, nil
-}
-
-// getResponseHeaders performs a small range request to get proper response headers.
-func (pt *ParallelTransport) getResponseHeaders(req *http.Request) (*http.Response, error) {
-	// Request just the first byte to get headers.
-	headerReq := req.Clone(req.Context())
-	headerReq.Header = req.Header.Clone()
-	headerReq.Header.Set("Range", "bytes=0-0")
-	headerReq.Header.Set("Accept-Encoding", "identity")
-
-	// Remove conditional headers that could conflict with Range logic.
-	common.ScrubConditionalHeaders(headerReq.Header)
-
-	resp, err := pt.base.RoundTrip(headerReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Consume the body (just 1 byte).
-	io.Copy(io.Discard, resp.Body)
 
 	return resp, nil
 }
@@ -395,8 +391,9 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 		}
 	}
 
-	// Copy response body to temp file with progress signaling.
+	// Copy response body to FIFO and verify full chunk length is received.
 	buf := make([]byte, 32*1024) // 32KB buffer.
+	var copied int64
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
@@ -405,9 +402,16 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 				return fmt.Errorf(
 					"failed to write chunk data: %w", writeErr)
 			}
+			copied += int64(n)
 		}
 
 		if err == io.EOF {
+			// Validate that we received the complete range we requested.
+			expected := (chunk.end - chunk.start + 1)
+			if copied != expected {
+				return fmt.Errorf(
+					"short read for chunk: got %d, want %d", copied, expected)
+			}
 			break
 		}
 		if err != nil {
@@ -498,8 +502,9 @@ func (c *chunk) close() error {
 // cleanup closes and removes the FIFO.
 func (c *chunk) cleanup() {
 	if c.fifo != nil {
+		// Only close the FIFO. Do not nil the pointer to avoid races with
+		// in-flight writer goroutines checking or using this handle.
 		c.fifo.Close()
-		c.fifo = nil
 	}
 }
 

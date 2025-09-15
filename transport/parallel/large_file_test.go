@@ -153,7 +153,6 @@ func computeExpectedHash(size int64) []byte {
 	return hasher.Sum(nil)
 }
 
-
 // getTestFileSize returns an appropriate file size for testing based on
 // whether we're running under the race detector or other conditions.
 // The returned size ensures parallel downloads will still occur (larger than

@@ -58,6 +58,30 @@ func NewFIFO() (*FIFO, error) {
 	return fifo, nil
 }
 
+// NewFIFOInDir creates a new FIFO backed by a temporary file in the provided
+// directory. If dir is empty, the system temporary directory is used.
+// The caller is responsible for calling Close() to clean up the temporary
+// file.
+func NewFIFOInDir(dir string) (*FIFO, error) {
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	file, err := os.CreateTemp(dir, "fifo-*.tmp")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file in dir: %w", err)
+	}
+
+	fifo := &FIFO{
+		file:     file,
+		readPos:  0,
+		writePos: 0,
+		closed:   false,
+	}
+	fifo.cond = sync.NewCond(&fifo.mu)
+
+	return fifo, nil
+}
+
 // Write implements io.Writer. Writes always append to the end of the file.
 // Write is safe for concurrent use with Read.
 func (f *FIFO) Write(p []byte) (int, error) {
