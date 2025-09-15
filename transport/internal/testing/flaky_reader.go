@@ -12,12 +12,14 @@ var ErrFlakyFailure = errors.New("simulated read failure")
 // FlakyReader simulates a reader that fails after a certain number of
 // bytes.
 type FlakyReader struct {
-	// data holds the content to be read.
-	data []byte
+	// data holds the content to be read through random access reads.
+	data io.ReaderAt
+	// length is the total number of readable bytes.
+	length int64
 	// failAfter is the byte position after which reads should fail.
-	failAfter int
+	failAfter int64
 	// pos is the current read position.
-	pos int
+	pos int64
 	// failed indicates if the reader has already failed.
 	failed bool
 	// closed indicates if the reader has been closed.
@@ -28,10 +30,11 @@ type FlakyReader struct {
 
 // NewFlakyReader creates a FlakyReader that fails after reading failAfter
 // bytes. If failAfter is 0 or negative, it never fails.
-func NewFlakyReader(data []byte, failAfter int) *FlakyReader {
+func NewFlakyReader(data io.ReaderAt, length int64, failAfter int) *FlakyReader {
 	return &FlakyReader{
 		data:      data,
-		failAfter: failAfter,
+		length:    length,
+		failAfter: int64(failAfter),
 	}
 }
 
@@ -48,20 +51,19 @@ func (fr *FlakyReader) Read(p []byte) (int, error) {
 		return 0, ErrFlakyFailure
 	}
 
-	if fr.pos >= len(fr.data) {
+	if fr.pos >= fr.length {
 		return 0, io.EOF
 	}
 
 	// Calculate how much we can read.
-	remaining := len(fr.data) - fr.pos
-	toRead := len(p)
+	remaining := fr.length - fr.pos
+	toRead := int64(len(p))
 	if toRead > remaining {
 		toRead = remaining
 	}
 
 	// Check if we should fail.
 	if fr.failAfter > 0 && fr.pos+toRead > fr.failAfter {
-		// Read up to failure point.
 		toRead = fr.failAfter - fr.pos
 		if toRead <= 0 {
 			fr.failed = true
@@ -69,21 +71,30 @@ func (fr *FlakyReader) Read(p []byte) (int, error) {
 		}
 	}
 
-	// Copy data.
-	n := copy(p, fr.data[fr.pos:fr.pos+toRead])
-	fr.pos += n
+	if toRead == 0 {
+		return 0, nil
+	}
 
-	// Check if we've hit the failure point.
-	if fr.failAfter > 0 && fr.pos >= fr.failAfter &&
-		fr.pos < len(fr.data) {
+	buf := p[:toRead]
+	n, err := fr.data.ReadAt(buf, fr.pos)
+	fr.pos += int64(n)
+
+	if err != nil && err != io.EOF {
+		return n, err
+	}
+
+	if fr.failAfter > 0 && fr.pos >= fr.failAfter && fr.pos < fr.length {
 		fr.failed = true
 		if n == 0 {
 			return 0, ErrFlakyFailure
 		}
-		// Return the data we read, error will come on next read.
 	}
 
-	if fr.pos >= len(fr.data) {
+	if fr.pos >= fr.length {
+		return n, io.EOF
+	}
+
+	if err == io.EOF {
 		return n, io.EOF
 	}
 
@@ -111,7 +122,7 @@ func (fr *FlakyReader) Reset() {
 func (fr *FlakyReader) Position() int {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
-	return fr.pos
+	return int(fr.pos)
 }
 
 // HasFailed returns true if the reader has simulated a failure.
@@ -123,14 +134,16 @@ func (fr *FlakyReader) HasFailed() bool {
 
 // MultiFailReader simulates multiple failures at different points.
 type MultiFailReader struct {
-	// data holds the content to be read.
-	data []byte
+	// data holds the content to be read through random access reads.
+	data io.ReaderAt
+	// length is the total number of readable bytes.
+	length int64
 	// failurePoints are the byte positions where failures should occur.
 	failurePoints []int
 	// failureCount tracks how many failures have been simulated.
 	failureCount int
 	// pos is the current read position.
-	pos int
+	pos int64
 	// closed indicates if the reader has been closed.
 	closed bool
 	// mu protects all fields from concurrent access.
@@ -139,9 +152,10 @@ type MultiFailReader struct {
 
 // NewMultiFailReader creates a reader that fails at specified byte
 // positions.
-func NewMultiFailReader(data []byte, failurePoints []int) *MultiFailReader {
+func NewMultiFailReader(data io.ReaderAt, length int64, failurePoints []int) *MultiFailReader {
 	return &MultiFailReader{
 		data:          data,
+		length:        length,
 		failurePoints: failurePoints,
 	}
 }
@@ -155,7 +169,7 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		return 0, errors.New("read from closed reader")
 	}
 
-	if mfr.pos >= len(mfr.data) {
+	if mfr.pos >= mfr.length {
 		return 0, io.EOF
 	}
 
@@ -164,15 +178,15 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		if i < mfr.failureCount {
 			continue // Already failed here.
 		}
-		if mfr.pos == point {
+		if mfr.pos == int64(point) {
 			mfr.failureCount++
 			return 0, ErrFlakyFailure
 		}
 	}
 
 	// Calculate how much to read.
-	remaining := len(mfr.data) - mfr.pos
-	toRead := len(p)
+	remaining := mfr.length - mfr.pos
+	toRead := int64(len(p))
 	if toRead > remaining {
 		toRead = remaining
 	}
@@ -182,17 +196,30 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		if i < mfr.failureCount {
 			continue // Skip already used failure points.
 		}
-		if mfr.pos < point && mfr.pos+toRead > point {
-			toRead = point - mfr.pos
+		if mfr.pos < int64(point) && mfr.pos+toRead > int64(point) {
+			toRead = int64(point) - mfr.pos
 			break
 		}
 	}
 
 	// Copy data.
-	n := copy(p, mfr.data[mfr.pos:mfr.pos+toRead])
-	mfr.pos += n
+	if toRead == 0 {
+		return 0, nil
+	}
 
-	if mfr.pos >= len(mfr.data) {
+	buf := p[:toRead]
+	n, err := mfr.data.ReadAt(buf, mfr.pos)
+	mfr.pos += int64(n)
+
+	if err != nil && err != io.EOF {
+		return n, err
+	}
+
+	if mfr.pos >= mfr.length {
+		return n, io.EOF
+	}
+
+	if err == io.EOF {
 		return n, io.EOF
 	}
 
@@ -207,7 +234,7 @@ func (mfr *MultiFailReader) Close() error {
 	return nil
 }
 
-// Reset resets the reader to start from the beginning.
+// Reset resets the reader to the beginning and clears failure state.
 func (mfr *MultiFailReader) Reset() {
 	mfr.mu.Lock()
 	defer mfr.mu.Unlock()

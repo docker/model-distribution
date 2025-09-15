@@ -19,7 +19,8 @@ func TestParallelDownload_Success(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test-etag"`,
 	})
@@ -72,7 +73,7 @@ func TestSmallFile_FallsBackToSingle(t *testing.T) {
 	payload := []byte("small content")
 
 	ft := testutil.NewFakeTransport()
-	ft.AddSimple(url, payload, true)
+	ft.AddSimple(url, bytes.NewReader(payload), int64(len(payload)), true)
 
 	client := &http.Client{
 		Transport: New(ft, WithMaxConcurrentPerRequest(4), WithMinChunkSize(1024)),
@@ -125,7 +126,8 @@ func TestNoRangeSupport_FallsBack(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: false, // No range support.
 	})
 
@@ -165,7 +167,8 @@ func TestContentEncoding_FallsBack(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		Headers: http.Header{
 			"Content-Encoding": []string{"gzip"},
@@ -209,7 +212,8 @@ func TestETagValidation(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"strong-etag"`,
 	})
@@ -248,7 +252,8 @@ func TestWeakETag_UsesLastModified(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `W/"weak-etag"`,
 		LastModified:  lastModified,
@@ -288,7 +293,7 @@ func TestConcurrencyLimits(t *testing.T) {
 	payload := testutil.GenerateTestData(500000) // 500KB to ensure parallelization.
 
 	ft := testutil.NewFakeTransport()
-	ft.AddSimple(url, payload, true)
+	ft.AddSimple(url, bytes.NewReader(payload), int64(len(payload)), true)
 
 	// Track concurrent requests.
 	var maxConcurrent, currentConcurrent int
@@ -357,7 +362,8 @@ func TestIfRangeValidation(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          etag,
 	})
@@ -400,7 +406,7 @@ func TestNoContentLength_FallsBack(t *testing.T) {
 	payload := testutil.GenerateTestData(100000)
 
 	ft := testutil.NewFakeTransport()
-	ft.AddSimple(url, payload, true)
+	ft.AddSimple(url, bytes.NewReader(payload), int64(len(payload)), true)
 
 	// Remove Content-Length from HEAD response.
 	ft.ResponseHook = func(resp *http.Response) {
@@ -448,7 +454,7 @@ func TestNonGetRequest_PassesThrough(t *testing.T) {
 	responseData := []byte("response")
 
 	ft := testutil.NewFakeTransport()
-	ft.AddSimple(url, responseData, false)
+	ft.AddSimple(url, bytes.NewReader(responseData), int64(len(responseData)), false)
 
 	client := &http.Client{Transport: New(ft)}
 
@@ -487,7 +493,8 @@ func TestWrongRangeResponse_HandlesError(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 	})
 
@@ -534,7 +541,8 @@ func TestChunkBoundaries(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 	})
 
@@ -586,7 +594,8 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          originalETag,
 	})
@@ -634,7 +643,8 @@ func TestNoValidator_StillWorks(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		// No ETag or LastModified.
 	})
@@ -670,7 +680,8 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -752,7 +763,7 @@ func TestRangeHeader_PassesThrough(t *testing.T) {
 	payload := testutil.GenerateTestData(8192)
 
 	ft := testutil.NewFakeTransport()
-	ft.AddSimple(url, payload, true)
+	ft.AddSimple(url, bytes.NewReader(payload), int64(len(payload)), true)
 
 	client := &http.Client{Transport: New(ft, WithMaxConcurrentPerRequest(4))}
 

@@ -13,8 +13,10 @@ import (
 
 // FakeResource represents a resource that can be served by FakeTransport.
 type FakeResource struct {
-	// Data is the resource content.
-	Data []byte
+	// Data provides random access to the resource content.
+	Data io.ReaderAt
+	// Length is the total number of bytes in the resource content.
+	Length int64
 	// SupportsRange indicates if this resource supports byte ranges.
 	SupportsRange bool
 	// ETag is the ETag header value (optional).
@@ -59,10 +61,11 @@ func (ft *FakeTransport) Add(url string, resource *FakeResource) {
 	ft.resources[url] = resource
 }
 
-// AddSimple adds a simple resource with just data.
-func (ft *FakeTransport) AddSimple(url string, data []byte, supportsRange bool) {
+// AddSimple adds a simple resource with the provided reader and length.
+func (ft *FakeTransport) AddSimple(url string, data io.ReaderAt, length int64, supportsRange bool) {
 	ft.Add(url, &FakeResource{
 		Data:          data,
+		Length:        length,
 		SupportsRange: supportsRange,
 	})
 }
@@ -149,17 +152,14 @@ func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// Regular GET request
-	data := resource.Data
-
-	// Check if we should fail this request
 	var body io.ReadCloser
 	if failAfter > 0 && ft.getFailCount(req.URL.String()) == 0 {
 		// First request - fail after specified bytes
-		body = NewFlakyReader(data, failAfter)
+		body = NewFlakyReader(resource.Data, resource.Length, failAfter)
 		ft.incrementFailCount(req.URL.String())
 	} else {
 		// Subsequent request or no failure configured
-		body = io.NopCloser(bytes.NewReader(data))
+		body = io.NopCloser(io.NewSectionReader(resource.Data, 0, resource.Length))
 	}
 
 	resp := ft.createResponse(req, resource, body, http.StatusOK)
@@ -201,13 +201,13 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 			return ft.createErrorResponse(req, http.StatusBadRequest), nil
 		}
 	} else {
-		end = int64(len(resource.Data) - 1)
+		end = resource.Length - 1
 	}
 
 	// Validate range
-	if start < 0 || end >= int64(len(resource.Data)) || start > end {
+	if start < 0 || end >= resource.Length || start > end {
 		resp := ft.createErrorResponse(req, http.StatusRequestedRangeNotSatisfiable)
-		resp.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", len(resource.Data)))
+		resp.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", resource.Length))
 		if ft.ResponseHook != nil {
 			ft.ResponseHook(resp)
 		}
@@ -235,7 +235,7 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 
 		if !matches {
 			// Validator doesn't match - return full content
-			body := NewFlakyReader(resource.Data, failAfter)
+			body := NewFlakyReader(resource.Data, resource.Length, failAfter)
 			resp := ft.createResponse(req, resource, body, http.StatusOK)
 			if ft.ResponseHook != nil {
 				ft.ResponseHook(resp)
@@ -245,13 +245,10 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 	}
 
 	// Serve range
-	data := resource.Data[start : end+1]
-
-	// For range requests, don't apply failure (resumable should handle it)
-	body := io.NopCloser(bytes.NewReader(data))
+	body := io.NopCloser(io.NewSectionReader(resource.Data, start, end-start+1))
 
 	resp := ft.createResponse(req, resource, body, http.StatusPartialContent)
-	resp.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(resource.Data)))
+	resp.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, resource.Length))
 	resp.ContentLength = end - start + 1
 
 	if ft.ResponseHook != nil {
@@ -304,8 +301,8 @@ func (ft *FakeTransport) createResponse(req *http.Request, resource *FakeResourc
 
 	// Set Content-Length
 	if statusCode == http.StatusOK {
-		resp.ContentLength = int64(len(resource.Data))
-		resp.Header.Set("Content-Length", strconv.Itoa(len(resource.Data)))
+		resp.ContentLength = resource.Length
+		resp.Header.Set("Content-Length", strconv.FormatInt(resource.Length, 10))
 	}
 
 	return resp

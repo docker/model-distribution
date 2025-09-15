@@ -13,7 +13,7 @@ func TestFakeTransport_Basic(t *testing.T) {
 
 	// Add a simple resource.
 	data := []byte("Hello, World!")
-	ft.AddSimple("http://example.com/test", data, true)
+	ft.AddSimple("http://example.com/test", bytes.NewReader(data), int64(len(data)), true)
 
 	// Create a request.
 	req, err := http.NewRequest("GET", "http://example.com/test", nil)
@@ -44,7 +44,7 @@ func TestFakeTransport_Basic(t *testing.T) {
 // a specified number of bytes.
 func TestFlakyReader_FailsAfterN(t *testing.T) {
 	data := []byte("Hello, World!")
-	fr := NewFlakyReader(data, 5)
+	fr := NewFlakyReader(bytes.NewReader(data), int64(len(data)), 5)
 
 	// Read first 5 bytes.
 	buf := make([]byte, 5)

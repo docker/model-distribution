@@ -7,10 +7,11 @@ import (
 	"hash"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strconv"
 	"testing"
+
+	testutil "github.com/docker/model-distribution/transport/internal/testing"
 )
 
 // deterministicDataGenerator generates deterministic data based on position.
@@ -55,56 +56,41 @@ func (g *deterministicDataGenerator) Read(p []byte) (int, error) {
 	return int(toRead), nil
 }
 
-// createLargeFileServer creates an HTTP server that serves deterministic
-// large files.
-func createLargeFileServer() *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract size from URL path.
-		sizeStr := r.URL.Path[len("/data/"):]
-		size, err := strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil || size <= 0 {
-			http.Error(w, "Invalid size", http.StatusBadRequest)
-			return
-		}
+// ReadAt implements io.ReaderAt for deterministicDataGenerator.
+func (g *deterministicDataGenerator) ReadAt(p []byte, off int64) (int, error) {
+	if off >= g.size {
+		return 0, io.EOF
+	}
 
-		// Support range requests.
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("ETag", fmt.Sprintf(`"test-file-%d"`, size))
+	remaining := g.size - off
+	toRead := int64(len(p))
+	if toRead > remaining {
+		toRead = remaining
+	}
 
-		// Handle range requests.
-		rangeHeader := r.Header.Get("Range")
-		if rangeHeader != "" {
-			var start, end int64
-			if n, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); n == 2 && err == nil {
-				if start >= 0 && end < size && start <= end {
-					rangeSize := end - start + 1
-					w.Header().Set("Content-Length", strconv.FormatInt(rangeSize, 10))
-					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
-					w.WriteHeader(http.StatusPartialContent)
+	for i := int64(0); i < toRead; i++ {
+		pos := off + i
+		p[i] = byte((pos ^ (pos >> 8) ^ (pos >> 16)) % 256)
+	}
 
-					// Create generator positioned at start.
-					gen := newDeterministicDataGenerator(size)
-					gen.position = start
+	if toRead < int64(len(p)) {
+		return int(toRead), io.EOF
+	}
 
-					// Copy the requested range.
-					_, err := io.CopyN(w, gen, rangeSize)
-					if err != nil && err != io.EOF {
-						http.Error(w, err.Error(), http.StatusInternalServerError)
-					}
-					return
-				}
-			}
-		}
+	return int(toRead), nil
+}
 
-		// Full file request.
-		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-		gen := newDeterministicDataGenerator(size)
-		_, err = io.Copy(w, gen)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}))
+// addLargeFileResource registers a deterministic large file with the fake
+// transport. The resource shares behavior with the previous httptest server
+// implementation, including range support and metadata headers.
+func addLargeFileResource(ft *testutil.FakeTransport, url string, size int64) {
+	ft.Add(url, &testutil.FakeResource{
+		Data:          newDeterministicDataGenerator(size),
+		Length:        size,
+		SupportsRange: true,
+		ETag:          fmt.Sprintf(`"test-file-%d"`, size),
+		ContentType:   "application/octet-stream",
+	})
 }
 
 // hashingReader wraps an io.Reader and computes SHA-256 while reading.
@@ -187,9 +173,6 @@ func TestLargeFile_ParallelVsSequential(t *testing.T) {
 		t.Skip("Skipping large file test in short mode")
 	}
 
-	server := createLargeFileServer()
-	defer server.Close()
-
 	// Test with large file (1GB normally, 200MB in race/coverage mode).
 	baseSize := int64(1024 * 1024 * 1024) // 1 GB base size.
 	size := getTestFileSize(baseSize)
@@ -199,19 +182,28 @@ func TestLargeFile_ParallelVsSequential(t *testing.T) {
 			size/(1024*1024))
 	}
 
-	url := server.URL + "/data/" + strconv.FormatInt(size, 10)
+	url := fmt.Sprintf("https://parallel.example/data/%d", size)
+
+	// Prepare fake transport resource metadata once for logging consistency.
+	resourceETag := fmt.Sprintf(`"test-file-%d"`, size)
 
 	// Compute expected hash.
 	expectedHash := computeExpectedHash(size)
 
 	t.Run("Sequential", func(t *testing.T) {
-		client := &http.Client{Transport: http.DefaultTransport}
+		transport := testutil.NewFakeTransport()
+		addLargeFileResource(transport, url, size)
+		client := &http.Client{Transport: transport}
 
 		resp, err := client.Get(url)
 		if err != nil {
 			t.Fatalf("Failed to get %s: %v", url, err)
 		}
 		defer resp.Body.Close()
+
+		if resp.Header.Get("ETag") != resourceETag {
+			t.Errorf("Expected ETag %s, got %s", resourceETag, resp.Header.Get("ETag"))
+		}
 
 		if resp.ContentLength != size {
 			t.Errorf("Expected Content-Length %d, got %d",
@@ -237,8 +229,10 @@ func TestLargeFile_ParallelVsSequential(t *testing.T) {
 	})
 
 	t.Run("Parallel", func(t *testing.T) {
+		baseTransport := testutil.NewFakeTransport()
+		addLargeFileResource(baseTransport, url, size)
 		transport := New(
-			http.DefaultTransport,
+			baseTransport,
 			WithMaxConcurrentPerHost(map[string]uint{"": 0}),
 			WithMinChunkSize(4*1024*1024), // 4MB chunks.
 			WithMaxConcurrentPerRequest(8),
@@ -250,6 +244,10 @@ func TestLargeFile_ParallelVsSequential(t *testing.T) {
 			t.Fatalf("Failed to get %s: %v", url, err)
 		}
 		defer resp.Body.Close()
+
+		if resp.Header.Get("ETag") != resourceETag {
+			t.Errorf("Expected ETag %s, got %s", resourceETag, resp.Header.Get("ETag"))
+		}
 
 		if resp.ContentLength != size {
 			t.Errorf("Expected Content-Length %d, got %d",
@@ -283,9 +281,6 @@ func TestVeryLargeFile_ParallelDownload(t *testing.T) {
 		t.Skip("Skipping very large file test in short mode")
 	}
 
-	server := createLargeFileServer()
-	defer server.Close()
-
 	// Test with very large file (4GB normally, 400MB in race/coverage mode).
 	baseSize := int64(4 * 1024 * 1024 * 1024) // 4 GB base size.
 	size := getTestFileSize(baseSize)
@@ -295,11 +290,14 @@ func TestVeryLargeFile_ParallelDownload(t *testing.T) {
 			size/(1024*1024))
 	}
 
-	url := server.URL + "/data/" + strconv.FormatInt(size, 10)
+	url := fmt.Sprintf("https://parallel.example/very-large/%d", size)
+
+	baseTransport := testutil.NewFakeTransport()
+	addLargeFileResource(baseTransport, url, size)
 
 	// Only test parallel for very large files due to time constraints.
 	transport := New(
-		http.DefaultTransport,
+		baseTransport,
 		WithMaxConcurrentPerHost(map[string]uint{"": 0}),
 		WithMinChunkSize(8*1024*1024), // 8MB chunks.
 		WithMaxConcurrentPerRequest(16),

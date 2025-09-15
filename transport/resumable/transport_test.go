@@ -29,7 +29,8 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test-etag"`,
 	})
@@ -78,7 +79,8 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 	ft := testutil.NewFakeTransport()
 
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"multi-fail-etag"`,
 	})
@@ -97,7 +99,11 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 				idx := failureIndex
 				failureIndex++
 				mu.Unlock()
-				resp.Body = testutil.NewFlakyReader(payload, failurePoints[idx])
+				resp.Body = testutil.NewFlakyReader(
+					bytes.NewReader(payload),
+					int64(len(payload)),
+					failurePoints[idx],
+				)
 			} else {
 				// For range requests, check which failure point we're at.
 				mu.Lock()
@@ -121,7 +127,10 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 						if nextFailure > 0 &&
 							nextFailure < len(rangeData) {
 							resp.Body = testutil.NewFlakyReader(
-								rangeData, nextFailure)
+								bytes.NewReader(rangeData),
+								int64(len(rangeData)),
+								nextFailure,
+							)
 							mu.Lock()
 							failureIndex++
 							mu.Unlock()
@@ -170,7 +179,8 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"fail-test"`,
 	})
@@ -178,7 +188,7 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 	// Always fail after 100 bytes.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Method == http.MethodGet {
-			resp.Body = testutil.NewFlakyReader(payload, 100)
+			resp.Body = testutil.NewFlakyReader(bytes.NewReader(payload), int64(len(payload)), 100)
 		}
 	}
 
@@ -219,7 +229,12 @@ func TestReadCloseInterleaving(t *testing.T) {
 	payload := testutil.GenerateTestData(1024)
 
 	ft := testutil.NewFakeTransport()
-	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: `"etag"`})
+	ft.Add(url, &testutil.FakeResource{
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
+		SupportsRange: true,
+		ETag:          `"etag"`,
+	})
 	// Replace body with a blocking body for the initial GET.
 	bb := newBlockingBody()
 	ft.ResponseHook = func(resp *http.Response) {
@@ -257,7 +272,11 @@ func TestMultiRange_PassThrough(t *testing.T) {
 	payload := testutil.GenerateTestData(4096)
 
 	ft := testutil.NewFakeTransport()
-	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true})
+	ft.Add(url, &testutil.FakeResource{
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
+		SupportsRange: true,
+	})
 
 	client := &http.Client{Transport: New(ft)}
 	req, err := http.NewRequest("GET", url, nil)
@@ -293,7 +312,12 @@ func TestInitialRange_200OK_Ignored(t *testing.T) {
 	payload := testutil.GenerateTestData(2048)
 
 	ft := testutil.NewFakeTransport()
-	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: `"e"`})
+	ft.Add(url, &testutil.FakeResource{
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
+		SupportsRange: true,
+		ETag:          `"e"`,
+	})
 
 	// Force 200 full response even when Range is present.
 	ft.ResponseHook = func(resp *http.Response) {
@@ -328,7 +352,12 @@ func TestRedirectOnResume(t *testing.T) {
 	etag := `"strong"`
 
 	ft := testutil.NewFakeTransport()
-	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: etag})
+	ft.Add(url, &testutil.FakeResource{
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
+		SupportsRange: true,
+		ETag:          etag,
+	})
 	ft.SetFailAfter(url, 2500)
 
 	ft.ResponseHook = func(resp *http.Response) {
@@ -361,7 +390,8 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -376,7 +406,11 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 			muResume.Unlock()
 			// Return wrong start position.
 			resp.Header.Set("Content-Range", "bytes 3000-4999/5000")
-			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload[3000:], 0))
+			resp.Body = io.NopCloser(testutil.NewFlakyReader(
+				bytes.NewReader(payload[3000:]),
+				int64(len(payload[3000:])),
+				0,
+			))
 		}
 	}
 
@@ -414,7 +448,8 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -425,7 +460,11 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 			resp.StatusCode = http.StatusOK
 			resp.Status = "200 OK"
 			resp.Header.Del("Content-Range")
-			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload, 0))
+			resp.Body = io.NopCloser(testutil.NewFlakyReader(
+				bytes.NewReader(payload),
+				int64(len(payload)),
+				0,
+			))
 		}
 	}
 
@@ -456,7 +495,8 @@ func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: false, // No range support.
 	})
 
@@ -492,7 +532,8 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          etag,
 	})
@@ -507,7 +548,11 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 			failCount = fc + 1
 			muFail.Unlock()
 			// First request fails after 3000 bytes.
-			resp.Body = testutil.NewFlakyReader(payload, 3000)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(payload),
+				int64(len(payload)),
+				3000,
+			)
 			return
 		}
 		muFail.Unlock()
@@ -556,7 +601,8 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          originalETag,
 	})
@@ -569,7 +615,11 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 			resp.Status = "200 OK"
 			resp.Header.Set("ETag", changedETag)
 			resp.Header.Del("Content-Range")
-			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload, 0))
+			resp.Body = io.NopCloser(testutil.NewFlakyReader(
+				bytes.NewReader(payload),
+				int64(len(payload)),
+				0,
+			))
 		}
 	}
 
@@ -600,7 +650,8 @@ func TestIfRange_LastModified_Matches_AllowsResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		LastModified:  lastModified,
 		// No ETag, so should use Last-Modified
@@ -652,7 +703,8 @@ func TestIfRange_LastModified_ChangedOnResume_RejectsResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		LastModified:  originalLM,
 	})
@@ -665,7 +717,11 @@ func TestIfRange_LastModified_ChangedOnResume_RejectsResume(t *testing.T) {
 			resp.Status = "200 OK"
 			resp.Header.Set("Last-Modified", changedLM)
 			resp.Header.Del("Content-Range")
-			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload, 0))
+			resp.Body = io.NopCloser(testutil.NewFlakyReader(
+				bytes.NewReader(payload),
+				int64(len(payload)),
+				0,
+			))
 		}
 	}
 
@@ -695,7 +751,8 @@ func TestIfRange_RequiredButUnavailable_MissingRejected(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		// No ETag or LastModified
 	})
@@ -728,7 +785,8 @@ func TestIfRange_WeakETag_Present_UsesLastModified_AllowsResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `W/"weak-etag"`, // Weak ETag
 		LastModified:  lastModified,
@@ -776,7 +834,8 @@ func TestGzipContentEncoding_DisablesResume(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		Headers: http.Header{
 			"Content-Encoding": []string{"gzip"},
@@ -815,7 +874,8 @@ func TestResumeHeaders_ScrubbedAndIdentityEncoding(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -873,7 +933,8 @@ func TestRangeRequest_Initial(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"range-test"`,
 	})
@@ -889,7 +950,11 @@ func TestRangeRequest_Initial(t *testing.T) {
 			muRange.Unlock()
 			// Fail after 2000 bytes of the range
 			rangeData := payload[1024:5120]
-			resp.Body = testutil.NewFlakyReader(rangeData, 2000)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(rangeData),
+				int64(len(rangeData)),
+				2000,
+			)
 			return
 		}
 		muRange.Unlock()
@@ -943,7 +1008,8 @@ func TestRangeInitial_ZeroToN_NoCuts_Succeeds(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 	})
 
@@ -976,7 +1042,8 @@ func TestRangeInitial_MidSpan_NoCuts_Succeeds(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 	})
 
@@ -1009,7 +1076,8 @@ func TestRangeInitial_FromNToEnd_NoCuts_Succeeds(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 	})
 
@@ -1042,7 +1110,8 @@ func TestRangeInitial_ZeroToN_WithCut_Resumes(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -1052,7 +1121,11 @@ func TestRangeInitial_ZeroToN_WithCut_Resumes(t *testing.T) {
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") == "bytes=0-2499" && failCount == 0 {
 			failCount++
-			resp.Body = testutil.NewFlakyReader(payload[0:2500], 1000)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(payload[0:2500]),
+				int64(len(payload[0:2500])),
+				1000,
+			)
 		}
 	}
 
@@ -1102,7 +1175,8 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -1117,12 +1191,20 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 		if rangeHeader == "bytes=2000-5999" && fc == 0 {
 			failCount = fc + 1
 			muCut.Unlock()
-			resp.Body = testutil.NewFlakyReader(payload[2000:6000], 1000)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(payload[2000:6000]),
+				int64(len(payload[2000:6000])),
+				1000,
+			)
 			return
 		} else if rangeHeader == "bytes=3000-5999" && fc == 1 {
 			failCount = fc + 1
 			muCut.Unlock()
-			resp.Body = testutil.NewFlakyReader(payload[3000:6000], 1500)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(payload[3000:6000]),
+				int64(len(payload[3000:6000])),
+				1500,
+			)
 			return
 		}
 		muCut.Unlock()
@@ -1170,7 +1252,8 @@ func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -1184,7 +1267,11 @@ func TestRangeInitial_FromNToEnd_WithCut_Resumes(t *testing.T) {
 		if resp.Request.Header.Get("Range") == "bytes=7000-" && fc == 0 {
 			failCount = fc + 1
 			muOpen.Unlock()
-			resp.Body = testutil.NewFlakyReader(payload[7000:], 1500)
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(payload[7000:]),
+				int64(len(payload[7000:])),
+				1500,
+			)
 			return
 		}
 		muOpen.Unlock()
@@ -1237,7 +1324,8 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
-		Data:          payload,
+		Data:          bytes.NewReader(payload),
+		Length:        int64(len(payload)),
 		SupportsRange: true,
 		ETag:          `"test"`,
 	})
@@ -1252,7 +1340,11 @@ func TestRangeInitial_ResumeHeaderStart_Correct(t *testing.T) {
 			failCount = fc + 1
 			muHdr.Unlock()
 			rangeData := payload[1000:3000]
-			resp.Body = testutil.NewFlakyReader(rangeData, 234) // Will have read 1234 total
+			resp.Body = testutil.NewFlakyReader(
+				bytes.NewReader(rangeData),
+				int64(len(rangeData)),
+				234,
+			) // Will have read 1234 total
 			return
 		}
 		muHdr.Unlock()
