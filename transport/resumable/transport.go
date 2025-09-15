@@ -32,6 +32,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,6 +137,12 @@ func isResumable(req *http.Request, resp *http.Response) bool {
 	if resp.Uncompressed || resp.Header.Get("Content-Encoding") != "" {
 		return false
 	}
+	// If the original request specified a Range, only support single-range.
+	if r := req.Header.Get("Range"); strings.TrimSpace(r) != "" {
+		if _, _, ok := common.ParseSingleRange(r); !ok {
+			return false
+		}
+	}
 	return true
 }
 
@@ -209,9 +216,15 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 				rb.totalSize = &total
 			}
 		}
-	} else if resp.ContentLength >= 0 { // 200 OK
-		total := int64(resp.ContentLength)
-		rb.totalSize = &total
+	} else if resp.StatusCode == http.StatusOK {
+		// For 200 OK, the server is sending a full stream starting at 0
+		// regardless of any Range header on the request.
+		rb.initialStart = 0
+		rb.initialEnd = nil
+		if resp.ContentLength >= 0 {
+			total := int64(resp.ContentLength)
+			rb.totalSize = &total
+		}
 	}
 
 	// Capture validators for If-Range to ensure consistency across resumes.
@@ -224,95 +237,97 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 }
 
 // Read delivers bytes to the caller. If an error occurs mid-stream, it will
-// transparently try to resume by issuing a new Range request.
+// transparently try to resume by issuing a new Range request. When the total
+// length is unknown (e.g., 200 OK without Content-Length), completeness cannot
+// be verified precisely; in such cases EOF is treated as the natural end.
 func (rb *resumableBody) Read(p []byte) (int, error) {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	if rb.done {
-		return 0, io.EOF
-	}
-	if rb.rc == nil {
-		// No active body — must resume from the last delivered offset.
-		if err := rb.resume(rb.bytesRead); err != nil {
-			return 0, err
+	for {
+		// Snapshot state without holding the lock across I/O.
+		rb.mu.Lock()
+		if rb.done {
+			rb.mu.Unlock()
+			return 0, io.EOF
 		}
-	}
+		rc := rb.rc
+		planned, plannedOK := rb.plannedLength()
+		already := rb.bytesRead
+		rb.mu.Unlock()
 
-	n, err := rb.rc.Read(p)
-	rb.bytesRead += int64(n)
+		if rc == nil {
+			if err := rb.resume(already); err != nil {
+				return 0, err
+			}
+			continue
+		}
 
-	switch {
-	case err == nil:
-		return n, nil
-	case errors.Is(err, io.EOF):
-		// Only mark done if we have delivered all planned bytes (when
-		// knowable). If not complete, treat as an unexpected termination and
-		// attempt to resume.
-		if planned, ok := rb.plannedLength(); ok {
-			if rb.bytesRead < planned {
+		n, err := rc.Read(p)
+
+		rb.mu.Lock()
+		rb.bytesRead += int64(n)
+
+		switch {
+		case err == nil:
+			rb.mu.Unlock()
+			return n, nil
+		case errors.Is(err, io.EOF):
+			// If planned length is known and we are short, resume.
+			if plannedOK && already+int64(n) < planned {
 				_ = rb.rc.Close()
 				rb.rc = nil
 				if rb.retriesUsed >= rb.tr.maxRetries {
+					rb.mu.Unlock()
 					return n, io.ErrUnexpectedEOF
 				}
+				// Return bytes now; resume on next call.
 				if n > 0 {
-					// Return bytes now; resume on next Read.
+					rb.mu.Unlock()
 					return n, nil
 				}
-				if rerr := rb.resume(rb.bytesRead); rerr != nil {
+				// Resume outside lock.
+				nextOffset := rb.bytesRead
+				rb.mu.Unlock()
+				if rerr := rb.resume(nextOffset); rerr != nil {
 					return 0, rerr
 				}
-				n2, err2 := rb.rc.Read(p)
-				rb.bytesRead += int64(n2)
-				if err2 == nil {
-					return n2, nil
-				}
-				if errors.Is(err2, io.EOF) {
-					if planned2, ok2 := rb.plannedLength(); ok2 && rb.bytesRead < planned2 {
-						return n2, io.ErrUnexpectedEOF
-					}
-					rb.done = true
-				}
-				return n2, err2
+				continue
 			}
-		}
-		rb.done = true
-		return n, io.EOF
-	default:
-		// Underlying read failed mid-stream. Try to resume.
-		_ = rb.rc.Close()
-		rb.rc = nil
-
-		if n > 0 {
-			// Surface bytes already read; the caller will call Read again.
-			return n, nil
-		}
-		if rb.retriesUsed >= rb.tr.maxRetries {
-			return 0, err
-		}
-		if rerr := rb.resume(rb.bytesRead); rerr != nil {
-			return 0, rerr
-		}
-
-		n2, err2 := rb.rc.Read(p)
-		rb.bytesRead += int64(n2)
-		if err2 == nil {
-			return n2, nil
-		}
-		if errors.Is(err2, io.EOF) {
+			// Completed.
 			rb.done = true
+			rb.mu.Unlock()
+			return n, io.EOF
+		default:
+			// Underlying read failed mid-stream. Try to resume.
+			_ = rb.rc.Close()
+			rb.rc = nil
+
+			if n > 0 {
+				rb.mu.Unlock()
+				// Surface bytes already read; the caller will call Read again.
+				return n, nil
+			}
+			if rb.retriesUsed >= rb.tr.maxRetries {
+				rb.mu.Unlock()
+				return 0, err
+			}
+			off := rb.bytesRead
+			rb.mu.Unlock()
+			if rerr := rb.resume(off); rerr != nil {
+				return 0, rerr
+			}
+			continue
 		}
-		return n2, err2
 	}
 }
 
 // Close closes the current response body if present.
 func (rb *resumableBody) Close() error {
 	rb.mu.Lock()
-	defer rb.mu.Unlock()
-	if rb.rc != nil {
-		return rb.rc.Close()
+	rc := rb.rc
+	rb.rc = nil
+	rb.done = true
+	rb.mu.Unlock()
+	if rc != nil {
+		return rc.Close()
 	}
 	return nil
 }
@@ -364,13 +379,22 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 		switch resp.StatusCode {
 		case http.StatusPartialContent:
 			// Validate server honored our starting offset precisely.
-			s, _, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range"))
+			s, e, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range"))
 			if !ok || s != start {
 				_ = resp.Body.Close()
 				continue // try again; mismatched range
 			}
-			rb.swapResponse(resp)
+			// If we requested a closed range and the end does not match, do
+			// not accept this response.
+			if rb.initialEnd != nil && e >= 0 && e != *rb.initialEnd {
+				_ = resp.Body.Close()
+				continue
+			}
+			// Install the new response under lock.
+			rb.mu.Lock()
+			rb.installResponseLocked(resp)
 			rb.retriesUsed++
+			rb.mu.Unlock()
 			return nil
 
 		case http.StatusOK:
@@ -378,6 +402,12 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 			// validator failed (resource changed) or the server ignored Range.
 			_ = resp.Body.Close()
 			return fmt.Errorf("resumable: server returned 200 to a range request; resource may have changed")
+
+		case http.StatusMultipleChoices, http.StatusMovedPermanently, http.StatusFound,
+			http.StatusSeeOther, http.StatusNotModified, http.StatusUseProxy,
+			http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+			_ = resp.Body.Close()
+			return fmt.Errorf("resumable: resume received redirect status %d", resp.StatusCode)
 
 		case http.StatusRequestedRangeNotSatisfiable:
 			// If we've already read to/ past the expected end, we are actually done.
@@ -395,9 +425,9 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 	return fmt.Errorf("resumable: exceeded retry budget after %d attempts", rb.tr.maxRetries)
 }
 
-// swapResponse replaces the current response body with a new one
-// from a resumed request, and updates any validators and size info.
-func (rb *resumableBody) swapResponse(resp *http.Response) {
+// installResponseLocked installs resp as the current response and updates
+// validators and size info. Caller must hold rb.mu.
+func (rb *resumableBody) installResponseLocked(resp *http.Response) {
 	if rb.rc != nil && rb.rc != resp.Body {
 		_ = rb.rc.Close()
 	}
@@ -414,7 +444,7 @@ func (rb *resumableBody) swapResponse(resp *http.Response) {
 
 	// Merge any updated size info from the Content-Range.
 	if s, e, total, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
-		_ = s // start is validated by caller
+		_ = s // start validated by caller
 		if e >= 0 {
 			rb.initialEnd = &e
 		}
@@ -442,8 +472,6 @@ func (rb *resumableBody) cloneBaseRequest(rangeVal string) *http.Request {
 		req.Header.Set("If-Range", rb.etag)
 	} else if rb.lastModified != "" {
 		req.Header.Set("If-Range", rb.lastModified)
-	} else {
-		// If no validator, we still attempt Range but risk a 200 if server can't verify.
 	}
 
 	// Prevent transparent decompression on resumed requests.
@@ -470,8 +498,10 @@ func waitBackoff(ctx context.Context, bf BackoffFunc, attempt int) error {
 	if d <= 0 {
 		return nil
 	}
+	t := time.NewTimer(d)
+	defer t.Stop()
 	select {
-	case <-time.After(d):
+	case <-t.C:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

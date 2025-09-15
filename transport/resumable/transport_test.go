@@ -1,14 +1,26 @@
 package resumable
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	testutil "github.com/docker/model-distribution/transport/internal/testing"
 )
+
+// blockingBody simulates a response body that blocks on Read until closed.
+type blockingBody struct {
+	ch chan struct{}
+}
+
+func newBlockingBody() *blockingBody               { return &blockingBody{ch: make(chan struct{})} }
+func (b *blockingBody) Read(p []byte) (int, error) { <-b.ch; return 0, io.EOF }
+func (b *blockingBody) Close() error               { close(b.ch); return nil }
 
 // TestResumeSingleFailure_Succeeds tests resuming after a single failure.
 func TestResumeSingleFailure_Succeeds(t *testing.T) {
@@ -197,6 +209,147 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 	// Initial + 2 retries = 3 total.
 	if attempts < 2 {
 		t.Errorf("expected at least 2 GET attempts, got %d", attempts)
+	}
+}
+
+// TestReadCloseInterleaving ensures Close does not deadlock with a blocked Read
+// and unblocks promptly.
+func TestReadCloseInterleaving(t *testing.T) {
+	url := "https://example.com/blocking"
+	payload := testutil.GenerateTestData(1024)
+
+	ft := testutil.NewFakeTransport()
+	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: `"etag"`})
+	// Replace body with a blocking body for the initial GET.
+	bb := newBlockingBody()
+	ft.ResponseHook = func(resp *http.Response) {
+		if resp.Request.Method == http.MethodGet && resp.Request.Header.Get("Range") == "" {
+			resp.Body = bb
+		}
+	}
+
+	client := &http.Client{Transport: New(ft)}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.ReadAll(resp.Body)
+	}()
+
+	// Close should unblock the read goroutine promptly.
+	if err := resp.Body.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("read did not unblock after Close")
+	}
+}
+
+// TestMultiRange_PassThrough ensures multi-range requests are not wrapped.
+func TestMultiRange_PassThrough(t *testing.T) {
+	url := "https://example.com/multirange"
+	payload := testutil.GenerateTestData(4096)
+
+	ft := testutil.NewFakeTransport()
+	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true})
+
+	client := &http.Client{Transport: New(ft)}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Range", "bytes=0-10,20-30")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// FakeTransport does not implement multi-range; it returns 400.
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 from fake transport for multi-range, got %d", resp.StatusCode)
+	}
+
+	// Ensure no If-Range was injected on request headers.
+	hdrs := ft.GetRequestHeaders(url)
+	for _, h := range hdrs {
+		if h.Get("If-Range") != "" {
+			t.Error("unexpected If-Range header on multi-range request")
+		}
+	}
+}
+
+// TestInitialRange_200OK_Ignored ensures if server responds 200 to a ranged
+// request, the stream is treated as starting at 0 and reads succeed.
+func TestInitialRange_200OK_Ignored(t *testing.T) {
+	url := "https://example.com/range-ignored"
+	payload := testutil.GenerateTestData(2048)
+
+	ft := testutil.NewFakeTransport()
+	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: `"e"`})
+
+	// Force 200 full response even when Range is present.
+	ft.ResponseHook = func(resp *http.Response) {
+		if resp.Request.Header.Get("Range") != "" && resp.StatusCode == http.StatusPartialContent {
+			resp.StatusCode = http.StatusOK
+			resp.Status = "200 OK"
+			resp.Header.Del("Content-Range")
+			resp.Body = io.NopCloser(bytes.NewReader(payload))
+		}
+	}
+
+	client := &http.Client{Transport: New(ft)}
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Range", "bytes=100-199")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	testutil.AssertDataEquals(t, data, payload)
+}
+
+// TestRedirectOnResume returns 3xx for resume request and expects a clear error.
+func TestRedirectOnResume(t *testing.T) {
+	url := "https://example.com/redirect-on-resume"
+	payload := testutil.GenerateTestData(5000)
+	etag := `"strong"`
+
+	ft := testutil.NewFakeTransport()
+	ft.Add(url, &testutil.FakeResource{Data: payload, SupportsRange: true, ETag: etag})
+	ft.SetFailAfter(url, 2500)
+
+	ft.ResponseHook = func(resp *http.Response) {
+		if resp.Request.Header.Get("Range") != "" {
+			resp.StatusCode = http.StatusFound
+			resp.Status = "302 Found"
+			resp.Header.Del("Content-Range")
+			resp.Body = io.NopCloser(bytes.NewReader(nil))
+		}
+	}
+
+	client := &http.Client{Transport: New(ft, WithMaxRetries(2))}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	_, err = io.ReadAll(resp.Body)
+	if err == nil || !strings.Contains(err.Error(), "redirect status") {
+		t.Fatalf("expected redirect error, got %v", err)
 	}
 }
 
