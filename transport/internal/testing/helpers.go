@@ -150,7 +150,6 @@ func ConcatChunks(chunks [][]byte) []byte {
 type ByteRange struct {
 	// Start is the starting byte position (inclusive).
 	Start int64
-
 	// End is the ending byte position (inclusive).
 	End int64
 }

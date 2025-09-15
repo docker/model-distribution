@@ -14,19 +14,14 @@ var ErrFlakyFailure = errors.New("simulated read failure")
 type FlakyReader struct {
 	// data holds the content to be read.
 	data []byte
-
 	// failAfter is the byte position after which reads should fail.
 	failAfter int
-
 	// pos is the current read position.
 	pos int
-
 	// failed indicates if the reader has already failed.
 	failed bool
-
 	// closed indicates if the reader has been closed.
 	closed bool
-
 	// mu protects all fields from concurrent access.
 	mu sync.Mutex
 }
@@ -130,19 +125,14 @@ func (fr *FlakyReader) HasFailed() bool {
 type MultiFailReader struct {
 	// data holds the content to be read.
 	data []byte
-
 	// failurePoints are the byte positions where failures should occur.
 	failurePoints []int
-
 	// failureCount tracks how many failures have been simulated.
 	failureCount int
-
 	// pos is the current read position.
 	pos int
-
 	// closed indicates if the reader has been closed.
 	closed bool
-
 	// mu protects all fields from concurrent access.
 	mu sync.Mutex
 }

@@ -169,6 +169,10 @@ func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// handleRangeRequest serves a single byte range request for a resource.
+// It validates the Range and If-Range headers and returns either 206 with the
+// requested slice, or 200 with the full resource if validation fails.
+// Multi-range specifications are not supported and result in 400.
 func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeResource, rangeHeader string, failAfter int) (*http.Response, error) {
 	// Parse range header (simplified - only handles single ranges)
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
@@ -256,6 +260,8 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 	return resp, nil
 }
 
+// createResponse builds a basic http.Response for the given resource and
+// status code, copying standard headers and any optional metadata.
 func (ft *FakeTransport) createResponse(req *http.Request, resource *FakeResource, body io.ReadCloser, statusCode int) *http.Response {
 	if body == nil {
 		body = io.NopCloser(bytes.NewReader(nil))
@@ -305,6 +311,8 @@ func (ft *FakeTransport) createResponse(req *http.Request, resource *FakeResourc
 	return resp
 }
 
+// createErrorResponse constructs a minimal error response with the provided
+// status code and an empty body.
 func (ft *FakeTransport) createErrorResponse(req *http.Request, statusCode int) *http.Response {
 	return &http.Response{
 		StatusCode: statusCode,
@@ -318,12 +326,16 @@ func (ft *FakeTransport) createErrorResponse(req *http.Request, statusCode int) 
 	}
 }
 
+// getFailCount returns how many failures have been injected for the URL so
+// far. It is safe for concurrent use.
 func (ft *FakeTransport) getFailCount(url string) int {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 	return ft.failCount[url]
 }
 
+// incrementFailCount increments the injected failure counter for the URL.
+// It is safe for concurrent use.
 func (ft *FakeTransport) incrementFailCount(url string) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()

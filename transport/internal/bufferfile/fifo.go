@@ -50,9 +50,6 @@ func NewFIFO() (*FIFO, error) {
 // The caller is responsible for calling Close() to clean up the temporary
 // file.
 func NewFIFOInDir(dir string) (*FIFO, error) {
-	if dir == "" {
-		dir = os.TempDir()
-	}
 	file, err := os.CreateTemp(dir, "fifo-*.tmp")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary file in dir: %w", err)
@@ -75,29 +72,29 @@ func (f *FIFO) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	// Check if FIFO is closed for writing, even for empty writes
+	// Check if FIFO is closed for writing.
 	if f.closed || f.writeClosed {
 		return 0, fmt.Errorf("write to closed FIFO")
 	}
 
-	// Handle empty write case after checking closed state
-	if len(p) == 0 {
-		return 0, nil
-	}
-
-	// Return persistent write error if we have one
+	// Return persistent write error if we have one.
 	if f.writeErr != nil {
 		return 0, f.writeErr
 	}
 
-	// Seek to current write position (end of file)
+	// Handle empty writes.
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// Seek to current write position (end of file).
 	_, err := f.file.Seek(f.writePos, io.SeekStart)
 	if err != nil {
 		f.writeErr = fmt.Errorf("seek to write position failed: %w", err)
 		return 0, f.writeErr
 	}
 
-	// Write the data to the file
+	// Write the data to the file.
 	n, err := f.file.Write(p)
 	if n > 0 {
 		// Update our write position to track how much data we've written.
