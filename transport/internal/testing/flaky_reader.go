@@ -9,18 +9,30 @@ import (
 // ErrFlakyFailure is returned when FlakyReader simulates a failure.
 var ErrFlakyFailure = errors.New("simulated read failure")
 
-// FlakyReader simulates a reader that fails after a certain number of bytes.
+// FlakyReader simulates a reader that fails after a certain number of
+// bytes.
 type FlakyReader struct {
-	data      []byte
+	// data holds the content to be read.
+	data []byte
+
+	// failAfter is the byte position after which reads should fail.
 	failAfter int
-	pos       int
-	failed    bool
-	closed    bool
-	mu        sync.Mutex
+
+	// pos is the current read position.
+	pos int
+
+	// failed indicates if the reader has already failed.
+	failed bool
+
+	// closed indicates if the reader has been closed.
+	closed bool
+
+	// mu protects all fields from concurrent access.
+	mu sync.Mutex
 }
 
-// NewFlakyReader creates a FlakyReader that fails after reading failAfter bytes.
-// If failAfter is 0 or negative, it never fails.
+// NewFlakyReader creates a FlakyReader that fails after reading failAfter
+// bytes. If failAfter is 0 or negative, it never fails.
 func NewFlakyReader(data []byte, failAfter int) *FlakyReader {
 	return &FlakyReader{
 		data:      data,
@@ -45,16 +57,16 @@ func (fr *FlakyReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	// Calculate how much we can read
+	// Calculate how much we can read.
 	remaining := len(fr.data) - fr.pos
 	toRead := len(p)
 	if toRead > remaining {
 		toRead = remaining
 	}
 
-	// Check if we should fail
+	// Check if we should fail.
 	if fr.failAfter > 0 && fr.pos+toRead > fr.failAfter {
-		// Read up to failure point
+		// Read up to failure point.
 		toRead = fr.failAfter - fr.pos
 		if toRead <= 0 {
 			fr.failed = true
@@ -62,17 +74,18 @@ func (fr *FlakyReader) Read(p []byte) (int, error) {
 		}
 	}
 
-	// Copy data
+	// Copy data.
 	n := copy(p, fr.data[fr.pos:fr.pos+toRead])
 	fr.pos += n
 
-	// Check if we've hit the failure point
-	if fr.failAfter > 0 && fr.pos >= fr.failAfter && fr.pos < len(fr.data) {
+	// Check if we've hit the failure point.
+	if fr.failAfter > 0 && fr.pos >= fr.failAfter &&
+		fr.pos < len(fr.data) {
 		fr.failed = true
 		if n == 0 {
 			return 0, ErrFlakyFailure
 		}
-		// Return the data we read, error will come on next read
+		// Return the data we read, error will come on next read.
 	}
 
 	if fr.pos >= len(fr.data) {
@@ -115,15 +128,27 @@ func (fr *FlakyReader) HasFailed() bool {
 
 // MultiFailReader simulates multiple failures at different points.
 type MultiFailReader struct {
-	data         []byte
+	// data holds the content to be read.
+	data []byte
+
+	// failurePoints are the byte positions where failures should occur.
 	failurePoints []int
+
+	// failureCount tracks how many failures have been simulated.
 	failureCount int
-	pos          int
-	closed       bool
-	mu           sync.Mutex
+
+	// pos is the current read position.
+	pos int
+
+	// closed indicates if the reader has been closed.
+	closed bool
+
+	// mu protects all fields from concurrent access.
+	mu sync.Mutex
 }
 
-// NewMultiFailReader creates a reader that fails at specified byte positions.
+// NewMultiFailReader creates a reader that fails at specified byte
+// positions.
 func NewMultiFailReader(data []byte, failurePoints []int) *MultiFailReader {
 	return &MultiFailReader{
 		data:          data,
@@ -144,10 +169,10 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	// Check if we're at a failure point
+	// Check if we're at a failure point.
 	for i, point := range mfr.failurePoints {
 		if i < mfr.failureCount {
-			continue // Already failed here
+			continue // Already failed here.
 		}
 		if mfr.pos == point {
 			mfr.failureCount++
@@ -155,17 +180,17 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		}
 	}
 
-	// Calculate how much to read
+	// Calculate how much to read.
 	remaining := len(mfr.data) - mfr.pos
 	toRead := len(p)
 	if toRead > remaining {
 		toRead = remaining
 	}
 
-	// Check if we would cross a failure point
+	// Check if we would cross a failure point.
 	for i, point := range mfr.failurePoints {
 		if i < mfr.failureCount {
-			continue
+			continue // Skip already used failure points.
 		}
 		if mfr.pos < point && mfr.pos+toRead > point {
 			toRead = point - mfr.pos
@@ -173,7 +198,7 @@ func (mfr *MultiFailReader) Read(p []byte) (int, error) {
 		}
 	}
 
-	// Copy data
+	// Copy data.
 	n := copy(p, mfr.data[mfr.pos:mfr.pos+toRead])
 	mfr.pos += n
 

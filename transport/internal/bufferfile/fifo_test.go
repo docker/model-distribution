@@ -10,15 +10,17 @@ import (
 	"time"
 )
 
-// stat returns information about the current state of the FIFO for testing purposes.
+// stat returns information about the current state of the FIFO for testing
+// purposes.
 func (f *FIFO) stat() (readPos, writePos int64, closed bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.readPos, f.writePos, f.closed
 }
 
-// TestFIFO_BasicReadWrite tests that data written to a FIFO can be read back exactly.
-// This is the fundamental requirement for the FIFO to work correctly.
+// TestFIFO_BasicReadWrite tests that data written to a FIFO can be read
+// back exactly. This is the fundamental requirement for the FIFO to work
+// correctly.
 func TestFIFO_BasicReadWrite(t *testing.T) {
 	// Arrange: Create a new FIFO
 	fifo, err := NewFIFO()
@@ -54,8 +56,9 @@ func TestFIFO_BasicReadWrite(t *testing.T) {
 	}
 }
 
-// TestFIFO_MultipleWrites tests that multiple separate writes are concatenated correctly
-// when reading back from the FIFO, preserving the order and boundaries.
+// TestFIFO_MultipleWrites tests that multiple separate writes are
+// concatenated correctly when reading back from the FIFO, preserving the
+// order and boundaries.
 func TestFIFO_MultipleWrites(t *testing.T) {
 	// Arrange: Create FIFO and test data
 	fifo, err := NewFIFO()
@@ -100,6 +103,8 @@ func TestFIFO_MultipleWrites(t *testing.T) {
 	}
 }
 
+// TestFIFO_PartialReads tests that data can be read in smaller chunks than
+// it was written, ensuring proper read position tracking.
 func TestFIFO_PartialReads(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -131,8 +136,9 @@ func TestFIFO_PartialReads(t *testing.T) {
 	}
 }
 
-// TestFIFO_ConcurrentReadWrite tests that multiple concurrent writers and readers
-// can safely access the FIFO without data corruption or race conditions.
+// TestFIFO_ConcurrentReadWrite tests that multiple concurrent writers and
+// readers can safely access the FIFO without data corruption or race
+// conditions.
 func TestFIFO_ConcurrentReadWrite(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -210,9 +216,9 @@ func TestFIFO_ConcurrentReadWrite(t *testing.T) {
 		numWriters, totalExpected)
 }
 
-// TestFIFO_ReadBlocksUntilData tests that reads block when no data is available
-// and unblock immediately when data is written, which is essential for the
-// streaming behavior needed by the parallel transport.
+// TestFIFO_ReadBlocksUntilData tests that reads block when no data is
+// available and unblock immediately when data is written, which is essential
+// for the streaming behavior needed by the parallel transport.
 func TestFIFO_ReadBlocksUntilData(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -256,8 +262,8 @@ func TestFIFO_ReadBlocksUntilData(t *testing.T) {
 	}
 }
 
-// TestFIFO_CloseInterruptsRead tests that Close() interrupts blocked readers
-// and causes them to return EOF, which is needed for proper cleanup.
+// TestFIFO_CloseInterruptsRead tests that Close() interrupts blocked
+// readers and causes them to return EOF, which is needed for proper cleanup.
 func TestFIFO_CloseInterruptsRead(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -303,8 +309,8 @@ func TestFIFO_CloseInterruptsRead(t *testing.T) {
 	}
 }
 
-// TestFIFO_CloseWithPendingData tests that Close() immediately makes all data
-// unavailable, which implements the interruptible FIFO semantics.
+// TestFIFO_CloseWithPendingData tests that Close() immediately makes all
+// data unavailable, which implements the interruptible FIFO semantics.
 func TestFIFO_CloseWithPendingData(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -335,6 +341,7 @@ func TestFIFO_CloseWithPendingData(t *testing.T) {
 	}
 }
 
+// TestFIFO_WriteAfterClose tests that writes fail after the FIFO is closed.
 func TestFIFO_WriteAfterClose(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -351,7 +358,7 @@ func TestFIFO_WriteAfterClose(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected write after close to fail")
 	}
-	
+
 	// Even empty writes should fail after close
 	_, err = fifo.Write(nil)
 	if err == nil {
@@ -359,6 +366,8 @@ func TestFIFO_WriteAfterClose(t *testing.T) {
 	}
 }
 
+// TestFIFO_WriteAfterCloseWrite tests that writes fail after CloseWrite
+// is called.
 func TestFIFO_WriteAfterCloseWrite(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -373,7 +382,7 @@ func TestFIFO_WriteAfterCloseWrite(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected write after CloseWrite to fail")
 	}
-	
+
 	// Even empty writes should fail after CloseWrite
 	_, err = fifo.Write(nil)
 	if err == nil {
@@ -381,6 +390,8 @@ func TestFIFO_WriteAfterCloseWrite(t *testing.T) {
 	}
 }
 
+// TestFIFO_Stat tests the internal stat method used for debugging and
+// testing position tracking.
 func TestFIFO_Stat(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -391,7 +402,8 @@ func TestFIFO_Stat(t *testing.T) {
 	// Check initial state
 	readPos, writePos, closed := fifo.stat()
 	if readPos != 0 || writePos != 0 || closed {
-		t.Fatalf("Initial state wrong: readPos=%d, writePos=%d, closed=%v", readPos, writePos, closed)
+		t.Fatalf("Initial state wrong: readPos=%d, writePos=%d, closed=%v",
+			readPos, writePos, closed)
 	}
 
 	// Write some data
@@ -403,7 +415,8 @@ func TestFIFO_Stat(t *testing.T) {
 
 	readPos, writePos, closed = fifo.stat()
 	if readPos != 0 || writePos != int64(len(data)) || closed {
-		t.Fatalf("After write state wrong: readPos=%d, writePos=%d, closed=%v", readPos, writePos, closed)
+		t.Fatalf("After write state wrong: readPos=%d, writePos=%d, closed=%v",
+			readPos, writePos, closed)
 	}
 
 	// Read some data
@@ -415,7 +428,8 @@ func TestFIFO_Stat(t *testing.T) {
 
 	readPos, writePos, closed = fifo.stat()
 	if readPos != int64(n) || writePos != int64(len(data)) || closed {
-		t.Fatalf("After read state wrong: readPos=%d, writePos=%d, closed=%v", readPos, writePos, closed)
+		t.Fatalf("After read state wrong: readPos=%d, writePos=%d, closed=%v",
+			readPos, writePos, closed)
 	}
 
 	// Close and check
@@ -426,6 +440,8 @@ func TestFIFO_Stat(t *testing.T) {
 	}
 }
 
+// TestFIFO_StressTest performs concurrent read/write operations to test
+// for race conditions and data corruption under heavy load.
 func TestFIFO_StressTest(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
@@ -471,7 +487,8 @@ func TestFIFO_StressTest(t *testing.T) {
 		buf := make([]byte, maxReadSize)
 		start := time.Now()
 
-		for time.Since(start) < duration+time.Second { // Give extra time to read
+		for time.Since(start) < duration+time.Second {
+			// Give extra time to read.
 			n, err := fifo.Read(buf)
 			if err == io.EOF {
 				break
@@ -482,8 +499,10 @@ func TestFIFO_StressTest(t *testing.T) {
 			}
 			atomic.AddInt64(&totalRead, int64(n))
 
-			// If we've read everything written and writer is done, we're done
-			if atomic.LoadInt64(&totalRead) >= atomic.LoadInt64(&totalWritten) && time.Since(start) > duration {
+			// If we've read everything written and writer is done, we're
+			// done.
+			if atomic.LoadInt64(&totalRead) >= atomic.LoadInt64(&totalWritten) &&
+				time.Since(start) > duration {
 				break
 			}
 		}
@@ -493,13 +512,17 @@ func TestFIFO_StressTest(t *testing.T) {
 
 	finalWritten := atomic.LoadInt64(&totalWritten)
 	finalRead := atomic.LoadInt64(&totalRead)
-	t.Logf("Stress test completed: wrote %d bytes, read %d bytes", finalWritten, finalRead)
+	t.Logf("Stress test completed: wrote %d bytes, read %d bytes",
+		finalWritten, finalRead)
 
 	if finalRead > finalWritten {
-		t.Fatalf("Read more than written: read=%d, written=%d", finalRead, finalWritten)
+		t.Fatalf("Read more than written: read=%d, written=%d",
+			finalRead, finalWritten)
 	}
 }
 
+// TestFIFO_EmptyOperations tests that empty reads and writes are handled
+// correctly.
 func TestFIFO_EmptyOperations(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -526,6 +549,8 @@ func TestFIFO_EmptyOperations(t *testing.T) {
 	}
 }
 
+// TestFIFO_MultipleClose tests that calling Close() multiple times is
+// safe and doesn't cause errors or panics.
 func TestFIFO_MultipleClose(t *testing.T) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -545,7 +570,8 @@ func TestFIFO_MultipleClose(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
+// BenchmarkFIFO_Write measures the performance of write operations.
 func BenchmarkFIFO_Write(b *testing.B) {
 	fifo, err := NewFIFO()
 	if err != nil {
@@ -565,6 +591,7 @@ func BenchmarkFIFO_Write(b *testing.B) {
 	}
 }
 
+// BenchmarkFIFO_Read measures the performance of read operations.
 func BenchmarkFIFO_Read(b *testing.B) {
 	fifo, err := NewFIFO()
 	if err != nil {

@@ -76,8 +76,8 @@ func ParseSingleRange(h string) (int64, int64, bool) {
 	return start, end, true
 }
 
-// ParseContentRange parses "Content-Range: bytes start-end/total".
-// It returns (start, end, total, ok). When total is unknown, total == -1.
+// ParseContentRange parses "Content-Range: bytes start-end/total". It
+// returns (start, end, total, ok). When total is unknown, total == -1.
 func ParseContentRange(h string) (int64, int64, int64, bool) {
 	if h == "" {
 		return 0, -1, -1, false

@@ -16,34 +16,38 @@ import (
 type FIFO struct {
 	// file is the underlying temporary file used for storage.
 	file *os.File
-	
+
 	// mu protects all fields and synchronizes access to the FIFO.
 	mu sync.Mutex
-	
+
 	// cond is used to signal waiting readers when new data becomes available
 	// or when the write side is closed.
 	cond *sync.Cond
-	
+
 	// readPos tracks the current read position within the file.
 	readPos int64
-	
-	// writePos tracks the current write position within the file (always at EOF).
+
+	// writePos tracks the current write position within the file
+	// (always at EOF).
 	writePos int64
-	
-	// closed indicates whether Close() has been called, making the FIFO unusable.
+
+	// closed indicates whether Close() has been called, making the FIFO
+	// unusable.
 	closed bool
-	
-	// writeClosed indicates whether CloseWrite() has been called, meaning no more
-	// writes will occur but reads can continue until all data is consumed.
+
+	// writeClosed indicates whether CloseWrite() has been called, meaning
+	// no more writes will occur but reads can continue until all data is
+	// consumed.
 	writeClosed bool
-	
-	// writeErr holds any persistent write error that should be returned to future
-	// write operations.
+
+	// writeErr holds any persistent write error that should be returned to
+	// future write operations.
 	writeErr error
 }
 
 // NewFIFO creates a new FIFO backed by a temporary file.
-// The caller is responsible for calling Close() to clean up the temporary file.
+// The caller is responsible for calling Close() to clean up the temporary
+// file.
 func NewFIFO() (*FIFO, error) {
 	file, err := os.CreateTemp("", "fifo-*.tmp")
 	if err != nil {
@@ -92,14 +96,14 @@ func (f *FIFO) Write(p []byte) (int, error) {
 	// Write the data to the file
 	n, err := f.file.Write(p)
 	if n > 0 {
-		// Update our write position to track how much data we've written
+		// Update our write position to track how much data we've written.
 		f.writePos += int64(n)
-		// Signal all waiting readers that new data is available
+		// Signal all waiting readers that new data is available.
 		f.cond.Broadcast()
 	}
 
 	if err != nil {
-		// Store the error for future write attempts
+		// Store the error for future write attempts.
 		f.writeErr = fmt.Errorf("write failed: %w", err)
 		return n, f.writeErr
 	}
@@ -120,29 +124,30 @@ func (f *FIFO) Read(p []byte) (int, error) {
 
 	for {
 		if f.closed {
-			// FIFO has been fully closed - file is closed and cleaned up
-			// Return EOF immediately since no more data can be read
+			// FIFO has been fully closed - file is closed and cleaned up.
+			// Return EOF immediately since no more data can be read.
 			return 0, io.EOF
 		}
 
 		// Calculate how much unread data is available
 		availableBytes := f.writePos - f.readPos
 		if availableBytes > 0 {
-			// Data is available - read it immediately
+			// Data is available - read it immediately.
 			return f.readFromFile(p)
 		}
 
 		// No data currently available - check if writes are finished
 		if f.writeClosed {
-			// Write side is closed and no data available - return EOF
+			// Write side is closed and no data available - return EOF.
 			return 0, io.EOF
 		}
 
-		// No data available and writes are still possible - wait for more data
+		// No data available and writes are still possible - wait for more
+		// data.
 		// The condition variable will be signaled when:
-		// - New data is written (f.cond.Broadcast() in Write)
-		// - Write side is closed (f.cond.Broadcast() in CloseWrite)
-		// - FIFO is fully closed (f.cond.Broadcast() in Close)
+		// - New data is written (f.cond.Broadcast() in Write).
+		// - Write side is closed (f.cond.Broadcast() in CloseWrite).
+		// - FIFO is fully closed (f.cond.Broadcast() in Close).
 		f.cond.Wait()
 	}
 }
@@ -188,20 +193,20 @@ func (f *FIFO) Close() error {
 
 	f.closed = true
 
-	// Wake up all waiting readers
+	// Wake up all waiting readers.
 	f.cond.Broadcast()
 
 	var err error
 	if f.file != nil {
-		// Get the file name before closing for cleanup
+		// Get the file name before closing for cleanup.
 		fileName := f.file.Name()
 
-		// Close the file (this will interrupt any blocked I/O operations)
+		// Close the file (this will interrupt any blocked I/O operations).
 		if closeErr := f.file.Close(); closeErr != nil {
 			err = fmt.Errorf("failed to close file: %w", closeErr)
 		}
 
-		// Remove the temporary file
+		// Remove the temporary file.
 		if removeErr := os.Remove(fileName); removeErr != nil {
 			if err != nil {
 				err = fmt.Errorf("%w; also failed to remove temp file: %v", err, removeErr)
@@ -217,15 +222,14 @@ func (f *FIFO) Close() error {
 }
 
 // CloseWrite signals that no more writes will happen.
-// Readers can still read remaining data, and will receive EOF when all data is consumed.
-// Does not clean up resources - use Close() for that.
+// Readers can still read remaining data, and will receive EOF when all data
+// is consumed. Does not clean up resources - use Close() for that.
 func (f *FIFO) CloseWrite() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	f.writeClosed = true
 
-	// Wake up all waiting readers to check the new state
+	// Wake up all waiting readers to check the new state.
 	f.cond.Broadcast()
 }
-

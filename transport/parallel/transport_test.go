@@ -299,10 +299,10 @@ func TestConcurrencyLimits(t *testing.T) {
 				maxConcurrent = currentConcurrent
 			}
 			mu.Unlock()
-			
+
 			// Simulate work
 			time.Sleep(10 * time.Millisecond)
-			
+
 			mu.Lock()
 			currentConcurrent--
 			mu.Unlock()
@@ -333,11 +333,11 @@ func TestConcurrencyLimits(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	
+
 	if maxConcurrent > 2 {
 		t.Errorf("expected max 2 concurrent requests, got %d", maxConcurrent)
 	}
-	
+
 	if rangeRequests == 0 {
 		t.Error("no range requests were made")
 	}
@@ -547,7 +547,7 @@ func TestChunkBoundaries(t *testing.T) {
 
 	// Check the range requests
 	reqs := ft.GetRequests()
-	
+
 	var actualRanges []string
 	for _, req := range reqs {
 		if r := req.Header.Get("Range"); r != "" && r != "bytes=0-0" {

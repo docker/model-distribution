@@ -32,10 +32,12 @@ func AssertDataEquals(t *testing.T, got, want []byte) {
 	if !bytes.Equal(got, want) {
 		t.Errorf("data mismatch: got %d bytes, want %d bytes", len(got), len(want))
 		if len(got) == len(want) {
-			// Find first difference
+			// Find first difference.
 			for i := range got {
 				if got[i] != want[i] {
-					t.Errorf("first difference at byte %d: got %02x, want %02x", i, got[i], want[i])
+					t.Errorf(
+						"first difference at byte %d: got %02x, want %02x",
+						i, got[i], want[i])
 					break
 				}
 			}
@@ -53,7 +55,8 @@ func ReadAll(t *testing.T, r io.Reader) []byte {
 	return data
 }
 
-// ReadAllWithError reads all data from a reader and returns both data and error.
+// ReadAllWithError reads all data from a reader and returns both data and
+// error.
 func ReadAllWithError(r io.Reader) ([]byte, error) {
 	return io.ReadAll(r)
 }
@@ -64,7 +67,8 @@ func MustRead(t *testing.T, r io.Reader, n int) []byte {
 	buf := make([]byte, n)
 	nn, err := io.ReadFull(r, buf)
 	if err != nil {
-		t.Fatalf("failed to read %d bytes: got %d, err: %v", n, nn, err)
+		t.Fatalf(
+			"failed to read %d bytes: got %d, err: %v", n, nn, err)
 	}
 	return buf
 }
@@ -108,13 +112,13 @@ func ChunkData(data []byte, n int) [][]byte {
 	if n == 1 {
 		return [][]byte{data}
 	}
-	
+
 	chunkSize := len(data) / n
 	remainder := len(data) % n
-	
+
 	chunks := make([][]byte, n)
 	offset := 0
-	
+
 	for i := 0; i < n; i++ {
 		size := chunkSize
 		if i == n-1 {
@@ -123,7 +127,7 @@ func ChunkData(data []byte, n int) [][]byte {
 		chunks[i] = data[offset : offset+size]
 		offset += size
 	}
-	
+
 	return chunks
 }
 
@@ -133,31 +137,35 @@ func ConcatChunks(chunks [][]byte) []byte {
 	for _, chunk := range chunks {
 		total += len(chunk)
 	}
-	
+
 	result := make([]byte, 0, total)
 	for _, chunk := range chunks {
 		result = append(result, chunk...)
 	}
-	
+
 	return result
 }
 
 // ByteRange represents a byte range.
 type ByteRange struct {
+	// Start is the starting byte position (inclusive).
 	Start int64
-	End   int64 // inclusive
+
+	// End is the ending byte position (inclusive).
+	End int64
 }
 
-// CalculateByteRanges calculates byte ranges for splitting a file of given size into n parts.
+// CalculateByteRanges calculates byte ranges for splitting a file of given
+// size into n parts.
 func CalculateByteRanges(totalSize int64, n int) []ByteRange {
 	if n <= 0 || totalSize <= 0 {
 		return nil
 	}
-	
+
 	ranges := make([]ByteRange, n)
 	chunkSize := totalSize / int64(n)
 	remainder := totalSize % int64(n)
-	
+
 	var start int64
 	for i := 0; i < n; i++ {
 		size := chunkSize
@@ -170,7 +178,7 @@ func CalculateByteRanges(totalSize int64, n int) []ByteRange {
 		}
 		start += size
 	}
-	
+
 	return ranges
 }
 

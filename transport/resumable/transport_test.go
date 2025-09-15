@@ -62,7 +62,7 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 	payload := testutil.GenerateTestData(10000)
 
 	ft := testutil.NewFakeTransport()
-	
+
 	ft.Add(url, &testutil.FakeResource{
 		Data:          payload,
 		SupportsRange: true,
@@ -90,7 +90,7 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 						var start int
 						fmt.Sscanf(rangeHeader, "bytes=%d-", &start)
 						rangeData := payload[start:]
-						
+
 						// Apply next failure point relative to this range
 						nextFailure := failurePoints[failureIndex] - start
 						if nextFailure > 0 && nextFailure < len(rangeData) {
@@ -530,9 +530,9 @@ func TestIfRange_RequiredButUnavailable_MissingRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read failed: %v", err)
 	}
-	
+
 	testutil.AssertDataEquals(t, got, payload)
-	
+
 	// Verify that resume was attempted without If-Range
 	headers := ft.GetRequestHeaders(url)
 	for _, h := range headers {

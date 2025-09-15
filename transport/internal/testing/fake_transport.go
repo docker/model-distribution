@@ -35,7 +35,7 @@ type FakeTransport struct {
 	// FailAfter causes the transport to fail after serving this many bytes
 	// on a request (for simulating connection failures).
 	failAfter map[string]int
-	// failCount tracks how many times we've failed for each URL
+	// failCount tracks how many times we've failed for each URL.
 	failCount map[string]int
 	// RequestHook is called for each request if set.
 	RequestHook func(*http.Request)
@@ -67,7 +67,8 @@ func (ft *FakeTransport) AddSimple(url string, data []byte, supportsRange bool) 
 	})
 }
 
-// SetFailAfter configures the transport to fail after serving n bytes for the given URL.
+// SetFailAfter configures the transport to fail after serving n bytes for
+// the given URL.
 func (ft *FakeTransport) SetFailAfter(url string, n int) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -87,7 +88,7 @@ func (ft *FakeTransport) GetRequests() []http.Request {
 func (ft *FakeTransport) GetRequestHeaders(url string) []http.Header {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
-	
+
 	var headers []http.Header
 	for _, req := range ft.requests {
 		if req.URL.String() == url {
@@ -110,7 +111,7 @@ func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		reqCopy.Header = req.Header.Clone()
 	}
 	ft.requests = append(ft.requests, reqCopy)
-	
+
 	// Get resource
 	resource, exists := ft.resources[req.URL.String()]
 	failAfter := ft.failAfter[req.URL.String()]
@@ -149,7 +150,7 @@ func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Regular GET request
 	data := resource.Data
-	
+
 	// Check if we should fail this request
 	var body io.ReadCloser
 	if failAfter > 0 && ft.getFailCount(req.URL.String()) == 0 {
@@ -160,7 +161,7 @@ func (ft *FakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// Subsequent request or no failure configured
 		body = io.NopCloser(bytes.NewReader(data))
 	}
-	
+
 	resp := ft.createResponse(req, resource, body, http.StatusOK)
 	if ft.ResponseHook != nil {
 		ft.ResponseHook(resp)
@@ -173,23 +174,23 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
 		return ft.createErrorResponse(req, http.StatusBadRequest), nil
 	}
-	
+
 	rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
 	parts := strings.Split(rangeSpec, "-")
 	if len(parts) != 2 {
 		return ft.createErrorResponse(req, http.StatusBadRequest), nil
 	}
-	
+
 	var start, end int64
 	var err error
-	
+
 	if parts[0] != "" {
 		start, err = strconv.ParseInt(parts[0], 10, 64)
 		if err != nil {
 			return ft.createErrorResponse(req, http.StatusBadRequest), nil
 		}
 	}
-	
+
 	if parts[1] != "" {
 		end, err = strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
@@ -198,7 +199,7 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 	} else {
 		end = int64(len(resource.Data) - 1)
 	}
-	
+
 	// Validate range
 	if start < 0 || end >= int64(len(resource.Data)) || start > end {
 		resp := ft.createErrorResponse(req, http.StatusRequestedRangeNotSatisfiable)
@@ -208,26 +209,26 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 		}
 		return resp, nil
 	}
-	
+
 	// Check If-Range
 	if ifRange := req.Header.Get("If-Range"); ifRange != "" {
 		// Check if If-Range matches either ETag or Last-Modified
 		matches := false
-		
+
 		// Only match strong ETags for If-Range
 		if resource.ETag != "" && !strings.HasPrefix(resource.ETag, "W/") {
 			if ifRange == resource.ETag {
 				matches = true
 			}
 		}
-		
+
 		// Also check Last-Modified
 		if !matches && resource.LastModified != "" {
 			if ifRange == resource.LastModified {
 				matches = true
 			}
 		}
-		
+
 		if !matches {
 			// Validator doesn't match - return full content
 			body := NewFlakyReader(resource.Data, failAfter)
@@ -238,17 +239,17 @@ func (ft *FakeTransport) handleRangeRequest(req *http.Request, resource *FakeRes
 			return resp, nil
 		}
 	}
-	
+
 	// Serve range
 	data := resource.Data[start : end+1]
-	
+
 	// For range requests, don't apply failure (resumable should handle it)
 	body := io.NopCloser(bytes.NewReader(data))
-	
+
 	resp := ft.createResponse(req, resource, body, http.StatusPartialContent)
 	resp.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(resource.Data)))
 	resp.ContentLength = end - start + 1
-	
+
 	if ft.ResponseHook != nil {
 		ft.ResponseHook(resp)
 	}
@@ -259,7 +260,7 @@ func (ft *FakeTransport) createResponse(req *http.Request, resource *FakeResourc
 	if body == nil {
 		body = io.NopCloser(bytes.NewReader(nil))
 	}
-	
+
 	resp := &http.Response{
 		StatusCode: statusCode,
 		Status:     http.StatusText(statusCode),
@@ -270,37 +271,37 @@ func (ft *FakeTransport) createResponse(req *http.Request, resource *FakeResourc
 		Body:       body,
 		Request:    req,
 	}
-	
+
 	// Set standard headers
 	if resource.SupportsRange {
 		resp.Header.Set("Accept-Ranges", "bytes")
 	}
-	
+
 	if resource.ETag != "" {
 		resp.Header.Set("ETag", resource.ETag)
 	}
-	
+
 	if resource.LastModified != "" {
 		resp.Header.Set("Last-Modified", resource.LastModified)
 	}
-	
+
 	if resource.ContentType != "" {
 		resp.Header.Set("Content-Type", resource.ContentType)
 	}
-	
+
 	// Copy additional headers
 	if resource.Headers != nil {
 		for k, v := range resource.Headers {
 			resp.Header[k] = v
 		}
 	}
-	
-	// Set Content-Length 
+
+	// Set Content-Length
 	if statusCode == http.StatusOK {
 		resp.ContentLength = int64(len(resource.Data))
 		resp.Header.Set("Content-Length", strconv.Itoa(len(resource.Data)))
 	}
-	
+
 	return resp
 }
 

@@ -1,24 +1,30 @@
-// Package parallel provides an http.RoundTripper that transparently parallelizes
-// GET requests using concurrent byte-range requests for better throughput.
+// Package parallel provides an http.RoundTripper that transparently
+// parallelizes GET requests using concurrent byte-range requests for better
+// throughput.
 //
 // ───────────────────────────── How it works ─────────────────────────────
-//   - For non-GET requests, the transport passes them through unmodified to the
-//     underlying transport.
-//   - For GET requests, it first performs a HEAD request to check if the server
-//     supports byte ranges and to determine the total response size.
-//   - If the HEAD request indicates range support and known size, the transport
-//     generates multiple concurrent GET requests with specific byte-range headers.
-//   - Subranges are written to temporary files and stitched together in a custom
-//     Response.Body that's transparent to the caller.
-//   - Per-host and per-request concurrency limits are enforced using semaphores.
+//   - For non-GET requests, the transport passes them through unmodified to
+//     the underlying transport.
+//   - For GET requests, it first performs a HEAD request to check if the
+//     server supports byte ranges and to determine the total response size.
+//   - If the HEAD request indicates range support and known size, the
+//     transport generates multiple concurrent GET requests with specific
+//     byte-range headers.
+//   - Subranges are written to temporary files and stitched together in a
+//     custom Response.Body that's transparent to the caller.
+//   - Per-host and per-request concurrency limits are enforced using
+//     semaphores.
 //
 // ───────────────────────────── Notes & caveats ───────────────────────────
-//   - Only works with servers that support "Accept-Ranges: bytes" and provide
-//     Content-Length or Content-Range headers with total size information.
-//   - Content-Encoding (compression) is not compatible with byte ranges, so
-//     compressed responses fall back to single-threaded behavior.
-//   - Temporary files are created for each subrange and cleaned up automatically.
-//   - The transport respects per-host concurrency limits to avoid overwhelming servers.
+//   - Only works with servers that support "Accept-Ranges: bytes" and
+//     provide Content-Length or Content-Range headers with total size
+//     information.
+//   - Content-Encoding (compression) is not compatible with byte ranges,
+//     so compressed responses fall back to single-threaded behavior.
+//   - Temporary files are created for each subrange and cleaned up
+//     automatically.
+//   - The transport respects per-host concurrency limits to avoid
+//     overwhelming servers.
 package parallel
 
 import (
@@ -40,8 +46,8 @@ import (
 // Option configures a ParallelTransport.
 type Option func(*ParallelTransport)
 
-// WithMaxConcurrentPerHost sets the maximum concurrent requests per hostname.
-// Default concurrency limits are applied if not specified.
+// WithMaxConcurrentPerHost sets the maximum concurrent requests per
+// hostname. Default concurrency limits are applied if not specified.
 func WithMaxConcurrentPerHost(limits map[string]uint) Option {
 	return func(pt *ParallelTransport) {
 		pt.maxConcurrentPerHost = make(map[string]uint, len(limits))
@@ -51,8 +57,8 @@ func WithMaxConcurrentPerHost(limits map[string]uint) Option {
 	}
 }
 
-// WithMaxConcurrentPerRequest sets the maximum concurrent subrange requests
-// for a single request. Default: 4.
+// WithMaxConcurrentPerRequest sets the maximum concurrent subrange
+// requests for a single request. Default: 4.
 func WithMaxConcurrentPerRequest(n uint) Option {
 	return func(pt *ParallelTransport) { pt.maxConcurrentPerRequest = n }
 }
@@ -63,23 +69,26 @@ func WithMinChunkSize(size int64) Option {
 	return func(pt *ParallelTransport) { pt.minChunkSize = size }
 }
 
-// WithTempDir sets the directory for temporary files. If empty, os.TempDir() is used.
+// WithTempDir sets the directory for temporary files. If empty,
+// os.TempDir() is used.
 func WithTempDir(dir string) Option {
 	return func(pt *ParallelTransport) { pt.tempDir = dir }
 }
 
-// ParallelTransport wraps another http.RoundTripper and parallelizes GET requests
-// using concurrent byte-range requests when possible.
+// ParallelTransport wraps another http.RoundTripper and parallelizes GET
+// requests using concurrent byte-range requests when possible.
 type ParallelTransport struct {
 	// base is the underlying RoundTripper actually used to send requests.
 	base http.RoundTripper
-	// maxConcurrentPerHost maps canonicalized hostname to maximum concurrent requests.
-	// A value of 0 means unlimited. The "" entry is the default for unspecified hosts.
+	// maxConcurrentPerHost maps canonicalized hostname to maximum
+	// concurrent requests. A value of 0 means unlimited. The "" entry is
+	// the default for unspecified hosts.
 	maxConcurrentPerHost map[string]uint
-	// maxConcurrentPerRequest is the maximum number of concurrent subrange requests
-	// for a single request.
+	// maxConcurrentPerRequest is the maximum number of concurrent
+	// subrange requests for a single request.
 	maxConcurrentPerRequest uint
-	// minChunkSize is the minimum size in bytes for parallelization to be worthwhile.
+	// minChunkSize is the minimum size in bytes for parallelization to be
+	// worthwhile.
 	minChunkSize int64
 	// tempDir is the directory for temporary files.
 	tempDir string
@@ -97,9 +106,9 @@ func New(base http.RoundTripper, opts ...Option) *ParallelTransport {
 	}
 	pt := &ParallelTransport{
 		base:                    base,
-		maxConcurrentPerHost:    map[string]uint{"": 4}, // default 4 concurrent per host
+		maxConcurrentPerHost:    map[string]uint{"": 4}, // default 4 per host.
 		maxConcurrentPerRequest: 4,
-		minChunkSize:            1024 * 1024, // 1MB
+		minChunkSize:            1024 * 1024, // 1MB.
 		tempDir:                 os.TempDir(),
 		semaphores:              make(map[string]*semaphore),
 	}
@@ -109,8 +118,9 @@ func New(base http.RoundTripper, opts ...Option) *ParallelTransport {
 	return pt
 }
 
-// RoundTrip implements http.RoundTripper. It parallelizes GET requests when possible,
-// otherwise passes requests through to the underlying transport.
+// RoundTrip implements http.RoundTripper. It parallelizes GET requests
+// when possible, otherwise passes requests through to the underlying
+// transport.
 func (pt *ParallelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Non-GET requests pass through unmodified.
 	if req.Method != http.MethodGet {
@@ -122,7 +132,8 @@ func (pt *ParallelTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if err != nil {
 		return nil, err
 	}
-	if !canParallelize || pInfo.totalSize < pt.minChunkSize*int64(pt.maxConcurrentPerRequest) {
+	if !canParallelize ||
+		pInfo.totalSize < pt.minChunkSize*int64(pt.maxConcurrentPerRequest) {
 		// Fall back to single request.
 		return pt.base.RoundTrip(req)
 	}
@@ -135,9 +146,11 @@ func (pt *ParallelTransport) RoundTrip(req *http.Request) (*http.Response, error
 type parallelInfo struct {
 	// totalSize is the total size of the resource in bytes.
 	totalSize int64
-	// etag is the strong ETag validator from the HEAD response, used for If-Range.
+	// etag is the strong ETag validator from the HEAD response, used for
+	// If-Range.
 	etag string
-	// lastModified is the Last-Modified header value, used as fallback validator for If-Range.
+	// lastModified is the Last-Modified header value, used as fallback
+	// validator for If-Range.
 	lastModified string
 }
 
@@ -172,7 +185,8 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	if totalSize <= 0 {
 		// Try to parse from Content-Range if present (206 response).
 		if headResp.StatusCode == http.StatusPartialContent {
-			if _, _, total, ok := common.ParseContentRange(headResp.Header.Get("Content-Range")); ok && total > 0 {
+			if _, _, total, ok := common.ParseContentRange(
+				headResp.Header.Get("Content-Range")); ok && total > 0 {
 				totalSize = total
 			} else {
 				return false, nil, nil
@@ -186,7 +200,8 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 		return false, nil, nil
 	}
 
-	// Capture validators for If-Range to ensure consistency across parallel requests.
+	// Capture validators for If-Range to ensure consistency across parallel
+	// requests.
 	info := &parallelInfo{
 		totalSize: totalSize,
 	}
@@ -200,8 +215,8 @@ func (pt *ParallelTransport) checkParallelizable(req *http.Request) (bool, *para
 	return true, info, nil
 }
 
-// parallelDownload performs a parallel download by splitting the request into
-// multiple concurrent byte-range requests.
+// parallelDownload performs a parallel download by splitting the request
+// into multiple concurrent byte-range requests.
 func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallelInfo) (*http.Response, error) {
 	totalSize := pInfo.totalSize
 
@@ -226,7 +241,7 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 	for i := 0; i < numChunks; i++ {
 		size := chunkSize
 		if i == numChunks-1 {
-			size += remainder // Last chunk gets the remainder
+			size += remainder // Last chunk gets the remainder.
 		}
 		end := start + size - 1
 
@@ -255,10 +270,12 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 			ch.setSimpleState(chunkDownloading, nil)
 			if err := pt.downloadChunk(req, ch, sem, pInfo); err != nil {
 				ch.setSimpleState(chunkFailed, fmt.Errorf("chunk %d: %w", i, err))
-				ch.fifo.Close() // Close FIFO on error to interrupt readers
+				ch.fifo.Close() // Close FIFO on error to interrupt readers.
 			} else {
 				ch.setSimpleState(chunkCompleted, nil)
-				ch.fifo.CloseWrite() // Close write side to signal no more writes (EOF when all data read)
+				// Close write side to signal no more writes (EOF when all data
+				// read).
+				ch.fifo.CloseWrite()
 			}
 		}(i, ch)
 	}
@@ -270,7 +287,8 @@ func (pt *ParallelTransport) parallelDownload(req *http.Request, pInfo *parallel
 		for _, ch := range chunks {
 			ch.cleanup()
 		}
-		return nil, fmt.Errorf("parallel: failed to get response headers: %w", err)
+		return nil, fmt.Errorf(
+			"parallel: failed to get response headers: %w", err)
 	}
 
 	// Create stitched response.
@@ -358,29 +376,34 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 
 	// Check for If-Range validation failure (server returns 200 instead of 206).
 	if resp.StatusCode == http.StatusOK {
-		return fmt.Errorf("server returned 200 to range request, resource may have changed (If-Range validation failed)")
+		return fmt.Errorf(
+			"server returned 200 to range request, resource may have changed (If-Range validation failed)")
 	}
 
 	// Verify we got a partial content response.
 	if resp.StatusCode != http.StatusPartialContent {
-		return fmt.Errorf("expected 206 Partial Content, got %d", resp.StatusCode)
+		return fmt.Errorf(
+			"expected 206 Partial Content, got %d", resp.StatusCode)
 	}
 
 	// Verify the range matches what we requested.
 	if start, end, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
 		if start != chunk.start || end != chunk.end {
-			return fmt.Errorf("server returned range %d-%d, requested %d-%d", start, end, chunk.start, chunk.end)
+			return fmt.Errorf(
+				"server returned range %d-%d, requested %d-%d",
+				start, end, chunk.start, chunk.end)
 		}
 	}
 
 	// Copy response body to temp file with progress signaling.
-	buf := make([]byte, 32*1024) // 32KB buffer
+	buf := make([]byte, 32*1024) // 32KB buffer.
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
 			// Write to FIFO
 			if _, writeErr := chunk.fifo.Write(buf[:n]); writeErr != nil {
-				return fmt.Errorf("failed to write chunk data: %w", writeErr)
+				return fmt.Errorf(
+					"failed to write chunk data: %w", writeErr)
 			}
 		}
 
@@ -388,7 +411,8 @@ func (pt *ParallelTransport) downloadChunk(origReq *http.Request, chunk *chunk, 
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read chunk data: %w", err)
+			return fmt.Errorf(
+				"failed to read chunk data: %w", err)
 		}
 	}
 

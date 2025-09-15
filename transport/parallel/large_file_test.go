@@ -166,7 +166,8 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 		defer resp.Body.Close()
 
 		if resp.ContentLength != size {
-			t.Errorf("Expected Content-Length %d, got %d", size, resp.ContentLength)
+			t.Errorf("Expected Content-Length %d, got %d",
+				size, resp.ContentLength)
 		}
 
 		hashingReader := newHashingReader(resp.Body)
@@ -176,12 +177,14 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 		}
 
 		if hashingReader.BytesRead() != size {
-			t.Errorf("Expected to read %d bytes, actually read %d bytes", size, hashingReader.BytesRead())
+			t.Errorf("Expected to read %d bytes, actually read %d bytes",
+				size, hashingReader.BytesRead())
 		}
 
 		actualHash := hashingReader.Sum()
 		if !bytes.Equal(expectedHash, actualHash) {
-			t.Errorf("Hash mismatch.\nExpected: %x\nActual:   %x", expectedHash, actualHash)
+			t.Errorf("Hash mismatch.\nExpected: %x\nActual:   %x",
+				expectedHash, actualHash)
 		}
 	})
 
@@ -201,7 +204,8 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 		defer resp.Body.Close()
 
 		if resp.ContentLength != size {
-			t.Errorf("Expected Content-Length %d, got %d", size, resp.ContentLength)
+			t.Errorf("Expected Content-Length %d, got %d",
+				size, resp.ContentLength)
 		}
 
 		hashingReader := newHashingReader(resp.Body)
@@ -211,12 +215,14 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 		}
 
 		if hashingReader.BytesRead() != size {
-			t.Errorf("Expected to read %d bytes, actually read %d bytes", size, hashingReader.BytesRead())
+			t.Errorf("Expected to read %d bytes, actually read %d bytes",
+				size, hashingReader.BytesRead())
 		}
 
 		actualHash := hashingReader.Sum()
 		if !bytes.Equal(expectedHash, actualHash) {
-			t.Errorf("Hash mismatch.\nExpected: %x\nActual:   %x", expectedHash, actualHash)
+			t.Errorf("Hash mismatch.\nExpected: %x\nActual:   %x",
+				expectedHash, actualHash)
 		}
 	})
 }

@@ -17,10 +17,13 @@ func TestParseSingleRange(t *testing.T) {
 		{"bytes=0-", 0, -1, true},
 		{"bytes=5-5", 5, 5, true},
 		{"BYTES=7-9", 7, 9, true},
-		{"bytes=10-5", 0, -1, false}, // end before start
-		{"bytes=-100", 0, -1, false}, // suffix not supported
+		// End before start.
+		{"bytes=10-5", 0, -1, false},
+		// Suffix not supported.
+		{"bytes=-100", 0, -1, false},
 		{"items=0-10", 0, -1, false},
-		{"bytes=0-1,3-5", 0, -1, false}, // multi-range unsupported
+		// Multi-range unsupported.
+		{"bytes=0-1,3-5", 0, -1, false},
 	}
 	for _, tc := range cases {
 		start, end, ok := ParseSingleRange(tc.in)
@@ -44,7 +47,8 @@ func TestParseContentRange(t *testing.T) {
 		{"bytes 0-0/*", 0, 0, -1, true},
 		{"items 0-1/2", 0, -1, -1, false},
 		{"bytes 0-99/abc", 0, -1, -1, false},
-		{"bytes 5-4/10", 5, 4, 10, true}, // parser accepts; semantic check happens elsewhere
+		// Parser accepts; semantic check happens elsewhere.
+		{"bytes 5-4/10", 5, 4, 10, true},
 	}
 	for _, tc := range cases {
 		start, end, total, ok := ParseContentRange(tc.in)
@@ -154,6 +158,7 @@ func TestIsWeakETag(t *testing.T) {
 
 // TestScrubConditionalHeaders tests conditional header removal.
 func TestScrubConditionalHeaders(t *testing.T) {
+	// Set up test headers with both conditional and non-conditional headers.
 	headers := http.Header{
 		"If-None-Match":       []string{`"etag1"`},
 		"If-Modified-Since":   []string{"Wed, 21 Oct 2015 07:28:00 GMT"},
@@ -164,10 +169,16 @@ func TestScrubConditionalHeaders(t *testing.T) {
 		"Authorization":       []string{"Bearer token"},
 	}
 
+	// Scrub the conditional headers.
 	ScrubConditionalHeaders(headers)
 
 	// Verify conditional headers are removed.
-	conditionalHeaders := []string{"If-None-Match", "If-Modified-Since", "If-Match", "If-Unmodified-Since"}
+	conditionalHeaders := []string{
+		"If-None-Match",
+		"If-Modified-Since",
+		"If-Match",
+		"If-Unmodified-Since",
+	}
 	for _, header := range conditionalHeaders {
 		if headers.Get(header) != "" {
 			t.Errorf("conditional header %s was not scrubbed", header)
