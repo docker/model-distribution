@@ -42,20 +42,7 @@ type FIFO struct {
 // The caller is responsible for calling Close() to clean up the temporary
 // file.
 func NewFIFO() (*FIFO, error) {
-	file, err := os.CreateTemp("", "fifo-*.tmp")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary file: %w", err)
-	}
-
-	fifo := &FIFO{
-		file:     file,
-		readPos:  0,
-		writePos: 0,
-		closed:   false,
-	}
-	fifo.cond = sync.NewCond(&fifo.mu)
-
-	return fifo, nil
+	return NewFIFOInDir("")
 }
 
 // NewFIFOInDir creates a new FIFO backed by a temporary file in the provided
