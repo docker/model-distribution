@@ -23,6 +23,7 @@ func TestBuilder(t *testing.T) {
 		t.Fatalf("Failed to add multimodal projector: %v", err)
 	}
 
+	// Add a chat template file
 	b, err = b.WithChatTemplateFile(filepath.Join("..", "assets", "template.jinja"))
 	if err != nil {
 		t.Fatalf("Failed to add multimodal projector: %v", err)
