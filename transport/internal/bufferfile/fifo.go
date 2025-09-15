@@ -16,30 +16,23 @@ import (
 type FIFO struct {
 	// file is the underlying temporary file used for storage.
 	file *os.File
-
 	// mu protects all fields and synchronizes access to the FIFO.
 	mu sync.Mutex
-
 	// cond is used to signal waiting readers when new data becomes available
 	// or when the write side is closed.
 	cond *sync.Cond
-
 	// readPos tracks the current read position within the file.
 	readPos int64
-
 	// writePos tracks the current write position within the file
 	// (always at EOF).
 	writePos int64
-
 	// closed indicates whether Close() has been called, making the FIFO
 	// unusable.
 	closed bool
-
 	// writeClosed indicates whether CloseWrite() has been called, meaning
 	// no more writes will occur but reads can continue until all data is
 	// consumed.
 	writeClosed bool
-
 	// writeErr holds any persistent write error that should be returned to
 	// future write operations.
 	writeErr error
@@ -101,7 +94,6 @@ func (f *FIFO) Write(p []byte) (int, error) {
 		// Signal all waiting readers that new data is available.
 		f.cond.Broadcast()
 	}
-
 	if err != nil {
 		// Store the error for future write attempts.
 		f.writeErr = fmt.Errorf("write failed: %w", err)
@@ -172,7 +164,6 @@ func (f *FIFO) readFromFile(p []byte) (int, error) {
 	if n > 0 {
 		f.readPos += int64(n)
 	}
-
 	if err != nil && err != io.EOF {
 		return n, fmt.Errorf("read failed: %w", err)
 	}

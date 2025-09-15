@@ -8,17 +8,21 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 )
 
-// deterministicDataGenerator generates deterministic data based on position
-// This allows us to generate GB-sized data streams without storing them in memory
+// deterministicDataGenerator generates deterministic data based on position.
+// This allows us to generate GB-sized data streams without storing them in
+// memory.
 type deterministicDataGenerator struct {
 	position int64
 	size     int64
 }
 
+// newDeterministicDataGenerator creates a new deterministic data generator
+// with the specified size.
 func newDeterministicDataGenerator(size int64) *deterministicDataGenerator {
 	return &deterministicDataGenerator{
 		position: 0,
@@ -26,23 +30,24 @@ func newDeterministicDataGenerator(size int64) *deterministicDataGenerator {
 	}
 }
 
+// Read implements io.Reader for deterministicDataGenerator.
 func (g *deterministicDataGenerator) Read(p []byte) (int, error) {
 	if g.position >= g.size {
 		return 0, io.EOF
 	}
 
-	// Calculate how much we can read
+	// Calculate how much we can read.
 	remaining := g.size - g.position
 	toRead := int64(len(p))
 	if toRead > remaining {
 		toRead = remaining
 	}
 
-	// Generate deterministic data based on position
+	// Generate deterministic data based on position.
 	for i := int64(0); i < toRead; i++ {
 		pos := g.position + i
-		// Use a simple but deterministic pattern: position mod 256
-		// XOR with some constants to make it more interesting
+		// Use a simple but deterministic pattern: position mod 256.
+		// XOR with some constants to make it more interesting.
 		p[i] = byte((pos ^ (pos >> 8) ^ (pos >> 16)) % 256)
 	}
 
@@ -50,10 +55,11 @@ func (g *deterministicDataGenerator) Read(p []byte) (int, error) {
 	return int(toRead), nil
 }
 
-// createLargeFileServer creates an HTTP server that serves deterministic large files
+// createLargeFileServer creates an HTTP server that serves deterministic
+// large files.
 func createLargeFileServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract size from URL path
+		// Extract size from URL path.
 		sizeStr := r.URL.Path[len("/data/"):]
 		size, err := strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil || size <= 0 {
@@ -61,12 +67,12 @@ func createLargeFileServer() *httptest.Server {
 			return
 		}
 
-		// Support range requests
+		// Support range requests.
 		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("ETag", fmt.Sprintf(`"test-file-%d"`, size))
 
-		// Handle range requests
+		// Handle range requests.
 		rangeHeader := r.Header.Get("Range")
 		if rangeHeader != "" {
 			var start, end int64
@@ -77,11 +83,11 @@ func createLargeFileServer() *httptest.Server {
 					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
 					w.WriteHeader(http.StatusPartialContent)
 
-					// Create generator positioned at start
+					// Create generator positioned at start.
 					gen := newDeterministicDataGenerator(size)
 					gen.position = start
 
-					// Copy the requested range
+					// Copy the requested range.
 					_, err := io.CopyN(w, gen, rangeSize)
 					if err != nil && err != io.EOF {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -91,7 +97,7 @@ func createLargeFileServer() *httptest.Server {
 			}
 		}
 
-		// Full file request
+		// Full file request.
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		gen := newDeterministicDataGenerator(size)
 		_, err = io.Copy(w, gen)
@@ -101,13 +107,15 @@ func createLargeFileServer() *httptest.Server {
 	}))
 }
 
-// hashingReader wraps an io.Reader and computes SHA-256 while reading
+// hashingReader wraps an io.Reader and computes SHA-256 while reading.
 type hashingReader struct {
 	reader    io.Reader
 	hasher    hash.Hash
 	bytesRead int64
 }
 
+// newHashingReader creates a new hashing reader that computes SHA-256
+// hash while reading from the provided reader.
 func newHashingReader(r io.Reader) *hashingReader {
 	return &hashingReader{
 		reader:    r,
@@ -116,6 +124,7 @@ func newHashingReader(r io.Reader) *hashingReader {
 	}
 }
 
+// Read implements io.Reader for hashingReader.
 func (hr *hashingReader) Read(p []byte) (int, error) {
 	n, err := hr.reader.Read(p)
 	if n > 0 {
@@ -125,15 +134,18 @@ func (hr *hashingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Sum returns the SHA-256 hash of all data read so far.
 func (hr *hashingReader) Sum() []byte {
 	return hr.hasher.Sum(nil)
 }
 
+// BytesRead returns the total number of bytes read.
 func (hr *hashingReader) BytesRead() int64 {
 	return hr.bytesRead
 }
 
-// computeExpectedHash computes the expected SHA-256 hash for a file of given size
+// computeExpectedHash computes the expected SHA-256 hash for a file of
+// given size.
 func computeExpectedHash(size int64) []byte {
 	hasher := sha256.New()
 	gen := newDeterministicDataGenerator(size)
@@ -141,7 +153,37 @@ func computeExpectedHash(size int64) []byte {
 	return hasher.Sum(nil)
 }
 
-func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
+
+// getTestFileSize returns an appropriate file size for testing based on
+// whether we're running under the race detector or other conditions.
+// The returned size ensures parallel downloads will still occur (larger than
+// typical minimum chunk sizes of 1-10MB).
+func getTestFileSize(baseSize int64) int64 {
+	// Allow environment override for custom testing.
+	if sizeStr := os.Getenv("TEST_FILE_SIZE"); sizeStr != "" {
+		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+			return size
+		}
+	}
+
+	// Check for race detector or coverage mode.
+	if testing.CoverMode() != "" || raceEnabled {
+		// Use ~200MB for "large" (1GB) and ~400MB for "very large" (4GB).
+		// This is large enough to trigger parallel downloads with typical
+		// chunk sizes of 4-8MB, but small enough to run quickly.
+		if baseSize >= 4*1024*1024*1024 {
+			return 400 * 1024 * 1024 // 400MB instead of 4GB.
+		}
+		return 200 * 1024 * 1024 // 200MB instead of 1GB.
+	}
+
+	return baseSize
+}
+
+// TestLargeFile_ParallelVsSequential tests parallel vs sequential
+// download of a large file. The actual file size adapts based on whether
+// the race detector is enabled (200MB in race mode, 1GB normally).
+func TestLargeFile_ParallelVsSequential(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping large file test in short mode")
 	}
@@ -149,11 +191,18 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 	server := createLargeFileServer()
 	defer server.Close()
 
-	// Test with 1GB file
-	size := int64(1024 * 1024 * 1024) // 1 GB
+	// Test with large file (1GB normally, 200MB in race/coverage mode).
+	baseSize := int64(1024 * 1024 * 1024) // 1 GB base size.
+	size := getTestFileSize(baseSize)
+
+	if size != baseSize {
+		t.Logf("Running with reduced file size: %d MB (race detector or coverage mode detected)",
+			size/(1024*1024))
+	}
+
 	url := server.URL + "/data/" + strconv.FormatInt(size, 10)
 
-	// Compute expected hash
+	// Compute expected hash.
 	expectedHash := computeExpectedHash(size)
 
 	t.Run("Sequential", func(t *testing.T) {
@@ -192,7 +241,7 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 		transport := New(
 			http.DefaultTransport,
 			WithMaxConcurrentPerHost(map[string]uint{"": 0}),
-			WithMinChunkSize(4*1024*1024), // 4MB chunks
+			WithMinChunkSize(4*1024*1024), // 4MB chunks.
 			WithMaxConcurrentPerRequest(8),
 		)
 		client := &http.Client{Transport: transport}
@@ -227,23 +276,33 @@ func TestLargeFile_1GB_ParallelVsSequential(t *testing.T) {
 	})
 }
 
-func TestLargeFile_4GB_ParallelDownload(t *testing.T) {
+// TestVeryLargeFile_ParallelDownload tests parallel download of a very large
+// file. The actual file size adapts based on whether the race detector is
+// enabled (400MB in race mode, 4GB normally).
+func TestVeryLargeFile_ParallelDownload(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping large file test in short mode")
+		t.Skip("Skipping very large file test in short mode")
 	}
 
 	server := createLargeFileServer()
 	defer server.Close()
 
-	// Test with 4GB file
-	size := int64(4 * 1024 * 1024 * 1024) // 4 GB
+	// Test with very large file (4GB normally, 400MB in race/coverage mode).
+	baseSize := int64(4 * 1024 * 1024 * 1024) // 4 GB base size.
+	size := getTestFileSize(baseSize)
+
+	if size != baseSize {
+		t.Logf("Running with reduced file size: %d MB (race detector or coverage mode detected)",
+			size/(1024*1024))
+	}
+
 	url := server.URL + "/data/" + strconv.FormatInt(size, 10)
 
-	// Only test parallel for 4GB due to time constraints
+	// Only test parallel for very large files due to time constraints.
 	transport := New(
 		http.DefaultTransport,
 		WithMaxConcurrentPerHost(map[string]uint{"": 0}),
-		WithMinChunkSize(8*1024*1024), // 8MB chunks
+		WithMinChunkSize(8*1024*1024), // 8MB chunks.
 		WithMaxConcurrentPerRequest(16),
 	)
 	client := &http.Client{Transport: transport}
@@ -255,13 +314,14 @@ func TestLargeFile_4GB_ParallelDownload(t *testing.T) {
 	defer resp.Body.Close()
 
 	if resp.ContentLength != size {
-		t.Errorf("Expected Content-Length %d, got %d", size, resp.ContentLength)
+		t.Errorf("Expected Content-Length %d, got %d",
+			size, resp.ContentLength)
 	}
 
-	// For 4GB, let's just verify we can read the correct number of bytes
-	// Computing the full hash would take too long
+	// For 4GB, let's just verify we can read the correct number of bytes.
+	// Computing the full hash would take too long.
 	bytesRead := int64(0)
-	buf := make([]byte, 64*1024) // 64KB buffer
+	buf := make([]byte, 64*1024) // 64KB buffer.
 	for {
 		n, err := resp.Body.Read(buf)
 		bytesRead += int64(n)
@@ -274,8 +334,10 @@ func TestLargeFile_4GB_ParallelDownload(t *testing.T) {
 	}
 
 	if bytesRead != size {
-		t.Errorf("Expected to read %d bytes, actually read %d bytes", size, bytesRead)
+		t.Errorf("Expected to read %d bytes, actually read %d bytes",
+			size, bytesRead)
 	}
 
-	t.Logf("Successfully read %d bytes (4GB) from parallel download", bytesRead)
+	t.Logf("Successfully read %d bytes (4GB) from parallel download",
+		bytesRead)
 }

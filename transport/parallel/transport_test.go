@@ -11,10 +11,11 @@ import (
 	testutil "github.com/docker/model-distribution/transport/internal/testing"
 )
 
-// TestParallelDownload_Success verifies parallel downloads using testutil.FakeTransport
+// TestParallelDownload_Success verifies parallel downloads using
+// testutil.FakeTransport.
 func TestParallelDownload_Success(t *testing.T) {
 	url := "https://example.com/large-file"
-	payload := testutil.GenerateTestData(100000) // 100KB
+	payload := testutil.GenerateTestData(100000) // 100KB.
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
@@ -40,7 +41,7 @@ func TestParallelDownload_Success(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Verify parallel requests were made
+	// Verify parallel requests were made.
 	reqs := ft.GetRequests()
 	var headCount, rangeCount, getCount int
 	for _, req := range reqs {
@@ -52,18 +53,20 @@ func TestParallelDownload_Success(t *testing.T) {
 				rangeCount++
 			}
 		}
-		t.Logf("Request: %s %s, Range: %s", req.Method, req.URL, req.Header.Get("Range"))
+		t.Logf("Request: %s %s, Range: %s",
+			req.Method, req.URL, req.Header.Get("Range"))
 	}
 
 	if headCount != 1 {
 		t.Errorf("expected 1 HEAD request, got %d", headCount)
 	}
 	if rangeCount < 2 {
-		t.Errorf("expected at least 2 range requests, got %d (total GET: %d)", rangeCount, getCount)
+		t.Errorf("expected at least 2 range requests, got %d (total GET: %d)",
+			rangeCount, getCount)
 	}
 }
 
-// TestSmallFile_FallsBackToSingle verifies small files aren't parallelized
+// TestSmallFile_FallsBackToSingle verifies small files aren't parallelized.
 func TestSmallFile_FallsBackToSingle(t *testing.T) {
 	url := "https://example.com/small-file"
 	payload := []byte("small content")
@@ -88,7 +91,7 @@ func TestSmallFile_FallsBackToSingle(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Should only have HEAD and single GET
+	// Should only have HEAD and single GET.
 	reqs := ft.GetRequests()
 	var headCount, rangeCount, fullGetCount int
 	for _, req := range reqs {
@@ -114,7 +117,8 @@ func TestSmallFile_FallsBackToSingle(t *testing.T) {
 	}
 }
 
-// TestNoRangeSupport_FallsBack tests fallback when server doesn't support ranges
+// TestNoRangeSupport_FallsBack tests fallback when server doesn't support
+// ranges.
 func TestNoRangeSupport_FallsBack(t *testing.T) {
 	url := "https://example.com/no-range"
 	payload := testutil.GenerateTestData(100000)
@@ -122,7 +126,7 @@ func TestNoRangeSupport_FallsBack(t *testing.T) {
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
 		Data:          payload,
-		SupportsRange: false, // No range support
+		SupportsRange: false, // No range support.
 	})
 
 	client := &http.Client{Transport: New(ft)}
@@ -140,7 +144,7 @@ func TestNoRangeSupport_FallsBack(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Should fall back to single request
+	// Should fall back to single request.
 	reqs := ft.GetRequests()
 	var rangeCount int
 	for _, req := range reqs {
@@ -154,7 +158,7 @@ func TestNoRangeSupport_FallsBack(t *testing.T) {
 	}
 }
 
-// TestContentEncoding_FallsBack tests fallback with Content-Encoding
+// TestContentEncoding_FallsBack tests fallback with Content-Encoding.
 func TestContentEncoding_FallsBack(t *testing.T) {
 	url := "https://example.com/gzip"
 	payload := testutil.GenerateTestData(100000)
@@ -183,7 +187,7 @@ func TestContentEncoding_FallsBack(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Should fall back due to Content-Encoding
+	// Should fall back due to Content-Encoding.
 	reqs := ft.GetRequests()
 	var rangeCount int
 	for _, req := range reqs {
@@ -193,11 +197,12 @@ func TestContentEncoding_FallsBack(t *testing.T) {
 	}
 
 	if rangeCount != 0 {
-		t.Errorf("expected no range requests due to Content-Encoding, got %d", rangeCount)
+		t.Errorf("expected no range requests due to Content-Encoding, got %d",
+			rangeCount)
 	}
 }
 
-// TestETagValidation verifies ETag is used for If-Range validation
+// TestETagValidation verifies ETag is used for If-Range validation.
 func TestETagValidation(t *testing.T) {
 	url := "https://example.com/etag-test"
 	payload := testutil.GenerateTestData(100000)
@@ -224,7 +229,7 @@ func TestETagValidation(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check If-Range headers
+	// Check If-Range headers.
 	headers := ft.GetRequestHeaders(url)
 	for _, h := range headers {
 		if h.Get("Range") != "" {
@@ -235,7 +240,7 @@ func TestETagValidation(t *testing.T) {
 	}
 }
 
-// TestWeakETag_UsesLastModified tests weak ETags trigger Last-Modified usage
+// TestWeakETag_UsesLastModified tests weak ETags trigger Last-Modified usage.
 func TestWeakETag_UsesLastModified(t *testing.T) {
 	url := "https://example.com/weak-etag"
 	payload := testutil.GenerateTestData(100000)
@@ -264,27 +269,28 @@ func TestWeakETag_UsesLastModified(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check If-Range uses Last-Modified instead of weak ETag
+	// Check If-Range uses Last-Modified instead of weak ETag.
 	headers := ft.GetRequestHeaders(url)
 	for _, h := range headers {
 		if h.Get("Range") != "" {
 			ifRange := h.Get("If-Range")
 			if ifRange != lastModified {
-				t.Errorf("expected If-Range with Last-Modified, got %q", ifRange)
+				t.Errorf("expected If-Range with Last-Modified, got %q",
+					ifRange)
 			}
 		}
 	}
 }
 
-// TestConcurrencyLimits verifies per-host concurrency limits
+// TestConcurrencyLimits verifies per-host concurrency limits.
 func TestConcurrencyLimits(t *testing.T) {
 	url := "https://example.com/large"
-	payload := testutil.GenerateTestData(500000) // 500KB to ensure parallelization
+	payload := testutil.GenerateTestData(500000) // 500KB to ensure parallelization.
 
 	ft := testutil.NewFakeTransport()
 	ft.AddSimple(url, payload, true)
 
-	// Track concurrent requests
+	// Track concurrent requests.
 	var maxConcurrent, currentConcurrent int
 	var mu sync.Mutex
 	rangeRequests := 0
@@ -300,7 +306,7 @@ func TestConcurrencyLimits(t *testing.T) {
 			}
 			mu.Unlock()
 
-			// Simulate work
+			// Simulate work.
 			time.Sleep(10 * time.Millisecond)
 
 			mu.Lock()
@@ -314,7 +320,7 @@ func TestConcurrencyLimits(t *testing.T) {
 		Transport: New(ft,
 			WithMaxConcurrentPerHost(map[string]uint{"example.com": 2}),
 			WithMaxConcurrentPerRequest(4),
-			WithMinChunkSize(10000)), // Lower min chunk size to ensure parallelization
+			WithMinChunkSize(10000)), // Lower min chunk size to ensure parallelization.
 	}
 
 	resp, err := client.Get(url)
@@ -328,7 +334,7 @@ func TestConcurrencyLimits(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	// Give time for all requests to complete
+	// Give time for all requests to complete.
 	time.Sleep(100 * time.Millisecond)
 
 	mu.Lock()
@@ -343,7 +349,7 @@ func TestConcurrencyLimits(t *testing.T) {
 	}
 }
 
-// TestIfRangeValidation tests If-Range validation behavior
+// TestIfRangeValidation tests If-Range validation behavior.
 func TestIfRangeValidation(t *testing.T) {
 	url := "https://example.com/if-range-test"
 	payload := testutil.GenerateTestData(100000)
@@ -356,13 +362,13 @@ func TestIfRangeValidation(t *testing.T) {
 		ETag:          etag,
 	})
 
-	// Change ETag on range requests to simulate resource change
+	// Change ETag on range requests to simulate resource change.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") != "" {
-			// Check If-Range validation
+			// Check If-Range validation.
 			ifRange := resp.Request.Header.Get("If-Range")
 			if ifRange != etag {
-				// Resource changed, return full content
+				// Resource changed, return full content.
 				resp.StatusCode = http.StatusOK
 				resp.Status = "200 OK"
 				resp.Header.Del("Content-Range")
@@ -387,7 +393,8 @@ func TestIfRangeValidation(t *testing.T) {
 	testutil.AssertDataEquals(t, got, payload)
 }
 
-// TestNoContentLength_FallsBack tests fallback when Content-Length is missing
+// TestNoContentLength_FallsBack tests fallback when Content-Length is
+// missing.
 func TestNoContentLength_FallsBack(t *testing.T) {
 	url := "https://example.com/no-length"
 	payload := testutil.GenerateTestData(100000)
@@ -395,7 +402,7 @@ func TestNoContentLength_FallsBack(t *testing.T) {
 	ft := testutil.NewFakeTransport()
 	ft.AddSimple(url, payload, true)
 
-	// Remove Content-Length from HEAD response
+	// Remove Content-Length from HEAD response.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Method == http.MethodHead {
 			resp.ContentLength = -1
@@ -418,7 +425,7 @@ func TestNoContentLength_FallsBack(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Should fall back to single request
+	// Should fall back to single request.
 	reqs := ft.GetRequests()
 	var rangeCount int
 	for _, req := range reqs {
@@ -428,11 +435,13 @@ func TestNoContentLength_FallsBack(t *testing.T) {
 	}
 
 	if rangeCount != 0 {
-		t.Errorf("expected no range requests without Content-Length, got %d", rangeCount)
+		t.Errorf("expected no range requests without Content-Length, got %d",
+			rangeCount)
 	}
 }
 
-// TestNonGetRequest_PassesThrough verifies non-GET requests are passed through unmodified
+// TestNonGetRequest_PassesThrough verifies non-GET requests are passed
+// through unmodified.
 func TestNonGetRequest_PassesThrough(t *testing.T) {
 	url := "https://example.com/resource"
 	postData := []byte("post data")
@@ -443,8 +452,9 @@ func TestNonGetRequest_PassesThrough(t *testing.T) {
 
 	client := &http.Client{Transport: New(ft)}
 
-	// Test POST request
-	resp, err := client.Post(url, "application/json", bytes.NewReader(postData))
+	// Test POST request.
+	resp, err := client.Post(url, "application/json",
+		bytes.NewReader(postData))
 	if err != nil {
 		t.Fatalf("POST failed: %v", err)
 	}
@@ -457,7 +467,7 @@ func TestNonGetRequest_PassesThrough(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, responseData)
 
-	// Should not have any HEAD requests
+	// Should not have any HEAD requests.
 	reqs := ft.GetRequests()
 	for _, req := range reqs {
 		if req.Method == http.MethodHead {
@@ -469,7 +479,8 @@ func TestNonGetRequest_PassesThrough(t *testing.T) {
 	}
 }
 
-// TestWrongRangeResponse_HandlesError tests handling of incorrect range responses
+// TestWrongRangeResponse_HandlesError tests handling of incorrect range
+// responses.
 func TestWrongRangeResponse_HandlesError(t *testing.T) {
 	url := "https://example.com/wrong-range"
 	payload := testutil.GenerateTestData(100000)
@@ -480,17 +491,17 @@ func TestWrongRangeResponse_HandlesError(t *testing.T) {
 		SupportsRange: true,
 	})
 
-	// Return wrong range in response
+	// Return wrong range in response.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") == "bytes=1000-1999" {
-			// Return different range than requested
+			// Return different range than requested.
 			resp.Header.Set("Content-Range", "bytes 2000-2999/100000")
 		}
 	}
 
 	client := &http.Client{Transport: New(ft)}
 
-	// Make a specific range request
+	// Make a specific range request.
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
@@ -503,22 +514,23 @@ func TestWrongRangeResponse_HandlesError(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Should still work (parallel transport doesn't validate Content-Range for user requests)
+	// Should still work (parallel transport doesn't validate Content-Range
+	// for user requests).
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read failed: %v", err)
 	}
 
-	// Should get the correct range data
+	// Should get the correct range data.
 	want := payload[1000:2000]
 	testutil.AssertDataEquals(t, got, want)
 }
 
-// TestChunkBoundaries verifies correct chunk boundary calculation
+// TestChunkBoundaries verifies correct chunk boundary calculation.
 func TestChunkBoundaries(t *testing.T) {
 	url := "https://example.com/boundaries"
-	// Use specific size to test boundary conditions
-	payload := testutil.GenerateTestData(10000) // Exactly 10KB
+	// Use specific size to test boundary conditions.
+	payload := testutil.GenerateTestData(10000) // Exactly 10KB.
 
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
@@ -529,7 +541,7 @@ func TestChunkBoundaries(t *testing.T) {
 	client := &http.Client{
 		Transport: New(ft,
 			WithMaxConcurrentPerRequest(4),
-			WithMinChunkSize(2500)), // Should result in 4 chunks of 2500 bytes
+			WithMinChunkSize(2500)), // Should result in 4 chunks of 2500 bytes.
 	}
 
 	resp, err := client.Get(url)
@@ -545,7 +557,7 @@ func TestChunkBoundaries(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check the range requests
+	// Check the range requests.
 	reqs := ft.GetRequests()
 
 	var actualRanges []string
@@ -555,7 +567,8 @@ func TestChunkBoundaries(t *testing.T) {
 		}
 	}
 
-	// We might not get exactly these ranges due to scheduling, but verify we got multiple
+	// We might not get exactly these ranges due to scheduling, but verify we
+	// got multiple.
 	if len(actualRanges) < 2 {
 		t.Errorf("expected multiple range requests, got %d", len(actualRanges))
 	}
@@ -563,7 +576,8 @@ func TestChunkBoundaries(t *testing.T) {
 	t.Logf("Actual ranges: %v", actualRanges)
 }
 
-// TestETagChanged_FallsBackToSingle tests handling when ETag changes mid-download
+// TestETagChanged_FallsBackToSingle tests handling when ETag changes
+// mid-download.
 func TestETagChanged_FallsBackToSingle(t *testing.T) {
 	url := "https://example.com/changing"
 	payload := testutil.GenerateTestData(100000)
@@ -580,9 +594,9 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 	requestCount := 0
 	ft.ResponseHook = func(resp *http.Response) {
 		requestCount++
-		// Change ETag after first request
+		// Change ETag after first request.
 		if requestCount > 1 && resp.Request.Header.Get("Range") != "" {
-			// Simulate resource change - return full content with new ETag
+			// Simulate resource change - return full content with new ETag.
 			resp.StatusCode = http.StatusOK
 			resp.Status = "200 OK"
 			resp.Header.Set("ETag", changedETag)
@@ -604,11 +618,12 @@ func TestETagChanged_FallsBackToSingle(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	// Should still get the full payload
+	// Should still get the full payload.
 	testutil.AssertDataEquals(t, got, payload)
 }
 
-// TestNoValidator_StillWorks tests parallel download without ETag or Last-Modified
+// TestNoValidator_StillWorks tests parallel download without ETag or
+// Last-Modified.
 func TestNoValidator_StillWorks(t *testing.T) {
 	url := "https://example.com/no-validator"
 	payload := testutil.GenerateTestData(100000)
@@ -617,7 +632,7 @@ func TestNoValidator_StillWorks(t *testing.T) {
 	ft.Add(url, &testutil.FakeResource{
 		Data:          payload,
 		SupportsRange: true,
-		// No ETag or LastModified
+		// No ETag or LastModified.
 	})
 
 	client := &http.Client{Transport: New(ft)}
@@ -635,7 +650,7 @@ func TestNoValidator_StillWorks(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check that no If-Range headers were sent
+	// Check that no If-Range headers were sent.
 	headers := ft.GetRequestHeaders(url)
 	for _, h := range headers {
 		if ifRange := h.Get("If-Range"); ifRange != "" {
@@ -644,7 +659,7 @@ func TestNoValidator_StillWorks(t *testing.T) {
 	}
 }
 
-// TestConditionalHeadersScrubbed verifies conditional headers are removed
+// TestConditionalHeadersScrubbed verifies conditional headers are removed.
 func TestConditionalHeadersScrubbed(t *testing.T) {
 	url := "https://example.com/conditional"
 	payload := testutil.GenerateTestData(100000)
@@ -656,26 +671,31 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 		ETag:          `"test"`,
 	})
 
-	// Track headers
+	// Track headers.
 	ft.RequestHook = func(req *http.Request) {
 		// For range requests made by parallel transport,
-		// conditional headers should be removed
+		// conditional headers should be removed.
 		if req.Header.Get("Range") != "" {
 			if req.Header.Get("If-Match") != "" {
-				t.Errorf("%s request: If-Match header should be removed", req.Method)
+				t.Errorf("%s request: If-Match header should be removed",
+					req.Method)
 			}
 			if req.Header.Get("If-None-Match") != "" {
-				t.Errorf("%s request: If-None-Match header should be removed", req.Method)
+				t.Errorf("%s request: If-None-Match header should be removed",
+					req.Method)
 			}
 			if req.Header.Get("If-Modified-Since") != "" {
-				t.Errorf("%s request: If-Modified-Since header should be removed", req.Method)
+				t.Errorf("%s request: If-Modified-Since header should be removed",
+					req.Method)
 			}
 			if req.Header.Get("If-Unmodified-Since") != "" {
-				t.Errorf("%s request: If-Unmodified-Since header should be removed", req.Method)
+				t.Errorf("%s request: If-Unmodified-Since header should be removed",
+					req.Method)
 			}
 		}
-		// Note: HEAD requests currently don't scrub conditional headers (potential bug)
-		// If-Range should only be present on range requests with proper value
+		// Note: HEAD requests currently don't scrub conditional headers
+		// (potential bug).
+		// If-Range should only be present on range requests with proper value.
 		if ifRange := req.Header.Get("If-Range"); ifRange != "" {
 			if req.Header.Get("Range") == "" {
 				t.Error("If-Range without Range header")
@@ -685,7 +705,7 @@ func TestConditionalHeadersScrubbed(t *testing.T) {
 
 	client := &http.Client{Transport: New(ft)}
 
-	// Create request with conditional headers
+	// Create request with conditional headers.
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		t.Fatalf("create request: %v", err)

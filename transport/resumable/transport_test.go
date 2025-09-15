@@ -9,7 +9,7 @@ import (
 	testutil "github.com/docker/model-distribution/transport/internal/testing"
 )
 
-// TestResumeSingleFailure_Succeeds tests resuming after a single failure
+// TestResumeSingleFailure_Succeeds tests resuming after a single failure.
 func TestResumeSingleFailure_Succeeds(t *testing.T) {
 	url := "https://example.com/test-file"
 	payload := testutil.GenerateTestData(5000)
@@ -21,7 +21,7 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 		ETag:          `"test-etag"`,
 	})
 
-	// Simulate failure after 2500 bytes on first request
+	// Simulate failure after 2500 bytes on first request.
 	ft.SetFailAfter(url, 2500)
 
 	client := &http.Client{
@@ -41,7 +41,7 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Verify resume happened
+	// Verify resume happened.
 	reqs := ft.GetRequests()
 	var rangeRequests int
 	for _, req := range reqs {
@@ -56,7 +56,8 @@ func TestResumeSingleFailure_Succeeds(t *testing.T) {
 	}
 }
 
-// TestResumeMultipleFailuresWithinBudget_Succeeds tests multiple resume attempts
+// TestResumeMultipleFailuresWithinBudget_Succeeds tests multiple resume
+// attempts.
 func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 	url := "https://example.com/multi-fail"
 	payload := testutil.GenerateTestData(10000)
@@ -69,32 +70,37 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 		ETag:          `"multi-fail-etag"`,
 	})
 
-	// Hook to inject failures - use SetFailAfter multiple times
+	// Hook to inject failures - use SetFailAfter multiple times.
 	failurePoints := []int{2000, 5000, 7500}
 	failureIndex := 0
 	requestCount := 0
 	ft.ResponseHook = func(resp *http.Response) {
-		if resp.Request.Method == http.MethodGet && failureIndex < len(failurePoints) {
-			// For non-range requests, inject failure
+		if resp.Request.Method == http.MethodGet &&
+			failureIndex < len(failurePoints) {
+			// For non-range requests, inject failure.
 			if resp.Request.Header.Get("Range") == "" {
 				resp.Body = testutil.NewFlakyReader(payload, failurePoints[failureIndex])
 				failureIndex++
 			} else {
-				// For range requests, check which failure point we're at
+				// For range requests, check which failure point we're at.
 				requestCount++
-				if requestCount <= len(failurePoints) && failureIndex < len(failurePoints) {
-					// Parse range to determine data slice
+				if requestCount <= len(failurePoints) &&
+					failureIndex < len(failurePoints) {
+					// Parse range to determine data slice.
 					rangeHeader := resp.Request.Header.Get("Range")
 					if rangeHeader != "" {
-						// Simple parsing for bytes=N- format
+						// Simple parsing for bytes=N- format.
 						var start int
 						fmt.Sscanf(rangeHeader, "bytes=%d-", &start)
 						rangeData := payload[start:]
 
-						// Apply next failure point relative to this range
+						// Apply next failure point relative to this
+						// range.
 						nextFailure := failurePoints[failureIndex] - start
-						if nextFailure > 0 && nextFailure < len(rangeData) {
-							resp.Body = testutil.NewFlakyReader(rangeData, nextFailure)
+						if nextFailure > 0 &&
+							nextFailure < len(rangeData) {
+							resp.Body = testutil.NewFlakyReader(
+								rangeData, nextFailure)
 							failureIndex++
 						}
 					}
@@ -120,7 +126,7 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check that multiple resumes happened
+	// Check that multiple resumes happened.
 	reqs := ft.GetRequests()
 	var rangeCount int
 	for _, req := range reqs {
@@ -134,7 +140,7 @@ func TestResumeMultipleFailuresWithinBudget_Succeeds(t *testing.T) {
 	}
 }
 
-// TestExceedRetryBudget_Fails tests failure when retry budget is exceeded
+// TestExceedRetryBudget_Fails tests failure when retry budget is exceeded.
 func TestExceedRetryBudget_Fails(t *testing.T) {
 	url := "https://example.com/too-many-failures"
 	payload := testutil.GenerateTestData(4096)
@@ -146,7 +152,7 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 		ETag:          `"fail-test"`,
 	})
 
-	// Always fail after 100 bytes
+	// Always fail after 100 bytes.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Method == http.MethodGet {
 			resp.Body = testutil.NewFlakyReader(payload, 100)
@@ -154,7 +160,7 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 	}
 
 	client := &http.Client{
-		Transport: New(ft, WithMaxRetries(2)), // Low retry limit
+		Transport: New(ft, WithMaxRetries(2)), // Low retry limit.
 	}
 
 	resp, err := client.Get(url)
@@ -168,7 +174,7 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 		t.Error("expected error after exceeding retry budget")
 	}
 
-	// Check that retries were attempted
+	// Check that retries were attempted.
 	reqs := ft.GetRequests()
 	var attempts int
 	for _, req := range reqs {
@@ -177,13 +183,14 @@ func TestExceedRetryBudget_Fails(t *testing.T) {
 		}
 	}
 
-	// Initial + 2 retries = 3 total
+	// Initial + 2 retries = 3 total.
 	if attempts < 2 {
 		t.Errorf("expected at least 2 GET attempts, got %d", attempts)
 	}
 }
 
-// TestWrongStartOnResume_IsRejected tests handling of unexpected range responses
+// TestWrongStartOnResume_IsRejected tests handling of unexpected range
+// responses.
 func TestWrongStartOnResume_IsRejected(t *testing.T) {
 	url := "https://example.com/wrong-start"
 	payload := testutil.GenerateTestData(5000)
@@ -195,18 +202,18 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 		ETag:          `"test"`,
 	})
 
-	// Return wrong range on resume
+	// Return wrong range on resume.
 	resumeAttempted := false
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") == "bytes=2500-" {
 			resumeAttempted = true
-			// Return wrong start position
+			// Return wrong start position.
 			resp.Header.Set("Content-Range", "bytes 3000-4999/5000")
 			resp.Body = io.NopCloser(testutil.NewFlakyReader(payload[3000:], 0))
 		}
 	}
 
-	// First fail after 2500 bytes
+	// First fail after 2500 bytes.
 	ft.SetFailAfter(url, 2500)
 
 	client := &http.Client{
@@ -229,7 +236,8 @@ func TestWrongStartOnResume_IsRejected(t *testing.T) {
 	}
 }
 
-// TestNon206OnResume_IsRejected tests handling when server returns 200 instead of 206
+// TestNon206OnResume_IsRejected tests handling when server returns 200
+// instead of 206.
 func TestNon206OnResume_IsRejected(t *testing.T) {
 	url := "https://example.com/non-206"
 	payload := testutil.GenerateTestData(5000)
@@ -241,7 +249,7 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 		ETag:          `"test"`,
 	})
 
-	// Return 200 on range request (simulating resource change)
+	// Return 200 on range request (simulating resource change).
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") == "bytes=2500-" {
 			resp.StatusCode = http.StatusOK
@@ -264,12 +272,14 @@ func TestNon206OnResume_IsRejected(t *testing.T) {
 	defer resp.Body.Close()
 
 	_, err = io.ReadAll(resp.Body)
-	if err == nil || err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
+	if err == nil ||
+		err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
 		t.Errorf("expected specific error, got: %v", err)
 	}
 }
 
-// TestNoRangeSupport_PassesThrough_NoResume tests fallback when server doesn't support ranges
+// TestNoRangeSupport_PassesThrough_NoResume tests fallback when server
+// doesn't support ranges.
 func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 	url := "https://example.com/no-range"
 	payload := testutil.GenerateTestData(5000)
@@ -277,10 +287,10 @@ func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 	ft := testutil.NewFakeTransport()
 	ft.Add(url, &testutil.FakeResource{
 		Data:          payload,
-		SupportsRange: false, // No range support
+		SupportsRange: false, // No range support.
 	})
 
-	// Simulate failure - should not be able to resume
+	// Simulate failure - should not be able to resume.
 	ft.SetFailAfter(url, 2500)
 
 	client := &http.Client{
@@ -298,13 +308,13 @@ func TestNoRangeSupport_PassesThrough_NoResume(t *testing.T) {
 		t.Error("expected read error due to no range support and failure")
 	}
 
-	// Should only get partial data
+	// Should only get partial data.
 	if len(got) >= len(payload) {
 		t.Errorf("got %d bytes, expected less than %d", len(got), len(payload))
 	}
 }
 
-// TestIfRange_ETag_Matches_AllowsResume tests If-Range with ETag validation
+// TestIfRange_ETag_Matches_AllowsResume tests If-Range with ETag validation.
 func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 	url := "https://example.com/if-range-etag"
 	payload := testutil.GenerateTestData(7500)
@@ -317,12 +327,12 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 		ETag:          etag,
 	})
 
-	// Simulate failure to trigger resume
+	// Simulate failure to trigger resume.
 	failCount := 0
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Method == http.MethodGet && failCount == 0 {
 			failCount++
-			// First request fails after 3000 bytes
+			// First request fails after 3000 bytes.
 			resp.Body = testutil.NewFlakyReader(payload, 3000)
 		}
 	}
@@ -344,7 +354,7 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 
 	testutil.AssertDataEquals(t, got, payload)
 
-	// Check If-Range header on resume request
+	// Check If-Range header on resume request.
 	headers := ft.GetRequestHeaders(url)
 	foundIfRange := false
 	for _, h := range headers {
@@ -361,7 +371,7 @@ func TestIfRange_ETag_Matches_AllowsResume(t *testing.T) {
 	}
 }
 
-// TestIfRange_ETag_ChangedOnResume_RejectsResume tests ETag change detection
+// TestIfRange_ETag_ChangedOnResume_RejectsResume tests ETag change detection.
 func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 	url := "https://example.com/etag-changed"
 	payload := testutil.GenerateTestData(5000)
@@ -375,10 +385,10 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 		ETag:          originalETag,
 	})
 
-	// Change ETag on resume attempt
+	// Change ETag on resume attempt.
 	ft.ResponseHook = func(resp *http.Response) {
 		if resp.Request.Header.Get("Range") != "" {
-			// Simulate resource change
+			// Simulate resource change.
 			resp.StatusCode = http.StatusOK
 			resp.Status = "200 OK"
 			resp.Header.Set("ETag", changedETag)
@@ -400,7 +410,8 @@ func TestIfRange_ETag_ChangedOnResume_RejectsResume(t *testing.T) {
 	defer resp.Body.Close()
 
 	_, err = io.ReadAll(resp.Body)
-	if err == nil || err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
+	if err == nil ||
+		err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
 		t.Errorf("expected resource change error, got: %v", err)
 	}
 }
@@ -495,7 +506,8 @@ func TestIfRange_LastModified_ChangedOnResume_RejectsResume(t *testing.T) {
 	defer resp.Body.Close()
 
 	_, err = io.ReadAll(resp.Body)
-	if err == nil || err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
+	if err == nil ||
+		err.Error() != "resumable: server returned 200 to a range request; resource may have changed" {
 		t.Errorf("expected resource change error, got: %v", err)
 	}
 }
@@ -960,7 +972,7 @@ func TestRangeInitial_MidSpan_WithMultipleCuts_Resumes(t *testing.T) {
 	want := payload[2000:6000]
 	testutil.AssertDataEquals(t, got, want)
 
-	// Check that multiple resumes happened
+	// Check that multiple resumes happened.
 	reqs := ft.GetRequests()
 	var rangeCount int
 	for _, r := range reqs {
