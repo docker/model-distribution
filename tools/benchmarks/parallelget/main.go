@@ -29,8 +29,9 @@ HTTP GET requests against parallelized requests using the transport/parallel pac
 
 It downloads the same URL twice - once using the standard HTTP client and once
 using a parallel transport - then compares the results and reports performance metrics.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runBenchmark,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runBenchmark,
+	SilenceUsage: true,
 }
 
 func init() {
