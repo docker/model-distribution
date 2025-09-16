@@ -465,6 +465,10 @@ func TestFIFO_StressTest(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer fifo.CloseWrite()
+
+		// Signal to readers that no more bytes will arrive once the writer
+		// finishes so blocked reads can terminate.
 		start := time.Now()
 		for time.Since(start) < duration {
 			size := rand.Intn(maxWriteSize) + 1
