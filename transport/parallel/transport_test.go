@@ -295,14 +295,28 @@ func TestConcurrencyLimits(t *testing.T) {
 	ft := testutil.NewFakeTransport()
 	ft.AddSimple(url, bytes.NewReader(payload), int64(len(payload)), true)
 
-	// Track concurrent requests.
+	// Track concurrent requests. maxConcurrent records the peak concurrent range
+	// downloads observed while currentConcurrent holds the in-flight count at any
+	// moment. mu ensures those counters are updated atomically. rangeRequests
+	// counts how many range downloads we observed. wg waits until every tracked
+	// range request finishes. rangeStartedCh buffers notifications when a new
+	// tracked range request begins. releaseCh blocks the request until the test
+	// releases it. releaseOnce ensures releaseCh is only closed once, even on
+	// early exits.
 	var maxConcurrent, currentConcurrent int
 	var mu sync.Mutex
 	rangeRequests := 0
+	var wg sync.WaitGroup
+	rangeStartedCh := make(chan struct{}, 8)
+	releaseCh := make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(releaseCh) })
 
 	ft.RequestHook = func(req *http.Request) {
 		rangeHeader := req.Header.Get("Range")
 		if rangeHeader != "" && rangeHeader != "bytes=0-0" {
+			wg.Add(1)
+
 			mu.Lock()
 			currentConcurrent++
 			rangeRequests++
@@ -311,12 +325,19 @@ func TestConcurrencyLimits(t *testing.T) {
 			}
 			mu.Unlock()
 
-			// Simulate work.
-			time.Sleep(10 * time.Millisecond)
+			// Capture the start of the range request without blocking.
+			select {
+			case rangeStartedCh <- struct{}{}:
+			default:
+			}
+
+			<-releaseCh
 
 			mu.Lock()
 			currentConcurrent--
 			mu.Unlock()
+
+			wg.Done()
 		}
 		t.Logf("Request: %s %s, Range: %s", req.Method, req.URL, rangeHeader)
 	}
@@ -334,22 +355,41 @@ func TestConcurrencyLimits(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	_, err = io.ReadAll(resp.Body)
-	if err != nil {
+	// Drive the download in a goroutine so range requests can start while the
+	// test observes concurrency.
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := io.ReadAll(resp.Body)
+		readDone <- err
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-rangeStartedCh:
+		case <-time.After(time.Second):
+			releaseOnce.Do(func() { close(releaseCh) })
+			t.Fatalf("timed out waiting for parallel range requests to start")
+		}
+	}
+
+	releaseOnce.Do(func() { close(releaseCh) })
+
+	if err := <-readDone; err != nil {
 		t.Fatalf("read: %v", err)
 	}
 
-	// Give time for all requests to complete.
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	mu.Lock()
-	defer mu.Unlock()
+	maxSeen := maxConcurrent
+	madeRanges := rangeRequests
+	mu.Unlock()
 
-	if maxConcurrent > 2 {
-		t.Errorf("expected max 2 concurrent requests, got %d", maxConcurrent)
+	if maxSeen > 2 {
+		t.Errorf("expected max 2 concurrent requests, got %d", maxSeen)
 	}
 
-	if rangeRequests == 0 {
+	if madeRanges == 0 {
 		t.Error("no range requests were made")
 	}
 }
