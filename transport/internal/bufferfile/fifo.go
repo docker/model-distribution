@@ -50,7 +50,7 @@ func NewFIFO() (*FIFO, error) {
 // The caller is responsible for calling Close() to clean up the temporary
 // file.
 func NewFIFOInDir(dir string) (*FIFO, error) {
-	file, err := os.CreateTemp(dir, "fifo-*.tmp")
+	file, err := os.CreateTemp(dir, "model-buffer-*.tmp")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary file in dir: %w", err)
 	}
