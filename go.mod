@@ -2,7 +2,7 @@ module github.com/docker/model-distribution
 
 go 1.24
 
-toolchain go1.24.1
+toolchain go1.24.7
 
 require (
 	github.com/google/go-containerregistry v0.20.6
