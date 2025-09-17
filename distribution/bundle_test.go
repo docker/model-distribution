@@ -38,7 +38,7 @@ func TestBundle(t *testing.T) {
 	// Load model with multi-modal projector file
 	mmprojLayer, err := partial.NewLayer(filepath.Join("..", "assets", "dummy.mmproj"), types.MediaTypeMultimodalProjector)
 	if err != nil {
-		t.Fatalf("Failed to mmproj layer: %v", err)
+		t.Fatalf("Failed to create mmproj layer: %v", err)
 	}
 	mmprojMdl := mutate.AppendLayers(mdl, mmprojLayer)
 	mmprojMdlID, err := mmprojMdl.ID()
@@ -52,7 +52,7 @@ func TestBundle(t *testing.T) {
 	// Load model with template file
 	templateLayer, err := partial.NewLayer(filepath.Join("..", "assets", "template.jinja"), types.MediaTypeChatTemplate)
 	if err != nil {
-		t.Fatalf("Failed to mmproj layer: %v", err)
+		t.Fatalf("Failed to create chat template layer: %v", err)
 	}
 	templateMdl := mutate.AppendLayers(mdl, templateLayer)
 	templateMdlID, err := templateMdl.ID()

@@ -51,10 +51,10 @@ func TestBuilder(t *testing.T) {
 		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeGGUF, manifest.Layers[0].MediaType)
 	}
 	if manifest.Layers[1].MediaType != types.MediaTypeMultimodalProjector {
-		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeMultimodalProjector, manifest.Layers[0].MediaType)
+		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeMultimodalProjector, manifest.Layers[1].MediaType)
 	}
 	if manifest.Layers[2].MediaType != types.MediaTypeChatTemplate {
-		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeMultimodalProjector, manifest.Layers[0].MediaType)
+		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeChatTemplate, manifest.Layers[2].MediaType)
 	}
 }
 

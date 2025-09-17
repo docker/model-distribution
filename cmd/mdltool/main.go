@@ -276,10 +276,10 @@ func cmdPackage(args []string) int {
 	}
 
 	if chatTemplate != "" {
-		fmt.Println("Adding chat template file:", mmproj)
+		fmt.Println("Adding chat template file:", chatTemplate)
 		builder, err = builder.WithChatTemplateFile(chatTemplate)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding template layer for %s: %v\n", mmproj, err)
+			fmt.Fprintf(os.Stderr, "Error adding chat template layer for %s: %v\n", chatTemplate, err)
 			return 1
 		}
 	}

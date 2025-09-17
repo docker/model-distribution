@@ -59,7 +59,7 @@ func (b *Builder) WithMultimodalProjector(path string) (*Builder, error) {
 func (b *Builder) WithChatTemplateFile(path string) (*Builder, error) {
 	templateLayer, err := partial.NewLayer(path, types.MediaTypeChatTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("mmproj layer from %q: %w", path, err)
+		return nil, fmt.Errorf("chat template layer from %q: %w", path, err)
 	}
 	return &Builder{
 		model: mutate.AppendLayers(b.model, templateLayer),

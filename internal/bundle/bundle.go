@@ -8,11 +8,11 @@ import (
 
 // Bundle represents a runtime bundle containing a model and runtime config
 type Bundle struct {
-	dir           string
-	mmprojPath    string
-	ggufFile      string // path to GGUF file (first shard when model is split among files)
-	runtimeConfig types.Config
-	templatePath  string
+	dir              string
+	mmprojPath       string
+	ggufFile         string // path to GGUF file (first shard when model is split among files)
+	runtimeConfig    types.Config
+	chatTemplatePath string
 }
 
 // RootDir return the path to the bundle root directory
@@ -37,12 +37,12 @@ func (b *Bundle) MMPROJPath() string {
 	return filepath.Join(b.dir, b.mmprojPath)
 }
 
-// ChatTemplatePath return the path to a Jinja chat template file "" if none is present.
+// ChatTemplatePath return the path to a Jinja chat template file or "" if none is present.
 func (b *Bundle) ChatTemplatePath() string {
-	if b.templatePath == "" {
+	if b.chatTemplatePath == "" {
 		return ""
 	}
-	return filepath.Join(b.dir, b.templatePath)
+	return filepath.Join(b.dir, b.chatTemplatePath)
 }
 
 // RuntimeConfig returns config that should be respected by the backend at runtime.

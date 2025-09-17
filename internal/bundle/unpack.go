@@ -21,7 +21,7 @@ func Unpack(dir string, model types.Model) (*Bundle, error) {
 		return nil, fmt.Errorf("add multi-model projector file to runtime bundle: %w", err)
 	}
 	if err := unpackTemplate(bundle, model); err != nil {
-		return nil, fmt.Errorf("add multi-model projector file to runtime bundle: %w", err)
+		return nil, fmt.Errorf("add chat template file to runtime bundle: %w", err)
 	}
 	if err := unpackRuntimeConfig(bundle, model); err != nil {
 		return nil, fmt.Errorf("add config.json to runtime bundle: %w", err)
@@ -91,7 +91,7 @@ func unpackTemplate(bundle *Bundle, mdl types.Model) error {
 	if err = unpackFile(filepath.Join(bundle.dir, "template.jinja"), path); err != nil {
 		return err
 	}
-	bundle.templatePath = "template.jinja"
+	bundle.chatTemplatePath = "template.jinja"
 	return nil
 }
 

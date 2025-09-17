@@ -87,7 +87,7 @@ func MMPROJPath(i WithLayers) (string, error) {
 func ChatTemplatePath(i WithLayers) (string, error) {
 	paths, err := layerPathsByMediaType(i, types.MediaTypeChatTemplate)
 	if err != nil {
-		return "", fmt.Errorf("get mmproj layer paths: %w", err)
+		return "", fmt.Errorf("get chat template layer paths: %w", err)
 	}
 	if len(paths) == 0 {
 		return "", fmt.Errorf("model does not contain any layer of type %q", types.MediaTypeChatTemplate)

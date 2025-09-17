@@ -31,11 +31,11 @@ func Parse(rootDir string) (*Bundle, error) {
 		return nil, err
 	}
 	return &Bundle{
-		dir:           rootDir,
-		mmprojPath:    mmprojPath,
-		ggufFile:      ggufPath,
-		runtimeConfig: cfg,
-		templatePath:  templatePath,
+		dir:              rootDir,
+		mmprojPath:       mmprojPath,
+		ggufFile:         ggufPath,
+		runtimeConfig:    cfg,
+		chatTemplatePath: templatePath,
 	}, nil
 }
 
