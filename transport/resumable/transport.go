@@ -32,10 +32,11 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/docker/model-distribution/transport/internal/common"
 )
 
 // Option configures a ResumableTransport.
@@ -129,26 +130,20 @@ func isResumable(req *http.Request, resp *http.Response) bool {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return false
 	}
-	if !supportsRange(resp.Header) {
+	if !common.SupportsRange(resp.Header) {
 		return false
 	}
 	// Disallow when the response was auto-decompressed or has a Content-Encoding.
 	if resp.Uncompressed || resp.Header.Get("Content-Encoding") != "" {
 		return false
 	}
-	return true
-}
-
-// supportsRange determines whether or not an HTTP response indicates support
-// for range requests.
-func supportsRange(h http.Header) bool {
-	ar := strings.ToLower(h.Get("Accept-Ranges"))
-	for _, part := range strings.Split(ar, ",") {
-		if strings.TrimSpace(part) == "bytes" {
-			return true
+	// If the original request specified a Range, only support single-range.
+	if r := req.Header.Get("Range"); strings.TrimSpace(r) != "" {
+		if _, _, ok := common.ParseSingleRange(r); !ok {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // resumableBody wraps a Response.Body to add transparent resume support.
@@ -203,7 +198,7 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 	}
 
 	// Extract starting offsets from request Range if present (single-range only).
-	if start, end, ok := parseSingleRange(rb.originalRangeSpec); ok {
+	if start, end, ok := common.ParseSingleRange(rb.originalRangeSpec); ok {
 		rb.initialStart = start
 		if end >= 0 {
 			rb.initialEnd = &end
@@ -212,7 +207,7 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 
 	// Refine offsets from Content-Range header if response was 206.
 	if resp.StatusCode == http.StatusPartialContent {
-		if s, e, total, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
+		if s, e, total, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
 			rb.initialStart = s
 			if e >= 0 {
 				rb.initialEnd = &e
@@ -221,13 +216,19 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 				rb.totalSize = &total
 			}
 		}
-	} else if resp.ContentLength >= 0 { // 200 OK
-		total := int64(resp.ContentLength)
-		rb.totalSize = &total
+	} else if resp.StatusCode == http.StatusOK {
+		// For 200 OK, the server is sending a full stream starting at 0
+		// regardless of any Range header on the request.
+		rb.initialStart = 0
+		rb.initialEnd = nil
+		if resp.ContentLength >= 0 {
+			total := int64(resp.ContentLength)
+			rb.totalSize = &total
+		}
 	}
 
 	// Capture validators for If-Range to ensure consistency across resumes.
-	if et := resp.Header.Get("ETag"); et != "" && !isWeakETag(et) {
+	if et := resp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
 		rb.etag = et
 	} else if lm := resp.Header.Get("Last-Modified"); lm != "" {
 		rb.lastModified = lm
@@ -236,64 +237,97 @@ func newResumableBody(req *http.Request, resp *http.Response, tr *ResumableTrans
 }
 
 // Read delivers bytes to the caller. If an error occurs mid-stream, it will
-// transparently try to resume by issuing a new Range request.
+// transparently try to resume by issuing a new Range request. When the total
+// length is unknown (e.g., 200 OK without Content-Length), completeness cannot
+// be verified precisely; in such cases EOF is treated as the natural end.
 func (rb *resumableBody) Read(p []byte) (int, error) {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	if rb.done {
-		return 0, io.EOF
-	}
-	if rb.rc == nil {
-		// No active body — must resume from the last delivered offset.
-		if err := rb.resume(rb.bytesRead); err != nil {
-			return 0, err
+	for {
+		// Snapshot state without holding the lock across I/O.
+		rb.mu.Lock()
+		if rb.done {
+			rb.mu.Unlock()
+			return 0, io.EOF
 		}
-	}
+		rc := rb.rc
+		planned, plannedOK := rb.plannedLength()
+		already := rb.bytesRead
+		rb.mu.Unlock()
 
-	n, err := rb.rc.Read(p)
-	rb.bytesRead += int64(n)
+		if rc == nil {
+			if err := rb.resume(already); err != nil {
+				return 0, err
+			}
+			continue
+		}
 
-	switch {
-	case err == nil:
-		return n, nil
-	case errors.Is(err, io.EOF):
-		rb.done = true
-		return n, io.EOF
-	default:
-		// Underlying read failed mid-stream. Try to resume.
-		_ = rb.rc.Close()
-		rb.rc = nil
+		n, err := rc.Read(p)
 
-		if n > 0 {
-			// Surface bytes already read; the caller will call Read again.
+		rb.mu.Lock()
+		rb.bytesRead += int64(n)
+
+		switch {
+		case err == nil:
+			rb.mu.Unlock()
 			return n, nil
-		}
-		if rb.retriesUsed >= rb.tr.maxRetries {
-			return 0, err
-		}
-		if rerr := rb.resume(rb.bytesRead); rerr != nil {
-			return 0, rerr
-		}
-
-		n2, err2 := rb.rc.Read(p)
-		rb.bytesRead += int64(n2)
-		if err2 == nil {
-			return n2, nil
-		}
-		if errors.Is(err2, io.EOF) {
+		case errors.Is(err, io.EOF):
+			// If planned length is known and we are short, resume.
+			if plannedOK && already+int64(n) < planned {
+				_ = rb.rc.Close()
+				rb.rc = nil
+				if rb.retriesUsed >= rb.tr.maxRetries {
+					rb.mu.Unlock()
+					return n, io.ErrUnexpectedEOF
+				}
+				// Return bytes now; resume on next call.
+				if n > 0 {
+					rb.mu.Unlock()
+					return n, nil
+				}
+				// Resume outside lock.
+				nextOffset := rb.bytesRead
+				rb.mu.Unlock()
+				if rerr := rb.resume(nextOffset); rerr != nil {
+					return 0, rerr
+				}
+				continue
+			}
+			// Completed.
 			rb.done = true
+			rb.mu.Unlock()
+			return n, io.EOF
+		default:
+			// Underlying read failed mid-stream. Try to resume.
+			_ = rb.rc.Close()
+			rb.rc = nil
+
+			if n > 0 {
+				rb.mu.Unlock()
+				// Surface bytes already read; the caller will call Read again.
+				return n, nil
+			}
+			if rb.retriesUsed >= rb.tr.maxRetries {
+				rb.mu.Unlock()
+				return 0, err
+			}
+			off := rb.bytesRead
+			rb.mu.Unlock()
+			if rerr := rb.resume(off); rerr != nil {
+				return 0, rerr
+			}
+			continue
 		}
-		return n2, err2
 	}
 }
 
 // Close closes the current response body if present.
 func (rb *resumableBody) Close() error {
 	rb.mu.Lock()
-	defer rb.mu.Unlock()
-	if rb.rc != nil {
-		return rb.rc.Close()
+	rc := rb.rc
+	rb.rc = nil
+	rb.done = true
+	rb.mu.Unlock()
+	if rc != nil {
+		return rc.Close()
 	}
 	return nil
 }
@@ -320,6 +354,12 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 			return err
 		}
 
+		// For safety, do not attempt an unvalidated resume when neither a
+		// strong ETag nor Last-Modified validator is available.
+		if rb.etag == "" && rb.lastModified == "" {
+			return fmt.Errorf("resumable: cannot resume without validator")
+		}
+
 		start := rb.initialStart + absoluteOffset
 		rangeVal := buildRangeHeader(start, rb.initialEnd)
 		req := rb.cloneBaseRequest(rangeVal)
@@ -339,13 +379,22 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 		switch resp.StatusCode {
 		case http.StatusPartialContent:
 			// Validate server honored our starting offset precisely.
-			s, _, _, ok := parseContentRange(resp.Header.Get("Content-Range"))
+			s, e, _, ok := common.ParseContentRange(resp.Header.Get("Content-Range"))
 			if !ok || s != start {
 				_ = resp.Body.Close()
 				continue // try again; mismatched range
 			}
-			rb.swapResponse(resp)
+			// If we requested a closed range and the end does not match, do
+			// not accept this response.
+			if rb.initialEnd != nil && e >= 0 && e != *rb.initialEnd {
+				_ = resp.Body.Close()
+				continue
+			}
+			// Install the new response under lock.
+			rb.mu.Lock()
+			rb.installResponseLocked(resp)
 			rb.retriesUsed++
+			rb.mu.Unlock()
 			return nil
 
 		case http.StatusOK:
@@ -353,6 +402,12 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 			// validator failed (resource changed) or the server ignored Range.
 			_ = resp.Body.Close()
 			return fmt.Errorf("resumable: server returned 200 to a range request; resource may have changed")
+
+		case http.StatusMultipleChoices, http.StatusMovedPermanently, http.StatusFound,
+			http.StatusSeeOther, http.StatusNotModified, http.StatusUseProxy,
+			http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+			_ = resp.Body.Close()
+			return fmt.Errorf("resumable: resume received redirect status %d", resp.StatusCode)
 
 		case http.StatusRequestedRangeNotSatisfiable:
 			// If we've already read to/ past the expected end, we are actually done.
@@ -370,9 +425,9 @@ func (rb *resumableBody) resume(absoluteOffset int64) error {
 	return fmt.Errorf("resumable: exceeded retry budget after %d attempts", rb.tr.maxRetries)
 }
 
-// swapResponse replaces the current response body with a new one
-// from a resumed request, and updates any validators and size info.
-func (rb *resumableBody) swapResponse(resp *http.Response) {
+// installResponseLocked installs resp as the current response and updates
+// validators and size info. Caller must hold rb.mu.
+func (rb *resumableBody) installResponseLocked(resp *http.Response) {
 	if rb.rc != nil && rb.rc != resp.Body {
 		_ = rb.rc.Close()
 	}
@@ -380,7 +435,7 @@ func (rb *resumableBody) swapResponse(resp *http.Response) {
 	rb.rc = resp.Body
 
 	// Persist validators from the server if they are strong.
-	if et := resp.Header.Get("ETag"); et != "" && !isWeakETag(et) {
+	if et := resp.Header.Get("ETag"); et != "" && !common.IsWeakETag(et) {
 		rb.etag = et
 	}
 	if lm := resp.Header.Get("Last-Modified"); lm != "" {
@@ -388,8 +443,8 @@ func (rb *resumableBody) swapResponse(resp *http.Response) {
 	}
 
 	// Merge any updated size info from the Content-Range.
-	if s, e, total, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
-		_ = s // start is validated by caller
+	if s, e, total, ok := common.ParseContentRange(resp.Header.Get("Content-Range")); ok {
+		_ = s // start validated by caller
 		if e >= 0 {
 			rb.initialEnd = &e
 		}
@@ -406,46 +461,22 @@ func (rb *resumableBody) cloneBaseRequest(rangeVal string) *http.Request {
 	req := rb.origReq.Clone(rb.ctx)
 	req.Body = nil
 	req.ContentLength = 0
-	req.Header = cloneHeader(rb.origReq.Header)
+	req.Header = rb.origReq.Header.Clone()
 
 	// Ensure we control the Range validator set.
 	req.Header.Set("Range", rangeVal)
 	// Remove conditional headers that could conflict with If-Range semantics.
-	scrubConditionalHeaders(req.Header)
+	common.ScrubConditionalHeaders(req.Header)
 
 	if rb.etag != "" {
 		req.Header.Set("If-Range", rb.etag)
 	} else if rb.lastModified != "" {
 		req.Header.Set("If-Range", rb.lastModified)
-	} else {
-		// If no validator, we still attempt Range but risk a 200 if server can't verify.
 	}
 
 	// Prevent transparent decompression on resumed requests.
 	req.Header.Set("Accept-Encoding", "identity")
 	return req
-}
-
-// cloneHeader makes a deep copy of an http.Header map.
-func cloneHeader(h http.Header) http.Header {
-	out := make(http.Header, len(h))
-	for k, vv := range h {
-		cp := make([]string, len(vv))
-		copy(cp, vv)
-		out[k] = cp
-	}
-	return out
-}
-
-// scrubConditionalHeaders removes conditional headers we do not want to forward
-// on resumed Range requests, because they can alter semantics or conflict with
-// If-Range logic.
-func scrubConditionalHeaders(h http.Header) {
-	h.Del("If-None-Match")
-	h.Del("If-Modified-Since")
-	h.Del("If-Match")
-	h.Del("If-Unmodified-Since")
-	// We overwrite Range/If-Range explicitly elsewhere.
 }
 
 // buildRangeHeader constructs a "Range" header value for a given start and
@@ -467,8 +498,10 @@ func waitBackoff(ctx context.Context, bf BackoffFunc, attempt int) error {
 	if d <= 0 {
 		return nil
 	}
+	t := time.NewTimer(d)
+	defer t.Stop()
 	select {
-	case <-time.After(d):
+	case <-t.C:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -491,87 +524,4 @@ func (rb *resumableBody) rangeIsComplete(absoluteOffset int64) bool {
 		}
 	}
 	return false
-}
-
-// isWeakETag reports whether the ETag is a weak validator (W/"...") which must
-// not be used with If-Range per RFC 7232 §2.1.
-func isWeakETag(etag string) bool {
-	etag = strings.TrimSpace(etag)
-	return strings.HasPrefix(etag, "W/") || strings.HasPrefix(etag, "w/")
-}
-
-// ─────────────────────────── Helpers: header parsing ──────────────────────────
-
-// parseSingleRange parses a single "Range: bytes=start-end" header.
-// It returns (start, end, ok). When end is omitted, end == -1.
-//
-// Notes:
-//   - Only absolute-start forms are supported (no suffix ranges "-N").
-//   - Multi-range specifications (comma separated) return ok == false.
-func parseSingleRange(h string) (int64, int64, bool) {
-	if h == "" {
-		return 0, -1, false
-	}
-	h = strings.TrimSpace(h)
-	if !strings.HasPrefix(strings.ToLower(h), "bytes=") {
-		return 0, -1, false
-	}
-	spec := strings.TrimSpace(h[len("bytes="):])
-	if strings.Contains(spec, ",") {
-		return 0, -1, false
-	}
-	parts := strings.SplitN(spec, "-", 2)
-	if len(parts) != 2 {
-		return 0, -1, false
-	}
-	if parts[0] == "" {
-		// Suffix form is not supported here.
-		return 0, -1, false
-	}
-	start, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
-	if err != nil || start < 0 {
-		return 0, -1, false
-	}
-	end := int64(-1)
-	if strings.TrimSpace(parts[1]) != "" {
-		e, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-		if err != nil || e < start {
-			return 0, -1, false
-		}
-		end = e
-	}
-	return start, end, true
-}
-
-// parseContentRange parses "Content-Range: bytes start-end/total".
-// It returns (start, end, total, ok). When total is unknown, total == -1.
-func parseContentRange(h string) (int64, int64, int64, bool) {
-	if h == "" {
-		return 0, -1, -1, false
-	}
-	h = strings.ToLower(strings.TrimSpace(h))
-	if !strings.HasPrefix(h, "bytes ") {
-		return 0, -1, -1, false
-	}
-	body := strings.TrimSpace(h[len("bytes "):])
-	seTotal := strings.SplitN(body, "/", 2)
-	if len(seTotal) != 2 {
-		return 0, -1, -1, false
-	}
-	se := strings.SplitN(strings.TrimSpace(seTotal[0]), "-", 2)
-	if len(se) != 2 {
-		return 0, -1, -1, false
-	}
-	start, err1 := strconv.ParseInt(strings.TrimSpace(se[0]), 10, 64)
-	end, err2 := strconv.ParseInt(strings.TrimSpace(se[1]), 10, 64)
-	totalStr := strings.TrimSpace(seTotal[1])
-	var total int64 = -1
-	var err3 error
-	if totalStr != "*" {
-		total, err3 = strconv.ParseInt(totalStr, 10, 64)
-	}
-	if err1 != nil || err2 != nil || (err3 != nil && totalStr != "*") {
-		return 0, -1, -1, false
-	}
-	return start, end, total, true
 }
