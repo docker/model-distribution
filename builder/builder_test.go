@@ -10,7 +10,7 @@ import (
 	"github.com/docker/model-distribution/types"
 )
 
-func TestWithMultimodalProjector(t *testing.T) {
+func TestBuilder(t *testing.T) {
 	// Create a builder from a GGUF file
 	b, err := builder.FromGGUF(filepath.Join("..", "assets", "dummy.gguf"))
 	if err != nil {
@@ -18,14 +18,20 @@ func TestWithMultimodalProjector(t *testing.T) {
 	}
 
 	// Add multimodal projector
-	b2, err := b.WithMultimodalProjector(filepath.Join("..", "assets", "dummy.mmproj"))
+	b, err = b.WithMultimodalProjector(filepath.Join("..", "assets", "dummy.mmproj"))
+	if err != nil {
+		t.Fatalf("Failed to add multimodal projector: %v", err)
+	}
+
+	// Add a chat template file
+	b, err = b.WithChatTemplateFile(filepath.Join("..", "assets", "template.jinja"))
 	if err != nil {
 		t.Fatalf("Failed to add multimodal projector: %v", err)
 	}
 
 	// Build the model
 	target := &fakeTarget{}
-	if err := b2.Build(t.Context(), target, nil); err != nil {
+	if err := b.Build(t.Context(), target, nil); err != nil {
 		t.Fatalf("Failed to build model: %v", err)
 	}
 
@@ -35,26 +41,21 @@ func TestWithMultimodalProjector(t *testing.T) {
 		t.Fatalf("Failed to get manifest: %v", err)
 	}
 
-	// Should have 2 layers: GGUF + multimodal projector
-	if len(manifest.Layers) != 2 {
+	// Should have 3 layers: GGUF + multimodal projector + chat template
+	if len(manifest.Layers) != 3 {
 		t.Fatalf("Expected 2 layers, got %d", len(manifest.Layers))
 	}
 
-	// Check that one layer has the multimodal projector media type
-	foundMMProjLayer := false
-	for _, layer := range manifest.Layers {
-		if layer.MediaType == types.MediaTypeMultimodalProjector {
-			foundMMProjLayer = true
-			break
-		}
+	// Check that each layer has the expected
+	if manifest.Layers[0].MediaType != types.MediaTypeGGUF {
+		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeGGUF, manifest.Layers[0].MediaType)
 	}
-
-	if !foundMMProjLayer {
-		t.Error("Expected to find a layer with multimodal projector media type")
+	if manifest.Layers[1].MediaType != types.MediaTypeMultimodalProjector {
+		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeMultimodalProjector, manifest.Layers[1].MediaType)
 	}
-
-	// Note: We can't directly test MMPROJPath() on ModelArtifact interface
-	// but we can verify the layer was added with correct media type above
+	if manifest.Layers[2].MediaType != types.MediaTypeChatTemplate {
+		t.Fatalf("Expected first layer with media type %s, got %s", types.MediaTypeChatTemplate, manifest.Layers[2].MediaType)
+	}
 }
 
 func TestWithMultimodalProjectorInvalidPath(t *testing.T) {

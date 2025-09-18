@@ -42,6 +42,9 @@ make build
 # Package a model with a multimodal projector file and push to a registry
 ./bin/model-distribution-tool package --mmproj ./model.mmproj --tag registry.example.com/models/llama:v1.0 ./model.gguf
 
+# Package a model with a custom chat template and push to a registry
+./bin/model-distribution-tool package --chat-template ./template.jinja --tag registry.example.com/models/llama:v1.0 ./model.gguf
+
 # Package a model and output the result to a file
 ./bin/model-distribution-tool package --file ./model.tar ./model.gguf
 

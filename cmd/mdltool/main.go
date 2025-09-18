@@ -167,6 +167,7 @@ func cmdPackage(args []string) int {
 		file         string
 		tag          string
 		mmproj       string
+		chatTemplate string
 	)
 
 	fs.Var(&licensePaths, "licenses", "Paths to license files (can be specified multiple times)")
@@ -174,6 +175,7 @@ func cmdPackage(args []string) int {
 	fs.StringVar(&mmproj, "mmproj", "", "Path to Multimodal Projector file")
 	fs.StringVar(&file, "file", "", "Write archived model to the given file")
 	fs.StringVar(&tag, "tag", "", "Push model to the given registry tag")
+	fs.StringVar(&chatTemplate, "chat-template", "", "Jinja chat template file")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: model-distribution-tool package [OPTIONS] <path-to-gguf>\n\n")
@@ -269,6 +271,15 @@ func cmdPackage(args []string) int {
 		builder, err = builder.WithMultimodalProjector(mmproj)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding multimodal projector layer for %s: %v\n", mmproj, err)
+			return 1
+		}
+	}
+
+	if chatTemplate != "" {
+		fmt.Println("Adding chat template file:", chatTemplate)
+		builder, err = builder.WithChatTemplateFile(chatTemplate)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding chat template layer for %s: %v\n", chatTemplate, err)
 			return 1
 		}
 	}

@@ -35,10 +35,10 @@ func TestBundle(t *testing.T) {
 		t.Fatalf("Failed to write model to store: %v", err)
 	}
 
-	// Load model with multi-modal project file
+	// Load model with multi-modal projector file
 	mmprojLayer, err := partial.NewLayer(filepath.Join("..", "assets", "dummy.mmproj"), types.MediaTypeMultimodalProjector)
 	if err != nil {
-		t.Fatalf("Failed to mmproj layer: %v", err)
+		t.Fatalf("Failed to create mmproj layer: %v", err)
 	}
 	mmprojMdl := mutate.AppendLayers(mdl, mmprojLayer)
 	mmprojMdlID, err := mmprojMdl.ID()
@@ -49,7 +49,21 @@ func TestBundle(t *testing.T) {
 		t.Fatalf("Failed to write model to store: %v", err)
 	}
 
-	// Load shared dummy model from asset directory
+	// Load model with template file
+	templateLayer, err := partial.NewLayer(filepath.Join("..", "assets", "template.jinja"), types.MediaTypeChatTemplate)
+	if err != nil {
+		t.Fatalf("Failed to create chat template layer: %v", err)
+	}
+	templateMdl := mutate.AppendLayers(mdl, templateLayer)
+	templateMdlID, err := templateMdl.ID()
+	if err != nil {
+		t.Fatalf("Failed to get model ID: %v", err)
+	}
+	if err := client.store.Write(templateMdl, []string{"some-model-with-template"}, nil); err != nil {
+		t.Fatalf("Failed to write model to store: %v", err)
+	}
+
+	// Load sharded dummy model from asset directory
 	shardedMdl, err := gguf.NewModel(filepath.Join("..", "assets", "dummy-00001-of-00002.gguf"))
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
@@ -98,6 +112,14 @@ func TestBundle(t *testing.T) {
 				"model.mmproj": filepath.Join("..", "assets", "dummy.mmproj"),
 			},
 		},
+		{
+			ref:         templateMdlID,
+			description: "model with template file",
+			expectedFiles: map[string]string{
+				"model.gguf":     filepath.Join("..", "assets", "dummy.gguf"),
+				"template.jinja": filepath.Join("..", "assets", "template.jinja"),
+			},
+		},
 	}
 
 	for _, tc := range tcs {
@@ -119,7 +141,7 @@ func TestBundle(t *testing.T) {
 					t.Fatalf("Failed to read file with expected contents: %v", err)
 				}
 				if string(got) != string(expected) {
-					t.Fatalf("File contents did not match expected contents")
+					t.Fatalf("File contents did not match expected contents. Expected: %s, got: %s", expected, got)
 				}
 			}
 		})
